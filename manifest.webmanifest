@@ -1,0 +1,12 @@
+{
+  "name": "狗庄74",
+  "short_name": "狗庄74",
+  "description": "加密 + A股 + 美股 + ETF 指标筛选排行榜",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07090d",
+  "theme_color": "#07090d",
+  "icons": [
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

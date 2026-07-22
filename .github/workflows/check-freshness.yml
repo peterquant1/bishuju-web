@@ -63,3 +63,34 @@ jobs:
 
           print("OK：数据新鲜。")
           PYEOF
+
+      # 付费数据链路（Worker KV）独立检查：上面的检查只覆盖公开文件——付费用户真正读的
+      # 是 Worker KV（X-License-Key → /api/data），upload 断了（400/token 失效等）公开侧
+      # 一切正常、这里才能发现（split_output 400 事故曾静默近一天，2026-07-22 加）。
+      # KV updateTime 每小时被 crypto 上传刷新，阈值与 crypto 同为 2.5h。
+      # /api/status 只回元信息（updateTime/tab 数/字节数），公开无鉴权。
+      # ⚠️ 若日后紧急关闭付费墙（PAYWALL_ENABLED=false），上传停止、这步会开始告警——
+      # 届时把本步一并注释掉。
+      - name: Check paid-data KV freshness (Worker /api/status)
+        run: |
+          # 自定义 UA：Cloudflare 会把已知机器人 UA 直接 403（error 1010，license.py 同款坑）
+          body=$(curl -sS --retry 3 --retry-delay 5 -A "bishuju-freshness-check/1.0" \
+            https://bishuju-api.fanshenpan.workers.dev/api/status) || {
+            echo "::error::Worker /api/status 连不上 —— 付费数据服务可能整体不可用！"; exit 1; }
+          echo "$body"
+          python3 - "$body" << 'PYEOF'
+          import json, sys
+          from datetime import datetime, timezone
+
+          d = json.loads(sys.argv[1])
+          if not d.get("ok") or not d.get("updateTime"):
+              print(f"::error::Worker /api/status 异常：{d} —— 付费数据缺失或损坏！")
+              sys.exit(1)
+          ts = datetime.strptime(d["updateTime"], "%Y-%m-%d %H:%M:%S UTC").replace(tzinfo=timezone.utc)
+          m = (datetime.now(timezone.utc) - ts).total_seconds() / 60
+          print(f"KV updateTime: {d['updateTime']}  (落后 {m:.0f} 分钟, tabs={d.get('tabs')}, bytes={d.get('bytes')})")
+          if m > 150:
+              print("::error::付费数据(Worker KV)已超过 2.5 小时未更新 —— 上传链路断了，付费用户正在受影响！")
+              sys.exit(1)
+          print("OK：付费数据新鲜。")
+          PYEOF

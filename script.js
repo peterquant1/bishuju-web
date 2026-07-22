@@ -1029,8 +1029,77 @@ function pulseTile(k, v, sub) {
     return `<div class="pulse__cell"><div class="pulse__label">${k}</div><div class="pulse__value">${v}</div><div class="pulse__sub">${sub}</div></div>`;
 }
 
+// 价格/百分比格式化（市场概览用）：大额无小数带千分位、小额留精度
+function fmtMktPrice(p) {
+    if (p == null) return "—";
+    if (p >= 1000) return "$" + Math.round(p).toLocaleString("en-US");
+    if (p >= 1) return "$" + p.toFixed(2);
+    if (p >= 0.01) return "$" + p.toFixed(4);
+    return "$" + Number(p).toPrecision(2);
+}
+function fmtMktPct(x, dp) {
+    if (x == null) return "—";
+    return (x >= 0 ? "+" : "") + x.toFixed(dp == null ? 2 : dp) + "%";
+}
+function mktAnchor(name, a) {
+    if (!a) return "";
+    const cls = a.change >= 0 ? "is-up" : "is-down";
+    return `<div class="mkt__item" title="${name} 最新价与 24h 涨跌幅">
+        <span class="mkt__k">${name}</span>
+        <span class="mkt__v">${fmtMktPrice(a.price)} <span class="${cls}">${fmtMktPct(a.change)}</span></span>
+    </div>`;
+}
+
+/** 市场概览全局条（免费引流,crypto 独有）：全市场 24h 内生指标 + 合约情绪,数据来自
+ *  data.marketOverview（后端 get_market_overview 从币安全市场 24h 行情 + 资金费率自算）。
+ *  仅加密视图显示（这是永续合约市场数据）,其余资产隐藏。参考 CMC/CoinGecko 顶部全局条,
+ *  但指标为合约市场定制（涨跌宽度/资金费率持仓/合约总成交额）。 */
+function renderMarketOverview() {
+    const el = document.getElementById("marketOverview");
+    if (!el) return;
+    const mo = data && data.marketOverview;
+    if (currentAsset !== "crypto" || !mo) { el.hidden = true; return; }
+
+    const b = mo.breadth || {};
+    const s = mo.sentiment;
+    const zone = s < 25 ? "fear2" : s < 45 ? "fear" : s < 55 ? "neutral" : s < 75 ? "greed" : "greed2";
+    const items = [];
+
+    items.push(`<div class="mkt__item mkt__item--senti" title="市场情绪指数（0-100）：基于全市场涨跌宽度与平均涨跌幅自算，非第三方指数">
+        <span class="mkt__k">市场情绪</span>
+        <span class="mkt__senti">
+            <span class="mkt__gauge"><i class="mkt__marker" style="left:${Math.max(0, Math.min(100, s))}%"></i></span>
+            <span class="mkt__score mkt-z--${zone}">${s}<em>${mo.sentimentLabel}</em></span>
+        </span>
+    </div>`);
+
+    if (b.total) items.push(`<div class="mkt__item" title="全市场 24h 上涨/下跌合约家数（市场宽度）">
+        <span class="mkt__k">涨跌家数</span>
+        <span class="mkt__v"><span class="is-up">${b.up}↑</span> <span class="is-down">${b.down}↓</span><span class="mkt__sub">${b.upPct}% 上涨</span></span>
+    </div>`);
+
+    items.push(`<div class="mkt__item" title="全市场 USDT 永续合约 24h 总成交额">
+        <span class="mkt__k">24h 合约成交额</span>
+        <span class="mkt__v">$${mo.totalVolumeFormatted}</span>
+    </div>`);
+
+    if (mo.funding) items.push(`<div class="mkt__item" title="全市场平均资金费率 + 正费率占比（正=多头付费，反映杠杆持仓偏向）">
+        <span class="mkt__k">资金费率</span>
+        <span class="mkt__v">均 <span class="${mo.funding.avg >= 0 ? "is-up" : "is-down"}">${fmtMktPct(mo.funding.avg, 4)}</span><span class="mkt__sub">正 ${mo.funding.positivePct}%</span></span>
+    </div>`);
+
+    items.push(mktAnchor("BTC", mo.btc));
+    items.push(mktAnchor("ETH", mo.eth));
+
+    el.innerHTML = `<div class="mkt__inner">${items.filter(Boolean).join("")}</div>`;
+    el.hidden = false;
+}
+
 /** 市场脉搏速览条（无缝状态条）：跟随当前资产切换,切 tab 立即重渲染。 */
 function renderPulse() {
+    // 概览条与脉搏同触发（切榜/数据刷新/解锁），一处调用覆盖三处；try 包住——新组件
+    // 渲染若出任何错，绝不能连累脉搏和整条主渲染链（付费站,稳健优先）。
+    try { renderMarketOverview(); } catch (e) { console.warn("市场概览渲染失败", e); }
     const el = document.getElementById("pulse");
     if (!el || !data) return;
     const tiles = currentAsset === "ashare" ? asharePulseTiles()

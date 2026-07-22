@@ -221,6 +221,24 @@ a:hover{color:var(--gold-hi)}
 .pulse__suffix.is-muted{color:var(--muted-2)}
 .pulse__sub{font-size:10.5px;color:var(--muted-2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+/* ---------------- 市场概览全局条(免费,加密专属)---------------- */
+.mkt{background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);margin-bottom:12px;overflow:hidden}
+.mkt__inner{display:flex;flex-wrap:wrap;align-items:stretch}
+.mkt__item{display:flex;flex-direction:column;justify-content:center;gap:4px;padding:9px 16px;min-width:0;border-right:1px solid var(--line)}
+.mkt__item:last-child{border-right:none}
+.mkt__k{font-size:10.5px;color:var(--muted-2);letter-spacing:.4px;white-space:nowrap}
+.mkt__v{font-size:14px;font-weight:700;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--text)}
+.mkt__v .is-up{color:var(--price-up)}
+.mkt__v .is-down{color:var(--price-down)}
+.mkt__sub{font-size:11px;font-weight:600;color:var(--muted-2);margin-left:7px}
+/* 情绪仪表 */
+.mkt__senti{display:flex;align-items:center;gap:9px}
+.mkt__gauge{position:relative;width:78px;height:6px;border-radius:3px;background:linear-gradient(90deg,#e5484d 0%,#e5a23d 50%,#30a46c 100%);flex:none}
+.mkt__marker{position:absolute;top:50%;transform:translate(-50%,-50%);width:3px;height:13px;border-radius:2px;background:var(--text);box-shadow:0 0 0 2px var(--panel)}
+.mkt__score{font-size:15px;font-weight:800;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.mkt__score em{font-style:normal;font-size:11.5px;font-weight:700;margin-left:5px}
+.mkt-z--fear2{color:#e5484d}.mkt-z--fear{color:#e5844d}.mkt-z--neutral{color:var(--muted)}.mkt-z--greed{color:#46a758}.mkt-z--greed2{color:#30a46c}
+
 /* ---------------- board 头(标识 + 搜索)---------------- */
 .board-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:13px 18px;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:12px}
 .board-head__title{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
@@ -406,6 +424,12 @@ a:hover{color:var(--gold-hi)}
     .pulse{flex-wrap:wrap;border:none;background:none;box-shadow:none;overflow:visible;gap:8px}
     .pulse__cell{flex:1 1 calc(50% - 4px);border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
     .pulse__value{font-size:15px}
+    /* 市场概览:移动端拆成卡片,情绪条占满一行(含仪表),其余 2 列 */
+    .mkt{border:none;background:none;box-shadow:none;overflow:visible}
+    .mkt__inner{gap:8px}
+    .mkt__item{flex:1 1 calc(50% - 4px);border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
+    .mkt__item--senti{flex-basis:100%}
+    .mkt__gauge{flex:1}
     .board-head{flex-direction:column;align-items:stretch;gap:9px;padding:12px 13px}
     .board-head__name{font-size:15.5px}
     .search{width:100%}

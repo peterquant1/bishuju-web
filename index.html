@@ -26,7 +26,7 @@
     <meta name="twitter:description" content="多周期趋势与资金结构筛选共 62 个榜单，覆盖加密永续合约、A 股、美股与大类资产 ETF，随收盘自动更新。">
     <meta name="twitter:image" content="https://gouzhuang748.com/og.png">
 
-    <link rel="stylesheet" href="style.css?v=31">
+    <link rel="stylesheet" href="style.css?v=32">
 </head>
 <body>
 <div class="app" id="app" data-asset="crypto">
@@ -88,6 +88,9 @@
             </aside>
 
             <main class="main">
+                <!-- 市场概览全局条（免费,加密专属）：全市场 24h 内生指标 + 合约情绪,JS 按
+                     data.marketOverview 渲染,非加密资产隐藏。参考 CMC/CoinGecko 顶部全局条。 -->
+                <section class="mkt" id="marketOverview" hidden></section>
                 <section class="pulse" id="pulse" hidden></section>
 
                 <section class="board">
@@ -234,6 +237,6 @@
     </ol>
 </dialog>
 
-<script src="script.js?v=150"></script>
+<script src="script.js?v=151"></script>
 </body>
 </html>

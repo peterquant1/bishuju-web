@@ -136,8 +136,12 @@ const TABS_CONFIG = {
     weeklyEmaBearish: { sorts: cryptoRsiFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
     weeklySarCvdBearish: { sorts: cryptoRsiFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
 
-    // === 加密 日线策略（四轴）===
-    dailyEma921: { sorts: cryptoRsiFirst("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
+    // === 加密 日线策略（五轴：RSI/成交额/CVD强弱/订单流 + 结构张开）===
+    // 2026-07-22 站长要求加密侧也上「结构张开」轴，但只挂这一个日线策略榜（其行本就带
+    // ema9/ema21，后端补 emaGap 字段零额外抓取；周/月/12H 榜不挂——那要动缓存 schema）。
+    // 故不改共享的 cryptoRsiFirst（它还喂 h12FourEma/周线五榜，那些行没 emaGap，加了会多
+    // 出恒 null 轴），而是就地在其后追加 AXIS_EMAGAP，只影响本榜。
+    dailyEma921: { sorts: [...cryptoRsiFirst("成交额"), AXIS_EMAGAP], subFormat: (v, sf) => axesSub(v, sf, "成交额") },
 
     // === 加密 12H策略（四轴；数据经 12H 缓存每 00:00/12:00 UTC 刷新）===
     h12FourEma: { sorts: cryptoRsiFirst("12H成交额"), subFormat: (v, sf) => axesSub(v, sf, "12H成交额") },

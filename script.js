@@ -135,13 +135,10 @@ const TABS_CONFIG = {
 
     // === 加密 日线策略（五轴：RSI/成交额/CVD强弱/订单流 + 结构张开）===
     // 2026-07-22 站长要求加密侧也上「结构张开」轴，但只挂这一个日线策略榜（其行本就带
-    // ema9/ema21，后端补 emaGap 字段零额外抓取；周/月/12H 榜不挂——那要动缓存 schema）。
-    // 故不改共享的 cryptoRsiFirst（它还喂 h12FourEma/周线五榜，那些行没 emaGap，加了会多
+    // ema9/ema21，后端补 emaGap 字段零额外抓取；周/月榜不挂——那要动缓存 schema）。
+    // 故不改共享的 cryptoRsiFirst（它还喂周线两榜，那些行没 emaGap，加了会多
     // 出恒 null 轴），而是就地在其后追加 AXIS_EMAGAP，只影响本榜。
     dailyEma921: { sorts: [...cryptoRsiFirst("成交额"), AXIS_EMAGAP], subFormat: (v, sf) => axesSub(v, sf, "成交额") },
-
-    // === 加密 12H策略（四轴；数据经 12H 缓存每 00:00/12:00 UTC 刷新）===
-    h12FourEma: { sorts: cryptoRsiFirst("12H成交额"), subFormat: (v, sf) => axesSub(v, sf, "12H成交额") },
 
     // === A股（2026-07-20 晚站长定版「纯多周期 EMA 矩阵」：涨跌幅 3 + 日线四线扩张 +
     // 周线三线扩张 + 月线两线扩张·SAR多头 = 6 tab；其余策略 tab 已移除，后端为保留组）===
@@ -313,13 +310,6 @@ const TAB_GROUPS = [
         ],
     },
     {
-        label: "12H策略", asset: "加密", tf: "12H",
-        tabs: [
-            { key: "h12FourEma", name: "短周期主升",
-              desc: "把「主升结构 · 强化」那一档的判断放到更短的周期上，捕捉日内级别的结构成型；每天刷新两次。" },
-        ],
-    },
-    {
         label: "周线策略", asset: "加密", tf: "周线",
         tabs: [
             { key: "weeklyRsi", name: "周线强度池",
@@ -338,8 +328,8 @@ const TAB_GROUPS = [
         ],
     },
     // A股（2026-07-16 补齐周期矩阵、2026-07-20 补齐月线策略组，与上面 crypto 四组一一
-    // 对应：涨跌幅 / 日线策略 / 周线策略 / 月线策略，同站同订阅解锁；crypto 的 12H策略组
-    // 因 A股 无 intraday 数据源不镜像）。周线/月线策略名逐字对齐 crypto 对应组。
+    // 对应：涨跌幅 / 日线策略 / 周线策略 / 月线策略，同站同订阅解锁）。周线/月线策略名
+    // 逐字对齐 crypto 对应组。（crypto 曾有 12H策略组，2026-07-22 移除，四资产现均为此四组。）
     // === A股 / 美股 / ETF ===
     // 这三个资产的四组结构、筛选口径、显示名**完全相同**（2026-07-20 晚站长定版
     // 「纯多周期 EMA 矩阵」，A股/美股/ETF 同步；其余策略后端为保留组）。
@@ -565,11 +555,11 @@ function getSortedItems() {
 }
 
 // === master-detail 左栏导航（Claude Design 重设计落地）===
-// 左栏 rail：顶部 加密/A股 分段控件 + 当前资产的分组榜单（加密 5 组：涨跌幅/日线/
-// 12H/周线/月线；A股 4 组：涨跌幅/日线/周线/月线——组数由 TAB_GROUPS 决定，别写死），
-// 「资产·周期·策略」同屏全见、一键直达；rail 激活态随资产变色（--asset-accent）。
-// 移动端 rail 隐藏，同一份导航渲染进抽屉（#drawerBody）。
-const TF_SHORT = { "日线": "日", "周线": "周", "月线": "月", "12H": "12H" };
+// 左栏 rail：顶部 加密/A股 分段控件 + 当前资产的分组榜单（加密/A股/美股/ETF 均 4 组：
+// 涨跌幅/日线/周线/月线——组数由 TAB_GROUPS 决定，别写死；crypto 曾有 12H策略组，
+// 2026-07-22 移除），「资产·周期·策略」同屏全见、一键直达；rail 激活态随资产变色
+// （--asset-accent）。移动端 rail 隐藏，同一份导航渲染进抽屉（#drawerBody）。
+const TF_SHORT = { "日线": "日", "周线": "周", "月线": "月" };
 const ASSET_KEY = { "加密": "crypto", "A股": "ashare", "美股": "us", "ETF": "etf" };   // TAB_GROUPS.asset → data-asset
 const ASSET_CN = { crypto: "加密", ashare: "A股", us: "美股", etf: "ETF" };            // data-asset → TAB_GROUPS.asset
 let currentAsset = "crypto";                                // 当前资产（由 tab 派生/资产切换驱动）

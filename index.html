@@ -9,27 +9,41 @@
     <script>try{if(localStorage.getItem("bishuju_theme")==="light"){document.documentElement.dataset.theme="light";document.getElementById("themeColorMeta").content="#f3f5f9";}}catch(e){}</script>
     <title>狗庄74 — 加密 + A股 + 美股 + ETF 指标筛选排行榜</title>
     <meta name="description" content="62 个榜单覆盖加密货币 USDT 永续合约、A 股、美股与大类资产 ETF（黄金/原油/指数/国别）：多周期趋势与资金结构筛选，随收盘自动更新，一键导出自选清单。">
+    <link rel="canonical" href="https://gouzhuang748.com/">
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <!-- PWA 基础:加主屏 = 全屏 app 体验。刻意不加 Service Worker——loadData 的
          条件请求/强拉限流带宽逻辑不能被 SW 缓存层截胡 -->
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="manifest" href="manifest.webmanifest">
+    <!-- iOS Safari 不读 manifest 的 display:standalone；用 default 状态栏(topbar 无
+         safe-area-inset-top 内距，black-translucent 会被状态栏遮挡) -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="狗庄74">
 
     <!-- X / OG 分享卡片：链接发到 X 上带图带描述，别浪费引流 -->
     <meta property="og:type" content="website">
+    <meta property="og:site_name" content="狗庄74">
+    <meta property="og:locale" content="zh_CN">
     <meta property="og:title" content="狗庄74 — 加密 + A股 + 美股 + ETF 指标筛选排行榜">
     <meta property="og:description" content="多周期趋势与资金结构筛选共 62 个榜单，覆盖加密永续合约、A 股、美股与大类资产 ETF，随收盘自动更新。">
     <meta property="og:image" content="https://gouzhuang748.com/og.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="狗庄74 — 加密/A股/美股/ETF 指标筛选排行榜">
     <meta property="og:url" content="https://gouzhuang748.com/">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="狗庄74 — 加密 + A股 + 美股 + ETF 指标筛选排行榜">
     <meta name="twitter:description" content="多周期趋势与资金结构筛选共 62 个榜单，覆盖加密永续合约、A 股、美股与大类资产 ETF，随收盘自动更新。">
     <meta name="twitter:image" content="https://gouzhuang748.com/og.png">
+    <meta name="twitter:image:alt" content="狗庄74 — 加密/A股/美股/ETF 指标筛选排行榜">
 
-    <link rel="stylesheet" href="style.css?v=32">
+    <link rel="stylesheet" href="style.css?v=33">
 </head>
 <body>
 <div class="app" id="app" data-asset="crypto">
+    <a class="skip-link" href="#main">跳到主内容</a>
 
     <header class="topbar">
         <div class="topbar__inner">
@@ -56,9 +70,9 @@
             </div>
             <div class="topbar__tools">
                 <!-- 三个新鲜度胶囊：JS 填内容并给非当前资产加 .is-dim -->
-                <span class="fresh" id="freshCrypto" title="查看加密榜单"><span class="fresh__dot"></span><span class="fresh__asset crypto">加密</span><span id="freshCryptoTxt">数据加载中…</span></span>
-                <span class="fresh is-dim" id="freshAshare" title="查看A股榜单"><span class="fresh__dot"></span><span class="fresh__asset ashare">A股</span><span id="freshAshareTxt">—</span></span>
-                <span class="fresh is-dim" id="freshUS" title="查看美股榜单"><span class="fresh__dot"></span><span class="fresh__asset us">美股</span><span id="freshUSTxt">—</span></span>
+                <button type="button" class="fresh" id="freshCrypto" title="查看加密榜单"><span class="fresh__dot"></span><span class="fresh__asset crypto">加密</span><span id="freshCryptoTxt">数据加载中…</span></button>
+                <button type="button" class="fresh is-dim" id="freshAshare" title="查看A股榜单"><span class="fresh__dot"></span><span class="fresh__asset ashare">A股</span><span id="freshAshareTxt">—</span></button>
+                <button type="button" class="fresh is-dim" id="freshUS" title="查看美股榜单"><span class="fresh__dot"></span><span class="fresh__asset us">美股</span><span id="freshUSTxt">—</span></button>
                 <span id="licenseStatus"><span class="lic-badge lic-off">未解锁</span></span>
                 <button id="licenseBtn" class="lic-btn-mini">输入通行证</button>
                 <button class="theme-btn" id="themeBtn" aria-label="切换亮暗主题" title="切换亮/暗">◐</button>
@@ -87,7 +101,7 @@
                 <div class="rail-foot" id="railFoot"></div>
             </aside>
 
-            <main class="main">
+            <main class="main" id="main" tabindex="-1">
                 <!-- 市场概览全局条（免费,加密专属）：全市场 24h 内生指标 + 合约情绪,JS 按
                      data.marketOverview 渲染,非加密资产隐藏。参考 CMC/CoinGecko 顶部全局条。 -->
                 <section class="mkt" id="marketOverview" hidden></section>
@@ -113,16 +127,16 @@
                     <div class="sort-strip" id="sortStrip" hidden></div>
 
                     <!-- 表格：表头/表体分离(表体内滚动,无 sticky) -->
-                    <div class="table">
-                        <div class="thead">
-                            <div class="th c-check"><input type="checkbox" class="chk" id="checkAll" aria-label="全选当前列表"></div>
-                            <div class="th c-rank">#</div>
-                            <div class="th c-sym">标的</div>
-                            <div class="th c-val" id="valueHeader">涨幅</div>
+                    <div class="table" role="table" aria-label="排行榜">
+                        <div class="thead" role="row">
+                            <div class="th c-check" role="columnheader"><input type="checkbox" class="chk" id="checkAll" aria-label="全选当前列表"></div>
+                            <div class="th c-rank" role="columnheader">#</div>
+                            <div class="th c-sym" role="columnheader">标的</div>
+                            <div class="th c-val" id="valueHeader" role="columnheader">涨幅</div>
                         </div>
-                        <div class="tbody" id="rankBody"></div>
+                        <div class="tbody" id="rankBody" role="rowgroup"></div>
                     </div>
-                    <div class="table-foot" id="tableFoot" hidden></div>
+                    <div class="table-foot" id="tableFoot" role="status" aria-live="polite" hidden></div>
                 </section>
 
                 <footer class="footer">
@@ -149,7 +163,7 @@
 
     <!-- 移动抽屉：JS 把 rail 内容 clone 进来,汉堡开关 -->
     <div class="scrim" id="drawerScrim"></div>
-    <aside class="drawer" id="drawer">
+    <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="榜单导航" inert>
         <div class="drawer__head"><span>榜单导航</span><button class="drawer__close" id="drawerClose" aria-label="关闭">✕</button></div>
         <div class="drawer__license"><span class="lic-badge lic-off" id="licenseStatusDrawer">未解锁</span><button class="lic-btn-mini" id="licenseBtnDrawer">输入通行证</button></div>
         <div id="drawerBody"><!-- JS: asset-seg + board-nav 副本 --></div>
@@ -157,8 +171,8 @@
 
 </div>
 
-<dialog id="faqDialog" class="modal modal-wide">
-    <h3>常见问题</h3>
+<dialog id="faqDialog" class="modal modal-wide" aria-labelledby="faqTitle">
+    <h3 id="faqTitle">常见问题</h3>
     <div class="faq">
         <h4>数据多久更新一次？</h4>
         <p>加密：每小时自动抓取一次（整点后约 2 分钟），覆盖币安全部 USDT 永续合约，日线以 UTC 00:00 收盘为准。A股：每个交易日收盘后（约北京时间 16:30，待数据源发布当日数据）更新一次，覆盖全部沪深 A 股（停牌股不入榜）。美股：每个交易日收盘后（待数据源发布当日数据）更新一次，覆盖全市场普通股与 ADR。ETF·大类资产：与美股同一条管道同时更新，覆盖黄金/白银/原油/主要股指/国别等约 40 只美股上市 ETF。</p>
@@ -177,8 +191,8 @@
     </div>
 </dialog>
 
-<dialog id="disclaimerDialog" class="modal modal-wide">
-    <h3>免责声明</h3>
+<dialog id="disclaimerDialog" class="modal modal-wide" aria-labelledby="disclaimerTitle">
+    <h3 id="disclaimerTitle">免责声明</h3>
     <div class="faq">
         <p>本站是行情数据的<b>筛选与展示工具</b>，所有榜单均为公开行情数据经既定数学规则计算后的结果，<b>不构成任何投资建议、买卖推荐或收益承诺</b>。</p>
         <p>加密货币合约与股票交易均具有较高风险，可能导致本金损失。据此操作，风险自担。</p>
@@ -191,9 +205,9 @@
     </div>
 </dialog>
 
-<dialog id="licenseDialog" class="modal">
+<dialog id="licenseDialog" class="modal" aria-labelledby="licenseTitle">
     <form id="licenseForm" method="dialog">
-        <h3>输入通行证</h3>
+        <h3 id="licenseTitle">输入通行证</h3>
         <p class="modal-hint">粘贴购买后收到的通行证，解锁全部策略榜。<br>通行证保存在本机浏览器，不上传任何个人信息。</p>
         <input type="text" id="licenseInput" class="text-input" placeholder="BSJ-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
         <div id="licenseMsg" class="lic-msg"></div>
@@ -204,8 +218,8 @@
     </form>
 </dialog>
 
-<dialog id="purchaseDialog" class="modal modal-wide">
-    <h3>购买通行证</h3>
+<dialog id="purchaseDialog" class="modal modal-wide" aria-labelledby="purchaseTitle">
+    <h3 id="purchaseTitle">购买通行证</h3>
     <p class="modal-hint">选择套餐并留下邮箱，跳转 OxaPay 用加密货币完成支付后，通行证会自动发到你的邮箱。</p>
     <div class="buy-plans" id="buyPlans">
         <button type="button" class="buy-plan" data-plan="monthly">
@@ -237,6 +251,6 @@
     </ol>
 </dialog>
 
-<script src="script.js?v=151"></script>
+<script src="script.js?v=152"></script>
 </body>
 </html>

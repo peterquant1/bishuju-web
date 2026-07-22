@@ -602,7 +602,7 @@ function navHtml() {
                 // 全市场数量,显示无意义,不挂。数据未到时不渲染,loadData 后 renderNav 补上。
                 const hits = isStrategyTab(t.key) ? tabCount(t.key) : null;
                 const locked = PAYWALL_ENABLED && !license.valid && t.key !== TEASER_TAB && !FREE_TABS.has(t.key);
-                return `<button class="nav-item${t.key === currentTab ? " is-active" : ""}" data-tab="${t.key}" title="${g.label} · ${t.name}${hits != null ? ` · 命中 ${hits}` : ""}${locked ? " · 未解锁" : ""}">
+                return `<button class="nav-item${t.key === currentTab ? " is-active" : ""}" data-tab="${t.key}"${t.key === currentTab ? ' aria-current="page"' : ''} title="${g.label} · ${t.name}${hits != null ? ` · 命中 ${hits}` : ""}${locked ? " · 未解锁" : ""}">
                     <span class="nav-item__bar"></span>
                     ${tf ? `<span class="tf-chip${tf.length > 1 ? " tf-chip--wide" : ""}">${tf}</span>` : ""}
                     <span class="nav-item__name">${t.name}${locked ? " " + LOCK_SVG : ""}</span>
@@ -614,8 +614,11 @@ function navHtml() {
 
 function renderNav() {
     // 资产分段控件激活态（rail + drawer 两份）
-    document.querySelectorAll(".asset-seg__opt").forEach(b =>
-        b.classList.toggle("is-active", b.dataset.k === currentAsset));
+    document.querySelectorAll(".asset-seg__opt").forEach(b => {
+        const on = b.dataset.k === currentAsset;
+        b.classList.toggle("is-active", on);
+        b.setAttribute("aria-pressed", String(on)); // SR 能读出当前选中的是哪个资产
+    });
     const nav = document.getElementById("boardNav");
     if (nav) nav.innerHTML = navHtml();
     const dnav = document.getElementById("drawerNav");
@@ -776,7 +779,10 @@ function renderTable() {
             const btn = document.getElementById("emptyUnlockBtn");
             if (btn) btn.addEventListener("click", lockedCtaAction);
         }
-        if (foot) foot.hidden = true;
+        // 空状态也给 #tableFoot(role=status/aria-live)一句话,让 AT 用户得到反馈
+        // (#rankBody 不设 live——30s 刷新会朗读上千行)。搜索分支用原始 searchQuery,
+        // textContent 自动转义;非搜索用 title(不含用户输入,无双重转义问题)。
+        if (foot) { foot.textContent = searchQuery ? `没有匹配「${searchQuery}」的标的` : title; foot.hidden = false; }
         return;
     }
 
@@ -818,16 +824,16 @@ function renderTable() {
             const symLabel = item.name
                 ? `${symBase} <span class="sym__suffix">${escapeHtml(item.name)}</span>`
                 : `${symBase} <span class="sym__suffix">/ ${symSuffix}</span>`;
-            return `<div class="tr">
-                <div class="c-check"><span class="row-accent"></span><input type="checkbox" class="chk chk--row symbol-check" data-symbol="${item.symbol}" aria-label="选择 ${item.symbol}" ${checked}></div>
-                <div class="c-rank">${rankCell}</div>
-                <div class="c-sym">
+            return `<div class="tr" role="row">
+                <div class="c-check" role="cell"><span class="row-accent"></span><input type="checkbox" class="chk chk--row symbol-check" data-symbol="${item.symbol}" aria-label="选择 ${item.symbol}" ${checked}></div>
+                <div class="c-rank" role="cell">${rankCell}</div>
+                <div class="c-sym" role="cell">
                     <a class="sym" href="${tvUrl}" target="_blank" rel="noopener noreferrer" title="在 TradingView 打开 ${item.symbol} 图表">
                         <span class="sym__base">${symLabel}</span>
                         <span class="sym__tv">TV ↗</span>
                     </a>${subInfo}
                 </div>
-                <div class="c-val">
+                <div class="c-val" role="cell">
                     <span class="val${valCls}">${displayValue}<span class="val__bar" style="width:${barW}%"></span></span>
                 </div>
             </div>`;
@@ -1197,12 +1203,18 @@ function etfPulseTiles() {
 function renderSkeleton() {
     const tbody = document.getElementById("rankBody");
     if (!tbody) return;
-    tbody.innerHTML = Array.from({ length: 8 }, () => `
-        <div class="skeleton-row">
-            <span class="sk" style="width:18px"></span>
-            <span class="sk" style="width:${34 + Math.round(Math.random() * 26)}%"></span>
-            <span class="sk" style="width:64px;margin-left:auto"></span>
-        </div>`).join("");
+    // 复用真实行的四列 class → 零横向漂移、继承响应式列宽,数据到位时不再整体重排。
+    // 静态灰条(GPU 硬约束禁动画);pointer-events:none 关掉骨架 hover。
+    tbody.innerHTML = Array.from({ length: 10 }, () => {
+        const w = 90 + Math.round(Math.random() * 80);
+        return `
+        <div class="tr" style="pointer-events:none">
+            <div class="c-check"><span class="sk" style="width:15px;height:15px;border-radius:4px"></span></div>
+            <div class="c-rank"><span class="sk" style="width:20px"></span></div>
+            <div class="c-sym"><span class="sk" style="width:${w}px"></span><div class="sub"><span class="sk" style="width:55%;height:9px;margin-top:6px"></span></div></div>
+            <div class="c-val"><span class="sk" style="width:64px;margin-left:auto"></span></div>
+        </div>`;
+    }).join("");
 }
 
 /** 拉付费全量数据。返回 {data, authFailed}：
@@ -1223,6 +1235,7 @@ async function fetchPaidData() {
             license.valid = true;
             license.reason = null;
             license.expiresAt = resp.headers.get("X-License-Expires");
+            license.plan = resp.headers.get("X-License-Plan"); // Worker 现回传套餐,供徽标"已解锁 · 季付"
             return { data: await resp.json(), authFailed: false };
         }
         if (resp.status === 401 || resp.status === 402) {
@@ -1406,7 +1419,13 @@ function openUnlockDialog(hintMsg) {
     if (input) input.value = license.key || "";
     const msg = document.getElementById("licenseMsg");
     if (msg) {
-        msg.textContent = hintMsg || "";
+        // 已解锁用户点"管理通行证"(无 hint)时,顺带展示到期日——header 里早已拿到 expiresAt
+        // 却从不显示;有 hint(如"付款已收到…")时不覆盖。
+        let m = hintMsg || "";
+        if (!m && license.valid && license.expiresAt) {
+            m = `当前通行证有效期至 ${String(license.expiresAt).slice(0, 10)}`;
+        }
+        msg.textContent = m;
         msg.className = "lic-msg";
     }
     dlg.showModal();
@@ -1466,9 +1485,12 @@ function initPaywallUI() {
         license.key = key;
         safeStore.set("localStorage", LS_LICENSE, key);
         if (msg) { msg.textContent = "校验中…"; msg.className = "lic-msg"; }
+        const sbtn = document.querySelector("#licenseForm .btn-primary");
+        if (sbtn) sbtn.disabled = true; // 校验期间禁用"解锁",防慢网并发重复提交(与 checkout 一致)
         lastPaidUpdateTime = null; // 强制这次不跳过，立即真实校验一次
         const result = await fetchPaidData();
         if (result.data) {
+            if (sbtn) sbtn.disabled = false;
             paidData = result.data;
             // 合并后必须恢复 updateTime：paidData 带的是 KV **上传时刻**（谁上传谁刷新），
             // 直接盖掉免费文件的 build 时刻会让下一轮 loadData 的单调性守卫把正常新数据
@@ -1485,6 +1507,7 @@ function initPaywallUI() {
             renderPulse();
             setTimeout(() => document.getElementById("licenseDialog").close(), 700);
         } else {
+            if (sbtn) sbtn.disabled = false;
             renderLicenseStatus();
             if (msg) {
                 msg.textContent = LOCK_REASON[license.reason] || "校验失败，请稍后重试";
@@ -1545,9 +1568,11 @@ function updateExportBar() {
     }
     // 同步全选框状态
     const checks = document.querySelectorAll(".symbol-check");
-    if (checks.length > 0) {
-        checkAll.checked = [...checks].every(c => c.checked);
-    }
+    const arr = [...checks];
+    const all = arr.length > 0 && arr.every(c => c.checked);
+    checkAll.checked = all;
+    // 部分选中显示 indeterminate 横杠(否则 SR 读成"未选中")；切到 0 行 tab 也清掉残留
+    checkAll.indeterminate = arr.some(c => c.checked) && !all;
 }
 
 function exportTradingViewTxt() {
@@ -1622,7 +1647,9 @@ function bindNavEvents(rootId, closeDrawerAfter) {
     if (!root) return;
     root.addEventListener("click", e => {
         const seg = e.target.closest(".asset-seg__opt");
-        if (seg) { switchAsset(seg.dataset.k); if (closeDrawerAfter) closeDrawer(); return; }
+        // 抽屉内切资产**不**关抽屉：移动端抽屉是唯一资产入口,切完资产要让用户接着选具体
+        // 榜单(此前立即 closeDrawer 会把用户甩回该资产默认榜)。选具体 nav-item 才关。
+        if (seg) { switchAsset(seg.dataset.k); return; }
         const item = e.target.closest(".nav-item");
         if (item) { switchTab(item.dataset.tab); if (closeDrawerAfter) closeDrawer(); }
     });
@@ -1631,17 +1658,32 @@ bindNavEvents("rail", false);
 bindNavEvents("drawer", true);
 
 // === 移动抽屉 ===
+// 抽屉焦点管理:打开时把背景(topbar/wrap/dock)设 inert——键盘 Tab 困在抽屉内、SR 也
+// 读不到背景;焦点移入抽屉;关闭时归还 inert 并把焦点还给汉堡。inert 优雅降级(旧浏览器
+// no-op),不引入 sticky/backdrop/无限动画。桌面(≥641px)抽屉 display:none,inert 无害。
+const DRAWER_BG_SEL = [".topbar", ".wrap", "#exportBar"];
 function openDrawer() {
-    document.getElementById("drawer").classList.add("is-open");
+    const drawer = document.getElementById("drawer");
+    drawer.classList.add("is-open");
+    drawer.removeAttribute("inert");
     document.getElementById("drawerScrim").classList.add("is-open");
     document.body.classList.add("no-scroll"); // 锁背景滚动,抽屉内滚动不再带动页面
     document.getElementById("hamburger").setAttribute("aria-expanded", "true");
+    DRAWER_BG_SEL.forEach(sel => document.querySelector(sel)?.setAttribute("inert", ""));
+    document.getElementById("drawerClose").focus();
 }
 function closeDrawer() {
-    document.getElementById("drawer").classList.remove("is-open");
+    const drawer = document.getElementById("drawer");
+    const wasOpen = drawer.classList.contains("is-open");
+    drawer.classList.remove("is-open");
     document.getElementById("drawerScrim").classList.remove("is-open");
     document.body.classList.remove("no-scroll");
     document.getElementById("hamburger").setAttribute("aria-expanded", "false");
+    drawer.setAttribute("inert", ""); // 关闭后抽屉本身也 inert,背景恢复可交互
+    DRAWER_BG_SEL.forEach(sel => document.querySelector(sel)?.removeAttribute("inert"));
+    // 仅当确实从"打开"态关闭才归还焦点——未开时全局 Esc 触发 closeDrawer 是无害空操作,
+    // 不该抢走用户当前焦点。清 inert 必须在 focus 之前。
+    if (wasOpen) document.getElementById("hamburger").focus();
 }
 // Esc 关抽屉(dialog 自带 Esc,抽屉是自绘的要手动补;未开时是无害空操作)
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });

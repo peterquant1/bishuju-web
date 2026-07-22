@@ -23,8 +23,9 @@
     --up:#10c98a; --down:#f6465d;
     /* text ramp */
     /* muted-2 曾是 #5b6474(对 panel 仅 2.9:1)——三级文字大量用在 10.5-11px 的副行/
-       标签上,提到 ~4.3:1 明显更可读,同时仍暗于 muted 保住层级 */
-    --text:#e9edf4; --muted:#8f99ad; --muted-2:#737d93;
+       标签上,提到 ~5.4:1(对 panel 达 WCAG AA 4.5)明显更可读,同时仍暗于 muted 保住层级
+       (2026-07-22 审计:从 #737d93≈4.42:1 提到 #828ca3≈5.4:1，补齐 AA) */
+    --text:#e9edf4; --muted:#8f99ad; --muted-2:#828ca3;
     /* asset identity — 加密金 / A股蓝 / 美股紫 / ETF青（互不冲突，也不撞 up/down 的绿/红）*/
     --asset-crypto:#f0b90b; --asset-ashare:#6ab0ff; --asset-us:#a78bfa; --asset-etf:#2dd4bf;
     /* directional(在 [data-asset] 下翻转)*/
@@ -33,7 +34,7 @@
     --bar-up:linear-gradient(90deg,rgba(16,201,138,.10),rgba(16,201,138,.78));
     --bar-down:linear-gradient(90deg,rgba(246,70,93,.10),rgba(246,70,93,.78));
     --bar-gold:linear-gradient(90deg,rgba(240,185,11,.10),rgba(240,185,11,.72));
-    --bar-pos:var(--bar-up); --bar-neg:var(--bar-down);
+    --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:var(--bar-gold);
     /* semantic surfaces(硬编码深色全走这里,换主题自动翻)*/
     --th-bg:#151a24; --row-line:rgba(30,36,48,.5);
     --hover-wash:rgba(255,255,255,.04); --active-wash:rgba(255,255,255,.06); --nav-hover:rgba(255,255,255,.045);
@@ -66,6 +67,11 @@
     --up:#0b7a50; --down:#c81f38;
     --asset-ashare:#2166cc; --asset-us:#7c3aed; --asset-etf:#0d9488;
     --gold-ink:#806200;
+    /* 强度条渐变亮色覆盖(2026-07-22 审计:三个 --bar-* 原为暗色专属,亮色下值列条仍用暗色
+       更亮的绿/红,与已调深的数值文字不匹配)。经 var() 晚绑定自动流入各资产 --bar-pos/neg。 */
+    --bar-up:linear-gradient(90deg,rgba(11,122,80,.12),rgba(11,122,80,.72));
+    --bar-down:linear-gradient(90deg,rgba(200,31,56,.12),rgba(200,31,56,.72));
+    --bar-gold:linear-gradient(90deg,rgba(128,98,0,.12),rgba(128,98,0,.6));
     --th-bg:#eef2f7; --row-line:rgba(23,33,55,.08);
     --hover-wash:rgba(23,33,55,.035); --active-wash:rgba(240,185,11,.12); --nav-hover:rgba(23,33,55,.045);
     --header-bg:rgba(255,255,255,.92); --dock-bg:rgba(255,255,255,.98);
@@ -84,12 +90,15 @@
 }
 
 /* ---- 资产价格语义作用域(挂在 .app 上;A股 涨红跌绿)---- */
-[data-asset="crypto"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --asset-accent:var(--asset-crypto); }
-[data-asset="ashare"]{ --price-up:var(--down); --price-down:var(--up); --bar-pos:var(--bar-down); --bar-neg:var(--bar-up); --asset-accent:var(--asset-ashare); }
+/* --bar-neutral = 中性排序轴(RSI/成交额/资金强弱等非涨跌方向)时值列强度条的颜色，
+   跟随资产强调色，不再一律金色(2026-07-22 审计:此前四资产都落到 --bar-gold 与蓝/紫/青
+   强调色打架)。val--up/down 的 --bar-pos/--bar-neg 特异性更高，涨跌红绿仍正确。 */
+[data-asset="crypto"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:var(--bar-gold); --asset-accent:var(--asset-crypto); }
+[data-asset="ashare"]{ --price-up:var(--down); --price-down:var(--up); --bar-pos:var(--bar-down); --bar-neg:var(--bar-up); --bar-neutral:linear-gradient(90deg,rgba(106,176,255,.10),rgba(106,176,255,.72)); --asset-accent:var(--asset-ashare); }
 /* 美股涨绿跌红，跟国际习惯/crypto 一致，不像 A股 翻转 */
-[data-asset="us"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --asset-accent:var(--asset-us); }
+[data-asset="us"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:linear-gradient(90deg,rgba(167,139,250,.10),rgba(167,139,250,.72)); --asset-accent:var(--asset-us); }
 /* ETF（美股上市大类资产）同美股：涨绿跌红 */
-[data-asset="etf"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --asset-accent:var(--asset-etf); }
+[data-asset="etf"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:linear-gradient(90deg,rgba(45,212,191,.10),rgba(45,212,191,.72)); --asset-accent:var(--asset-etf); }
 
 /* ---------------- reset + page ---------------- */
 *{margin:0;padding:0;box-sizing:border-box}
@@ -103,6 +112,10 @@ body.no-scroll{overflow:hidden} /* 抽屉开启时锁背景滚动 */
 a{color:var(--gold);text-decoration:none}
 a:hover{color:var(--gold-hi)}
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px}
+/* 跳到主内容(键盘用户;平时藏在视口上方,聚焦滑入) */
+.skip-link{position:absolute;left:8px;top:-48px;z-index:200;padding:8px 14px;background:var(--bg1);color:var(--gold-ink);border:1px solid var(--line);border-radius:8px;font-size:13px;transition:top .15s}
+.skip-link:focus{top:8px}
+.main:focus{outline:none}
 
 /* ---------------- app 骨架 ---------------- */
 .app{min-height:100vh;padding-bottom:96px;color:var(--text)}
@@ -125,15 +138,18 @@ a:hover{color:var(--gold-hi)}
 .theme-btn:hover{color:var(--text);border-color:var(--muted)}
 
 /* 新鲜度胶囊(桌面双胶囊,非激活侧 .is-dim)*/
-.fresh{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);border-radius:var(--r-pill);padding:5px 12px;font-variant-numeric:tabular-nums;white-space:nowrap;transition:opacity var(--dur-smooth),border-color .15s;cursor:pointer}
-.fresh.is-dim{opacity:.5}
+/* 胶囊现在是 <button>（键盘/SR 可达，见 index.html）：appearance/font 复位按钮默认样式。
+   cursor 只给 .is-dim（= 点击真正有效的那一侧，切资产）；当前资产侧非 dim（含 ETF 视图下的
+   freshUS 空操作）用默认光标，不误导（2026-07-22 审计）。 */
+.fresh{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);border-radius:var(--r-pill);padding:5px 12px;font-variant-numeric:tabular-nums;white-space:nowrap;transition:opacity var(--dur-smooth),border-color .15s;font-family:inherit;appearance:none;-webkit-appearance:none}
+.fresh.is-dim{opacity:.5;cursor:pointer}
 .fresh.is-dim:hover{opacity:.85;border-color:var(--line-2)}
 .fresh__dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--muted-2)}
 .fresh--ok .fresh__dot{background:var(--up)}
 .fresh--warn .fresh__dot{background:var(--gold)}
 .fresh--bad .fresh__dot{background:var(--down)}
 .fresh__asset{font-weight:700}
-.fresh__asset.crypto{color:var(--asset-crypto)}
+.fresh__asset.crypto{color:var(--gold-ink)}
 .fresh__asset.ashare{color:var(--asset-ashare)}
 .fresh__asset.us{color:var(--asset-us)}
 .fresh b{color:var(--text);font-weight:600}
@@ -177,6 +193,7 @@ a:hover{color:var(--gold-hi)}
 .asset-seg__opt[data-k="us"].is-active{background:linear-gradient(135deg,#c4b5fd,#a78bfa 55%,#7c3aed);color:#160b2e;box-shadow:0 3px 14px rgba(167,139,250,.32)}
 .asset-seg__opt[data-k="etf"].is-active{background:linear-gradient(135deg,#7ae8da,#2dd4bf 55%,#0d9488);color:#04211c;box-shadow:0 3px 14px rgba(45,212,191,.32)}
 .asset-seg__opt.is-active .asset-seg__dot{background:rgba(0,0,0,.4)}
+.asset-seg__opt:not(.is-active):hover{color:var(--text);background:var(--nav-hover)}
 .board-nav{display:flex;flex-direction:column;gap:11px}
 .nav-group{display:flex;flex-direction:column;gap:3px}
 .nav-group+.nav-group{border-top:1px dashed var(--group-dash);padding-top:9px}
@@ -200,14 +217,14 @@ a:hover{color:var(--gold-hi)}
 .tf-chip{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:4px;font-size:10px;font-weight:700;flex:none}
 /* 多字符周期角标（如 12H）：单字角标(日/周/月)保持 15×15 方形不变，多字的放宽成小药丸 */
 .tf-chip--wide{width:auto;min-width:15px;padding:0 4px;letter-spacing:.2px}
-[data-asset="crypto"] .tf-chip{background:rgba(240,185,11,.16);color:var(--gold)}
+[data-asset="crypto"] .tf-chip{background:rgba(240,185,11,.16);color:var(--gold-ink)}
 [data-asset="ashare"] .tf-chip{background:rgba(90,160,255,.18);color:var(--asset-ashare)}
 [data-asset="us"] .tf-chip{background:rgba(167,139,250,.18);color:var(--asset-us)}
 [data-asset="etf"] .tf-chip{background:rgba(45,212,191,.16);color:var(--asset-etf)}
 .rail-foot{margin-top:2px;padding:10px 8px 2px;border-top:1px solid var(--line);font-size:11px;color:var(--muted-2);letter-spacing:.3px;font-variant-numeric:tabular-nums}
 
 /* ---------------- 市场脉搏(无缝状态条)---------------- */
-.pulse{display:flex;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);overflow:hidden;margin-bottom:14px}
+.pulse{display:flex;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);overflow:hidden;margin-bottom:12px}
 .pulse__cell{flex:1;min-width:0;padding:13px 16px}
 .pulse__cell+.pulse__cell{border-left:1px solid var(--line)}
 .pulse__label{font-size:11px;color:var(--muted-2);letter-spacing:.5px;margin-bottom:5px;white-space:nowrap}
@@ -238,13 +255,15 @@ a:hover{color:var(--gold-hi)}
 .mkt__score{font-size:15px;font-weight:800;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 .mkt__score em{font-style:normal;font-size:11.5px;font-weight:700;margin-left:5px}
 .mkt-z--fear2{color:#e5484d}.mkt-z--fear{color:#e5844d}.mkt-z--neutral{color:var(--muted)}.mkt-z--greed{color:#46a758}.mkt-z--greed2{color:#30a46c}
+/* 亮色覆盖(2026-07-22 审计:.mkt__score 15px/800 粗体需 4.5:1,四档情绪色暗色专属值在亮色下 2.7-3.9 不达标) */
+[data-theme="light"] .mkt-z--fear2{color:#c81f38}[data-theme="light"] .mkt-z--fear{color:#a8531a}[data-theme="light"] .mkt-z--greed{color:#1c7a3f}[data-theme="light"] .mkt-z--greed2{color:#0b7a50}
 
 /* ---------------- board 头(标识 + 搜索)---------------- */
 .board-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:13px 18px;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:12px}
 .board-head__title{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .board-head__name{font-size:16.5px;font-weight:700;margin:0;letter-spacing:.3px}
-.board-head__note{font-size:12px;color:var(--muted-2);margin-top:6px;font-variant-numeric:tabular-nums}
-.asset-tag{font-size:12px;font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.5px;color:var(--gold);background:rgba(240,185,11,.13);white-space:nowrap}
+.board-head__note{font-size:12.5px;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
+.asset-tag{font-size:12px;font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.5px;color:var(--gold-ink);background:rgba(240,185,11,.13);white-space:nowrap}
 .asset-tag.is-ashare{color:var(--asset-ashare);background:rgba(90,160,255,.15)}
 .asset-tag.is-us{color:var(--asset-us);background:rgba(167,139,250,.15)}
 .asset-tag.is-etf{color:var(--asset-etf);background:rgba(45,212,191,.14)}
@@ -301,6 +320,8 @@ a:hover{color:var(--gold-hi)}
 .chk{accent-color:var(--gold);width:15px;height:15px;cursor:pointer}
 .chk--row{opacity:.32;transition:opacity .12s}
 .tr:hover .chk--row,.chk--row:checked{opacity:1}
+/* 触屏无 hover：未勾选态若停在 .32 几乎不可见，抬到 .62（:checked 特异性更高仍恒亮） */
+@media (hover:none){.chk--row{opacity:.62}}
 .row-accent{position:absolute;left:0;top:15%;height:70%;width:2.5px;border-radius:3px;background:var(--asset-accent);opacity:0;transition:opacity .14s}
 .tr:hover .row-accent{opacity:1}
 .medal{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:8px;font-size:12px;font-weight:800;font-family:var(--mono)}
@@ -323,7 +344,7 @@ a:hover{color:var(--gold-hi)}
 .val{position:relative;display:inline-block;padding-bottom:6px;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;font-size:15px;letter-spacing:-.2px;white-space:nowrap;color:var(--text)}
 .val--up{color:var(--price-up)}
 .val--down{color:var(--price-down)}
-.val__bar{position:absolute;bottom:0;right:0;height:3px;border-radius:3px;min-width:8px;max-width:100%;background:var(--bar-gold)}
+.val__bar{position:absolute;bottom:0;right:0;height:3px;border-radius:3px;min-width:8px;max-width:100%;background:var(--bar-neutral)}
 .val--up .val__bar{background:var(--bar-pos)}
 .val--down .val__bar{background:var(--bar-neg)}
 .table-foot{margin-top:10px;padding:0 4px;font-size:11.5px;color:var(--muted-2);text-align:right;letter-spacing:.3px;font-variant-numeric:tabular-nums}
@@ -433,13 +454,15 @@ a:hover{color:var(--gold-hi)}
     .board-head{flex-direction:column;align-items:stretch;gap:9px;padding:12px 13px}
     .board-head__name{font-size:15.5px}
     .search{width:100%}
-    /* 搜索框字号必须 ≥16px：iOS Safari 对 <16px 的输入框聚焦时会强制放大整页 */
+    /* 搜索框字号必须 ≥16px：iOS Safari 对 <16px 的输入框聚焦时会强制放大整页。
+       弹窗输入框(通行证/邮箱,付费转化路径)同理——原 14px 在 iOS 聚焦时也会放大整页 */
     .search__input{font-size:16px}
+    .text-input{font-size:16px}
     /* 表体高度跟屏幕走(dvh 容忍手机地址栏伸缩;不支持 dvh 的老浏览器落回 420px) */
     .tbody{max-height:420px;max-height:min(64dvh,600px)}
     .sort-chip{padding:7px 13px} /* 触控目标略放大 */
     .c-check{width:36px}
-    .c-check .chk{width:13px;height:13px}
+    .c-check .chk{width:16px;height:16px}
     .c-rank{width:42px;padding-left:4px}
     .c-val{width:116px;padding:0 12px 0 6px;overflow:hidden;text-overflow:ellipsis}
     .c-sym{padding:8px 6px 8px 2px}
@@ -481,6 +504,15 @@ a:hover{color:var(--gold-hi)}
 @media (max-width:860px){
     .topbar__tools .fresh.is-dim{display:none}
     #licenseStatus{display:none}
+}
+/* 641–860px（P1 审计死区）：这一档仍是桌面双列布局（移动块要 ≤640px 才生效），但
+   266px rail + 22px gap 挤下，值列在 ~660–768px 被裁、标的列一度压到十几 px。收窄
+   rail 到 210px、缩固定列，把宽度让给标的列。与 ≤640px 移动块阈值不重叠、不冲突。 */
+@media (min-width:641px) and (max-width:860px){
+    .layout{grid-template-columns:210px minmax(0,1fr);gap:16px}
+    .c-rank{width:48px}
+    .c-val{width:150px;padding:0 12px 0 6px;overflow:hidden;text-overflow:ellipsis}
+    .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 }
 
 /* ≤360px 超窄屏:再压固定列宽 */

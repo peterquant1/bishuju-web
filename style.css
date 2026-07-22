@@ -267,6 +267,9 @@ a:hover{color:var(--gold-hi)}
 [data-asset="ashare"] .tf-chip{background:rgba(90,160,255,.18);color:var(--asset-ashare)}
 [data-asset="us"] .tf-chip{background:rgba(167,139,250,.18);color:var(--asset-us)}
 [data-asset="etf"] .tf-chip{background:rgba(45,212,191,.16);color:var(--asset-etf)}
+/* 亮色下 crypto 琥珀墨 #9a4f04 配 18% 琥珀底实测只有 ~3.95:1（10px 小字要 4.5），单独
+   调深一档到 6.4:1；蓝/紫/青三资产同法实测 4.6~5.6 达标不动（2026-07-22 深夜审美 PASS）。 */
+[data-theme="light"] [data-asset="crypto"] .tf-chip{color:#7a3e03}
 .rail-foot{margin-top:2px;padding:10px 8px 2px;border-top:1px solid var(--line);font-size:11px;color:var(--muted-2);letter-spacing:.3px;font-variant-numeric:tabular-nums}
 
 /* ---------------- 市场脉搏(无缝状态条)---------------- */

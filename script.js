@@ -132,9 +132,6 @@ const TABS_CONFIG = {
     // === 加密 周线策略（四轴：RSI/成交额 主轴 + CVD强弱 + 订单流）===
     weeklyRsi: { sorts: cryptoRsiFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额", momentumStr(v)) },
     weeklyEma921: { sorts: cryptoRsiFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
-    weeklyCvd: { sorts: cryptoRsiFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
-    weeklyEmaBearish: { sorts: cryptoRsiFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
-    weeklySarCvdBearish: { sorts: cryptoRsiFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
 
     // === 加密 日线策略（五轴：RSI/成交额/CVD强弱/订单流 + 结构张开）===
     // 2026-07-22 站长要求加密侧也上「结构张开」轴，但只挂这一个日线策略榜（其行本就带
@@ -328,13 +325,7 @@ const TAB_GROUPS = [
             { key: "weeklyRsi", name: "周线强度池",
               desc: "只按周线动能强度筛出的宽口径池子，不带结构条件——本组唯一一个不看结构的榜。" },
             { key: "weeklyEma921", name: "周线趋势",
-              desc: "周线级别结构转强的标的，趋势级别比日线更大、持续性更强。" },
-            { key: "weeklyCvd", name: "周线趋势 · 资金",
-              desc: "在「周线趋势」基础上追加资金流向确认。" },
-            { key: "weeklyEmaBearish", name: "周线趋势 · 回踩",
-              desc: "在「周线趋势」基础上，只取本周出现回调的——上涨结构中的回踩位置。" },
-            { key: "weeklySarCvdBearish", name: "周线趋势 · 回踩强化",
-              desc: "在「周线趋势 · 回踩」基础上再叠两层确认，回踩类里最严格的一档。" },
+              desc: "周线级别结构转强、且资金面未见转弱的标的，趋势级别比日线更大、持续性更强。" },
         ],
     },
     {

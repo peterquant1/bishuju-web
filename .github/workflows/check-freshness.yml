@@ -1,0 +1,65 @@
+name: Check Data Freshness
+
+# 数据停更告警：本机三个计划任务是唯一的数据更新通道（GH Actions 抓取因代理失效停用），
+# 机器离线/睡眠/任务挂掉时没有任何兜底，只能靠这里发现。
+# 只在数据落后超过阈值时 fail —— fail 即 GitHub 给你发邮件，收到就去看机器。
+#
+# 2026-07-22 拆仓库后：本仓库 bishuju-web 是公开的前端+数据仓库，三个本机任务把
+# data/rankings.json 推到这里（后端源码在私有仓库 bishuju）。这里读的就是任务 push 的
+# 结果（actions/checkout 拉下来的已提交文件），不夹 Pages/CDN 两层，直接反映数据是否停更。
+# 若日后想连"公开站是否还在服务"也一起监控，把 read-from-checkout 换成 urllib 抓
+# https://gouzhuang748.com/data/rankings.json 即可。
+
+on:
+  schedule:
+    # 每 2 小时查一次（GH cron 可能延迟/跳过，但停更状态会持续存在，下一次总能抓到）
+    - cron: '17 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (仅最新一次提交，避免拉整段每小时数据提交的历史)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Check updateTime is fresh
+        run: |
+          python3 - << 'PYEOF'
+          import json, sys
+          from datetime import datetime, timezone
+
+          with open("data/rankings.json", encoding="utf-8") as f:
+              data = json.load(f)
+
+          def age_min(field):
+              ts = datetime.strptime(data[field], "%Y-%m-%d %H:%M:%S UTC").replace(tzinfo=timezone.utc)
+              return (datetime.now(timezone.utc) - ts).total_seconds() / 60
+
+          a = age_min("updateTime")
+          print(f"updateTime: {data['updateTime']}  (落后 {a:.0f} 分钟，crypto 独占字段——A股/美股 不写它)")
+          if a > 150:
+              print("::error::加密数据已超过 2.5 小时未更新 —— 本机每小时计划任务可能挂了，去看机器！")
+              sys.exit(1)
+
+          # A股/美股独立新鲜度检查：两者都是 daily cadence（A股 每天 15:05 北京时间收盘后、
+          # 美股 每天 21:20 UTC 触发后还要等发布+增量补缓存），用远大于 crypto 的 30 小时
+          # 阈值（容忍节假日/偶发延迟）；字段不存在（该管道还没跑过第一次）时跳过而非报警。
+          # updateTime 是"谁最后写谁生效"，crypto 每小时都会刷新它，光看它无法发现
+          # A股/美股 任务本身挂了。
+          for field, label, task in [
+              ("ashareUpdateTime", "A股", "A股每日计划任务"),
+              ("usUpdateTime", "美股", "美股每日计划任务"),
+          ]:
+              if field not in data:
+                  continue
+              m = age_min(field)
+              print(f"{field}: {data[field]}  (落后 {m:.0f} 分钟)")
+              if m > 30 * 60:
+                  print(f"::error::{label}数据已超过 30 小时未更新 —— {task}可能挂了，去看机器！")
+                  sys.exit(1)
+
+          print("OK：数据新鲜。")
+          PYEOF

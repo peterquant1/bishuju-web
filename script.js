@@ -1,9 +1,12 @@
 // === 排序轴（2026-07-17 加 CVD强弱 第三轴 + 订单流；OI增仓 曾于 2026-07-19 加、07-20 移除；
-// 2026-07-20 深夜给 A股/美股/ETF 加 量比/EMA间距 两进阶轴）===
+// 2026-07-20 深夜给 A股/美股/ETF 加 量比/EMA间距 两进阶轴；2026-07-22 深夜给加密日线策略
+// 行家族〔dailyEma921/weeklyStrategy〕加 参与度/距前高 两轴 + weeklyStrategy 周线强度轴）===
 // 每个 tab 的每一行 payload 统一带 rsi / volume / volumeFormatted / cvdStrength 字段
-// （加密行另带 takerStrength，A股/美股/ETF 行另带 volRatio/emaGap），排序键稳定：
+// （加密行另带 takerStrength，A股/美股/ETF 行另带 volRatio/emaGap；加密日线策略行家族
+// 另带 volRatio/emaGap/highDist，weeklyStrategy 再带 weeklyRsi），排序键稳定：
 //   A股/美股/ETF 策略 tab 五轴 [RSI, 成交额, CVD强弱, 量比, EMA间距]、涨跌幅六轴 [涨幅, ...]；
-//   加密 策略 tab 四轴（+订单流）、加密 涨跌幅五轴。默认轴＝该 tab 本来的主指标排最前。
+//   加密 普通策略 tab 四轴（+订单流）、加密 涨跌幅五轴；加密日线策略行家族 七/八轴。
+//   默认轴＝该 tab 本来的主指标排最前。
 // sortField 直接是行上的字段名，getSortedItems 按它比较（null 沉底）。
 //
 // CVD强弱 = 归一化买卖失衡比 ∈ [−1,+1]（后端 calc_cvd_strength）：+1 纯买/吸筹、0 均衡、
@@ -34,9 +37,12 @@ function axesSub(item, sf, volLabel, extra) {
     // 数据驱动判断即可，无需 per-tab 配置。与 CVD强弱 背离时（阴线+订单流正=借跌吸筹）
     // 正是这轴的价值所在，所以两个都进副行。
     if ("takerStrength" in item && sf !== "takerStrength") seg.push(`买卖失衡 ${fmtCvdVal(item.takerStrength)}`);
-    // 量比/EMA间距 只有 A股/美股/ETF 行有（crypto 管道未挂这两轴），同样数据驱动判断。
+    // 量比/EMA间距：A股/美股/ETF 行 + 加密日线策略行家族（dailyEma921/weeklyStrategy）有，
+    // 数据驱动判断。距前高/周线强度 只有加密日线策略行家族（后者仅 weeklyStrategy）有。
     if ("volRatio" in item && sf !== "volRatio") seg.push(`参与度 ${fmtRatioVal(item.volRatio)}`);
     if ("emaGap" in item && sf !== "emaGap") seg.push(`结构张开 ${fmtGapVal(item.emaGap)}`);
+    if ("highDist" in item && sf !== "highDist") seg.push(`距前高 ${fmtGapVal(item.highDist)}`);
+    if ("weeklyRsi" in item && sf !== "weeklyRsi") seg.push(`周线强度 ${fmtRsiVal(item.weeklyRsi)}`);
     // 振幅 只有免费行情榜（涨跌幅/成交额/振幅）的行有——策略榜行没这个 key，数据驱动跳过。
     if ("amplitude" in item && sf !== "amplitude") seg.push(`振幅 ${fmtAmpVal(item.amplitude)}`);
     if (extra) seg.push(extra);
@@ -72,6 +78,13 @@ const axisChg = label => ({ key: "value", label, format: v => formatPercent(v.va
 // 站长没要求前不扩），crypto 行上没这两个 key。
 const AXIS_VOLRATIO = { key: "volRatio", label: "参与度", format: v => fmtRatioVal(v.volRatio) };
 const AXIS_EMAGAP = { key: "emaGap", label: "结构张开", format: v => fmtGapVal(v.emaGap) };
+// 距前高/周线强度（2026-07-22 深夜加，加密日线策略行家族独有——dailyEma921/weeklyStrategy）：
+// 距前高 = (收盘−近499日最高)/最高×100，恒 ≤0（0=正在创新高）——价格结构位置维度，
+// 降序=贴近前高的强势（上方无套牢盘），升序=深水区早期反转（空间大但阻力多）。
+// 周线强度 = 周线 RSI（仅 weeklyStrategy 行有，锚定大级别强弱；日线 RSI 看「谁启动最热」，
+// 周线 RSI 看「谁的大趋势最强」，两个维度都要给交易员）。
+const AXIS_HIGHDIST = { key: "highDist", label: "距前高", format: v => fmtGapVal(v.highDist) };
+const AXIS_WRSI = { key: "weeklyRsi", label: "周线强度", format: v => fmtRsiVal(v.weeklyRsi) };
 // A股/美股/ETF 五/六轴：主轴（RSI 或 成交额 或 涨幅）排最前，其余跟上
 const sortsRsiFirst = volLabel => [AXIS_RSI, axisVol(volLabel), AXIS_CVD, AXIS_VOLRATIO, AXIS_EMAGAP];
 const sortsVolFirst = volLabel => [axisVol(volLabel), AXIS_RSI, AXIS_CVD, AXIS_VOLRATIO, AXIS_EMAGAP];
@@ -129,16 +142,19 @@ const TABS_CONFIG = {
     monthlySarBreakout: { sorts: cryptoVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.changePercent != null ? `月涨幅 ${formatPercent(v.changePercent)}` : null) },
     monthlyFourBull: { sorts: cryptoVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.changePercent != null ? `月涨幅 ${formatPercent(v.changePercent)}` : null) },
 
-    // === 加密 周线策略（四轴：RSI/成交额 主轴 + CVD强弱 + 订单流）===
-    // weeklyRsi（周线强度池，纯 RSI≥50）2026-07-22 站长要求移除，本组只留母集 weeklyEma921。
-    weeklyEma921: { sorts: cryptoRsiFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
+    // === 加密 周线策略 weeklyStrategy「周线趋势 × 日线启动」（2026-07-22 深夜站长定版，
+    // 取代 weeklyEma921 母集；weeklyRsi 周线强度池 同日早些时候已移除）===
+    // 逻辑：周线 SAR 多头（硬过滤）∩ 日线策略 dailyEma921 命中集。行 payload 全部日线
+    // 数值（入场扫描视角，镜像 A股 月×日共振先例）+ weeklyRsi（周线强度轴）。
+    // 八轴 = 加密基础四轴 + 参与度/结构张开/距前高 + 周线强度（key 固定，调条件不改 key）。
+    weeklyStrategy: { sorts: [...cryptoRsiFirst("成交额"), AXIS_VOLRATIO, AXIS_EMAGAP, AXIS_HIGHDIST, AXIS_WRSI], subFormat: (v, sf) => axesSub(v, sf, "成交额") },
 
-    // === 加密 日线策略（五轴：RSI/成交额/CVD强弱/订单流 + 结构张开）===
-    // 2026-07-22 站长要求加密侧也上「结构张开」轴，但只挂这一个日线策略榜（其行本就带
-    // ema9/ema21，后端补 emaGap 字段零额外抓取；周/月榜不挂——那要动缓存 schema）。
-    // 故不改共享的 cryptoRsiFirst（它还喂周线母集榜 weeklyEma921，那些行没 emaGap，加了
-    // 会多出恒 null 轴），而是就地在其后追加 AXIS_EMAGAP，只影响本榜。
-    dailyEma921: { sorts: [...cryptoRsiFirst("成交额"), AXIS_EMAGAP], subFormat: (v, sf) => axesSub(v, sf, "成交额") },
+    // === 加密 日线策略（七轴：基础四轴 + 参与度/结构张开/距前高，2026-07-22 深夜扩充）===
+    // 行本就带 ema9/ema21（emaGap build 层现算），volRatio/highDist 由 get_daily_indicators
+    // 随行产出，全部零额外抓取；周/月榜不挂——那要动缓存 schema。故不改共享的
+    // cryptoRsiFirst（基础四轴工厂保持通用，行上没这些字段的榜用它不会多出恒 null 轴），
+    // 而是就地追加，只影响日线策略行家族（本榜 + 上方 weeklyStrategy）。
+    dailyEma921: { sorts: [...cryptoRsiFirst("成交额"), AXIS_VOLRATIO, AXIS_EMAGAP, AXIS_HIGHDIST], subFormat: (v, sf) => axesSub(v, sf, "成交额") },
 
     // === A股（2026-07-20 晚站长定版「纯多周期 EMA 矩阵」：涨跌幅 3 + 日线四线扩张 +
     // 周线三线扩张 + 月线两线扩张·SAR多头 = 6 tab；其余策略 tab 已移除，后端为保留组）===
@@ -312,8 +328,8 @@ const TAB_GROUPS = [
     {
         label: "周线策略", asset: "加密", tf: "周线",
         tabs: [
-            { key: "weeklyEma921", name: "周线趋势",
-              desc: "周线级别结构转强、且资金面未见转弱的标的，趋势级别比日线更大、持续性更强。" },
+            { key: "weeklyStrategy", name: "周线趋势 × 日线启动",
+              desc: "周线大级别方向已确认向上，且日线端刚出现启动信号——顺大势、做小势的入场扫描视角。" },
         ],
     },
     {

@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#07090d" id="themeColorMeta">
+    <meta name="theme-color" content="#0d1117" id="themeColorMeta">
     <!-- 亮色用户防闪暗:在样式表生效前就按 localStorage 置好 data-theme(审计 P2-6)。
-         裸访问 localStorage 可能抛(禁存储模式),必须 try 包住,否则整页脚本死掉。 -->
-    <script>try{if(localStorage.getItem("bishuju_theme")==="light"){document.documentElement.dataset.theme="light";document.getElementById("themeColorMeta").content="#f3f5f9";}}catch(e){}</script>
+         裸访问 localStorage 可能抛(禁存储模式),必须 try 包住,否则整页脚本死掉。
+         两个 hex 常量必须跟 style.css 的 --bg1(暗/亮)保持一致——2026-07-22 视觉系统 v4
+         重构改配色时这两处一起改，否则地址栏/状态栏颜色会跟页面背景对不上。 -->
+    <script>try{if(localStorage.getItem("bishuju_theme")==="light"){document.documentElement.dataset.theme="light";document.getElementById("themeColorMeta").content="#ffffff";}}catch(e){}</script>
     <title>狗庄74 — 加密 + A股 + 美股 + ETF 指标筛选排行榜</title>
     <meta name="description" content="62 个榜单覆盖加密货币 USDT 永续合约、A 股、美股与大类资产 ETF（黄金/原油/指数/国别）：多周期趋势与资金结构筛选，随收盘自动更新，一键导出自选清单。">
     <link rel="canonical" href="https://gouzhuang748.com/">
@@ -39,7 +41,7 @@
     <meta name="twitter:image" content="https://gouzhuang748.com/og.png">
     <meta name="twitter:image:alt" content="狗庄74 — 加密/A股/美股/ETF 指标筛选排行榜">
 
-    <link rel="stylesheet" href="style.css?v=33">
+    <link rel="stylesheet" href="style.css?v=34">
 </head>
 <body>
 <div class="app" id="app" data-asset="crypto">
@@ -51,17 +53,19 @@
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
             </button>
             <div class="brand">
+                <!-- 2026-07-22 视觉系统 v4:logo 渐变从金色轴换成品牌蓝轴(与 style.css
+                     --gold-grad 同源色标,改配色时两处一起改) -->
                 <svg class="brand__logo" viewBox="0 0 32 32" aria-hidden="true">
                     <defs>
                         <linearGradient id="gm" x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0" stop-color="#ffd875"/>
-                            <stop offset="1" stop-color="#e09c06"/>
+                            <stop offset="0" stop-color="#60a5fa"/>
+                            <stop offset="1" stop-color="#155dfc"/>
                         </linearGradient>
                     </defs>
                     <rect x="1" y="1" width="30" height="30" rx="8" fill="url(#gm)"/>
-                    <rect x="7" y="17" width="4" height="8" rx="1.5" fill="#0b0e11"/>
-                    <rect x="14" y="12" width="4" height="13" rx="1.5" fill="#0b0e11"/>
-                    <rect x="21" y="7" width="4" height="18" rx="1.5" fill="#0b0e11"/>
+                    <rect x="7" y="17" width="4" height="8" rx="1.5" fill="#fff"/>
+                    <rect x="14" y="12" width="4" height="13" rx="1.5" fill="#fff"/>
+                    <rect x="21" y="7" width="4" height="18" rx="1.5" fill="#fff"/>
                 </svg>
                 <div class="brand__text">
                     <div class="brand__name">狗庄74 <span class="brand__latin">gouzhuang748.com</span></div>
@@ -251,6 +255,6 @@
     </ol>
 </dialog>
 
-<script src="script.js?v=152"></script>
+<script src="script.js?v=153"></script>
 </body>
 </html>

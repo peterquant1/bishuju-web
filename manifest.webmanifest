@@ -4,8 +4,8 @@
   "description": "加密 + A股 + 美股 + ETF 指标筛选排行榜",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0d1117",
-  "theme_color": "#0d1117",
+  "background_color": "#f7f4ec",
+  "theme_color": "#f7f4ec",
   "icons": [
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]

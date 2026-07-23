@@ -3,41 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#0d1117">
+    <meta name="theme-color" content="#f7f4ec">
     <title>页面不存在 — 狗庄74</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-            background: #0d1117;
-            color: #e9edf4;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 24px;
+        /* 独立页,不读 style.css——v5「素白编辑」配色/字体在此内联一份(改品牌色记得同步) */
+        @font-face{font-family:"Geist";src:url("/fonts/geist-latin.woff2") format("woff2");font-weight:100 900;font-display:swap}
+        @font-face{font-family:"Geist Mono";src:url("/fonts/geist-mono-latin.woff2") format("woff2");font-weight:100 900;font-display:swap}
+        :root{
+            --bg:#f7f4ec; --text:#232019; --muted:#6c665a; --line:#e7e0d1;
+            --accent:#0f7a52; --accent-ink:#0a6547; --panel:#fffdf7;
         }
-        .code { font-size: 64px; font-weight: 800; color: #3b82f6; font-family: Consolas, monospace; }
-        p { color: #8f99ad; margin: 10px 0 26px; font-size: 14px; }
-        a {
-            display: inline-block;
-            background: #155dfc;
-            color: #fff;
-            font-weight: 700;
-            text-decoration: none;
-            padding: 11px 28px;
-            border-radius: 8px;
-            font-size: 14px;
+        @media (prefers-color-scheme:dark){
+            :root{ --bg:#141311; --text:#ece7dc; --muted:#9c9587; --line:#2a2720;
+                   --accent:#33c088; --accent-ink:#42ca90; --panel:#1b1915; }
         }
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{
+            font-family:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+            background:var(--bg); color:var(--text); min-height:100vh;
+            display:flex; align-items:center; justify-content:center; text-align:center; padding:24px;
+            -webkit-font-smoothing:antialiased;
+        }
+        .card{max-width:380px}
+        .brand{display:inline-flex;align-items:center;gap:9px;margin-bottom:26px;font-weight:700;font-size:15px;letter-spacing:-.2px}
+        .brand svg{width:26px;height:26px}
+        .code{font-size:72px;font-weight:700;color:var(--accent);font-family:"Geist Mono",ui-monospace,Consolas,monospace;letter-spacing:-.03em;line-height:1}
+        p{color:var(--muted);margin:14px 0 28px;font-size:14px;line-height:1.6}
+        a.home{
+            display:inline-block; background:var(--accent); color:#fff; font-weight:700;
+            text-decoration:none; padding:11px 28px; border-radius:9px; font-size:14px;
+            transition:box-shadow .18s;
+        }
+        a.home:hover{box-shadow:0 4px 14px rgba(15,122,82,.32)}
     </style>
 </head>
 <body>
-    <div>
+    <div class="card">
+        <div class="brand">
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+                <defs><linearGradient id="gm" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#2bbd86"/><stop offset="1" stop-color="#0f7a52"/>
+                </linearGradient></defs>
+                <rect x="1" y="1" width="30" height="30" rx="8" fill="url(#gm)"/>
+                <rect x="7" y="17" width="4" height="8" rx="1.5" fill="#fff"/>
+                <rect x="14" y="12" width="4" height="13" rx="1.5" fill="#fff"/>
+                <rect x="21" y="7" width="4" height="18" rx="1.5" fill="#fff"/>
+            </svg>
+            <span>狗庄74</span>
+        </div>
         <div class="code">404</div>
         <p>这个页面不存在 —— 榜单都在首页。</p>
-        <a href="/">回到排行榜</a>
+        <a class="home" href="/">回到排行榜</a>
     </div>
 </body>
 </html>

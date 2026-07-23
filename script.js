@@ -1775,14 +1775,14 @@ function applyTheme(t) {
     if (btn) btn.textContent = t === "light" ? "☀" : "◐";
     // 手机浏览器工具栏颜色跟随主题——index.html 首屏内联脚本只管「加载时」,
     // 这里补上「切换时」,否则亮色页面配深色地址栏。
-    // ⚠️ 两个 hex 必须跟 style.css 的 --bg1(暗/亮)保持一致(2026-07-22 视觉系统 v4
-    // 改配色时这里是第三份独立硬编码的拷贝,当时只同步了 index.html 和 manifest 两处,
-    // 漏了这里——审计发现每次切换主题/每次刷新页面都会把 index.html 刚设对的值又
-    // 覆盖回旧金色时代的 #07090d/#f3f5f9，三处以后要一起改）
+    // ⚠️ 两个 hex 必须跟 style.css 的 --bg1(亮 #f7f4ec / 暗 #141311)保持一致——这里是
+    // 第三份独立硬编码拷贝(index.html 内联脚本 + manifest + 这里,共三处),改配色一起改,
+    // 否则每次切换/刷新会把 index.html 刚设对的值又覆盖回旧值。
     const meta = document.getElementById("themeColorMeta");
-    if (meta) meta.content = t === "light" ? "#ffffff" : "#0d1117";
+    if (meta) meta.content = t === "light" ? "#f7f4ec" : "#141311";
 }
-applyTheme(safeStore.get("localStorage", LS_THEME) === "light" ? "light" : "dark");
+// v5 起亮色为默认底盘:除非用户显式存过 dark,否则一律亮色
+applyTheme(safeStore.get("localStorage", LS_THEME) === "dark" ? "dark" : "light");
 document.getElementById("themeBtn").addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
     safeStore.set("localStorage", LS_THEME, next);

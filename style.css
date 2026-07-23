@@ -1,174 +1,149 @@
 /* ============================================================
-   狗庄74 — 视觉系统 v4「massive.com 风格重构」
-   2026-07-22：品牌轴从「暗色终端 + 金色」换成「白净 SaaS + 单一蓝色强调」，
-   参照 massive.com（开发者向金融数据 API 站）的配色/字重/圆角/阴影语言——
-   大面积中性灰 + 一个强调色 + hairline 边框 + 克制阴影，去掉暗色版的
-   氛围光晕渐变和霓虹发光按钮。四资产识别色（加密/A股/美股/ETF）与涨跌
-   红绿是功能性的，不是装饰，全部保留；crypto 资产色因此从「等于品牌色」
-   解耦成独立琥珀色（见下方 --asset-crypto）。
-   结构:tokens(暗:root + 亮[data-theme] + 资产[data-asset])
+   狗庄74 — 视觉系统 v5「素白编辑 Editorial」
+   2026-07-23：从 v4「白净 SaaS + 蓝」转向「暖纸编辑 + 墨 + 单一宝石绿」。
+   基调参照 Mercury/Ramp 一类的编辑式金融品牌：暖纸画布、近黑墨字、一个
+   克制的深祖母绿强调、慷慨留白 + 考究字阶承担层级（不是靠更多卡片/更多颜色）。
+   —— 亮色成为默认底盘（编辑式的主角），暗色是同构的「暖炭」对位版（非旧 GitHub 蓝黑）。
+   —— 字体升级：自托管 Geist（正文/Latin）+ Geist Mono（全部数字），CJK 走系统栈；
+      这是「不再是 Segoe UI 默认脸」的最大一笔提升，见下方 @font-face。
+   结构:@font-face → tokens(:root=亮 + [data-theme=dark]=暗 + [data-asset]=价格语义)
         → 布局(topbar/rail/pulse/board/table 分离式/dock/drawer)
-        → 保留区块(modal/付费墙/页脚,已语义 token 化)
-   ⚠️ 三条 GPU 硬约束(真实黑屏事故,勿回退，本轮重构未触碰这三条):
+        → 弹窗/付费墙/页脚(语义 token 化)
+   ⚠️ 三条 GPU 硬约束(真实黑屏事故,勿回退，本轮未触碰):
      1) 禁 backdrop-filter + 固定背景  2) 禁 position:sticky
      3) 禁无限循环动画(一次性微交互 only;骨架屏是静态灰条)
+   ⚠️ 保留全部现有类选择器——script.js 依赖它们(medal--N/val--up/is-active/
+      mkt-z--*/fresh--ok 等)，本轮只改「值」不改「名」。
    ============================================================ */
 
-/* ---------------- tokens ---------------- */
+/* ---------------- 自托管字体(Latin 变量字体,单文件覆盖 400–700;CJK 走系统栈) ---------------- */
+@font-face{font-family:"Geist";src:url("fonts/geist-latin.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+2000-206F,U+2070-209F,U+20A0-20BF,U+2100-214F,U+2190-21FF,U+2212}
+@font-face{font-family:"Geist Mono";src:url("fonts/geist-mono-latin.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+2000-206F,U+2070-209F,U+20A0-20BF,U+2100-214F,U+2190-21FF,U+2212}
+
+/* ---------------- tokens（:root = 亮色/默认；[data-theme=dark] 覆盖为暗）---------------- */
 :root{
-    /* backgrounds — 保持深色终端基调，只去掉氛围光晕（见 body 规则），换纯色 */
-    --bg0:#0a0d12; --bg1:#0d1117;
-    --panel:#11151d; --panel-2:#171c26; --panel-3:#1d2330;
-    /* hairlines */
-    --line:#1e2430; --line-2:#2a3140;
-    /* 品牌强调轴（原金色，本轮改仿 massive.com 的单一蓝，见开头说明）*/
-    --gold:#3b82f6; --gold-hi:#60a5fa;
-    --gold-ink:#5b9dff; /* 品牌蓝「文字」用——亮色主题下换更深的蓝保对比度 */
-    /* 按钮实心填充色（审计发现的真实对比度 bug 修复）：--gold 在暗色主题下取较亮的
-       #3b82f6 是为了当"文字/图标色"贴着近黑背景仍然醒目——但同一个值当"填充按钮的
-       底色"配白字只有 3.68:1，不达 4.5:1。massive.com 的真实按钮本来就是纯色块
-       #155dfc（不是渐变），且这个值配白字在两个主题下都稳定达标（5.25:1）——按钮是
-       有边界的实心色块，不像贴页面背景的文字那样需要因主题变亮/变暗，两个主题统一用
-       同一个值即可，不用像 --gold 那样分主题。原 --gold-grad 渐变（浅端配白字仅
-       2.54~3.68:1）已废弃，全部按钮改用这个纯色。 */
-    --btn-fill:#155dfc; --btn-fill-rgb:21,93,252;
-    --gold-rgb:59,130,246; /* 需要 rgba() 透明度合成的地方配这个用 */
-    /* price semantics(crypto 默认:涨绿跌红)*/
-    --up:#10c98a; --down:#f6465d;
-    /* 独立的"警示"语义色，别挂在 --gold 上——--gold 本轮从金色改成品牌蓝后，任何
-       还借用它表达"警告/数据快过期"的地方语义会跟着悄悄变成蓝色（审计抓到的真实
-       bug：新鲜度胶囊红绿蓝三态圆点里蓝色不再传达警示感）。跟市场情绪仪表盘的
-       fear 色系 #e5a23d 保持同一路数（那处本来就是独立硬编码、不挂品牌色的），
-       两个主题共用同一个值，警示色不需要跟着主题变 */
-    --warn:#e5a23d;
-    /* text ramp */
-    --text:#e9edf4; --muted:#8f99ad; --muted-2:#828ca3;
-    /* asset identity — 加密琥珀 / A股蓝 / 美股紫 / ETF青（互不冲突，也不撞品牌蓝或 up/down 的绿/红；
-       crypto 曾经直接等于品牌金色，品牌轴改蓝后两者解耦，crypto 拿自己的暖色识别） */
-    --asset-crypto:#f2a93c; --asset-crypto-ink:#f2a93c; --asset-crypto-rgb:242,169,60;
-    --asset-ashare:#6ab0ff; --asset-us:#a78bfa; --asset-etf:#2dd4bf;
+    /* 暖纸画布(app 底 < 页面 < 卡片,靠明度差做图/底关系,不靠重阴影)*/
+    --bg0:#efe9dc; --bg1:#f7f4ec;
+    --panel:#fffdf7; --panel-2:#f8f4ea; --panel-3:#f1ece0;
+    /* 暖色 hairline */
+    --line:#e7e0d1; --line-2:#d8cfba;
+    /* 品牌强调轴 = 深祖母绿(token 名沿用 --gold,语义现为祖母绿;JS/CSS 多处引用故不改名)*/
+    --gold:#0f7a52; --gold-hi:#0b6444;
+    --gold-ink:#0a6547;   /* 当「文字」用的深一档,保证小字 ≥4.5:1 */
+    --gold-rgb:15,122,82;
+    /* 实心按钮填充(祖母绿块配白字,两主题共用同一值,白字对比 4.77:1 达 AA)*/
+    --btn-fill:#0f7a52; --btn-fill-rgb:15,122,82;
+    /* 价格语义(crypto/美股/ETF 默认涨绿跌红;A股 在 [data-asset] 翻转)*/
+    --up:#0b7a50; --down:#c4213a;
+    /* 独立「警示」暖琥珀(别挂 --gold,否则数据快过期的语义会变成品牌绿)*/
+    --warn:#b5750f;
+    /* 墨色文字阶梯(暖近黑 → 暖灰;muted-2 审计后调深至 AA:eyebrow/占位/名次在 panel/
+       panel-2 均 ≥4.5:1,同时仍比 muted 略浅一档保住二级弱化层次,不足处靠字号/字重区分)*/
+    --text:#232019; --muted:#6c665a; --muted-2:#757060;
+    /* 四资产识别色(功能性,非装饰;亮色下均已按 WCAG 调深)：加密琥珀/A股蓝/美股紫/ETF 深青
+       —— 与品牌祖母绿、涨跌绿红均可区分(青 vs 绿靠色相分开)*/
+    --asset-crypto:#9a4f04; --asset-crypto-ink:#9a4f04; --asset-crypto-rgb:154,79,4;
+    /* ashare/etf 审计后调深保证「作标签文字」在自身淡色底上 ≥4.5:1 */
+    --asset-ashare:#1d5cbf; --asset-us:#7c3aed; --asset-etf:#0a7061;
     /* directional(在 [data-asset] 下翻转)*/
     --price-up:var(--up); --price-down:var(--down); --asset-accent:var(--asset-crypto);
-    /* strength-bar gradients */
-    --bar-up:linear-gradient(90deg,rgba(16,201,138,.10),rgba(16,201,138,.78));
-    --bar-down:linear-gradient(90deg,rgba(246,70,93,.10),rgba(246,70,93,.78));
-    --bar-crypto:linear-gradient(90deg,rgba(242,169,60,.10),rgba(242,169,60,.72));
+    /* 强度条渐变 */
+    --bar-up:linear-gradient(90deg,rgba(11,122,80,.14),rgba(11,122,80,.7));
+    --bar-down:linear-gradient(90deg,rgba(196,33,58,.14),rgba(196,33,58,.7));
+    --bar-crypto:linear-gradient(90deg,rgba(154,79,4,.14),rgba(154,79,4,.62));
     --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:var(--bar-crypto);
-    /* semantic surfaces(硬编码深色全走这里,换主题自动翻)*/
-    --th-bg:#151a24; --row-line:rgba(30,36,48,.5);
-    --hover-wash:rgba(255,255,255,.035); --active-wash:rgba(255,255,255,.05); --nav-hover:rgba(255,255,255,.04);
-    --header-bg:#0a0d12; --dock-bg:#12161f;
-    --group-dash:rgba(255,255,255,.055);
-    --modal-bg:#11151d;
-    /* massive.com 卡片是纯平面 + hairline 边框，没有暗色终端那种渐变高光叠层——
-       但 background:var(--panel-hi),var(--panel) 是多层背景简写，非末层必须是合法的
-       <image>（渐变/url），纯色关键字 transparent 在这个位置是非法值,会让整条
-       background 声明被浏览器整体丢弃（真实踩过：.board-head/.pulse/.mkt/.rail 全部
-       背景消失，只剩 hairline 边框）。用「全透明渐变」占位,语法合法、视觉上仍等于
-       "无高光叠层"，第二层 var(--panel) 照常当纯色背景生效。 */
+    /* 语义表面(暖纸)*/
+    --th-bg:#f3eee3; --row-line:rgba(35,32,25,.07);
+    --hover-wash:rgba(35,32,25,.028); --active-wash:rgba(15,122,82,.09); --nav-hover:rgba(35,32,25,.04);
+    --header-bg:#f7f4ec; --dock-bg:#fffdf7;
+    --group-dash:rgba(35,32,25,.1);
+    --modal-bg:#fffdf7;
+    /* 卡片纯平面 + hairline,无高光叠层——但 background:var(--panel-hi),var(--panel) 是多层
+       背景简写,非末层必须是合法 <image>；纯色/transparent 关键字在此位非法会让整条
+       background 被丢弃(真实踩过:board-head/pulse/mkt/rail 背景全消失)。用「全透明渐变」占位。*/
     --panel-hi:linear-gradient(transparent,transparent);
-    --chip-wash:rgba(255,255,255,.035);
-    /* type / radii / motion / effects */
-    --font-sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,sans-serif;
-    --mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,"JetBrains Mono",monospace;
-    /* r-btn 是本轮新增：massive.com 的按钮统一走 rounded-md(6px 量级)，不是老版的
-       to-999px 全药丸。真正该是药丸的（资产分段/胶囊标签/徽标）继续用 r-pill，
-       按钮/输入框类换用 r-btn，两套并存不冲突 */
-    --r-lg:14px; --r-md:10px; --r-sm:7px; --r-btn:8px; --r-pill:999px;
-    /* massive.com 的阴影极克制(shadow-xs 量级)，去掉旧版的大范围软光晕(--shadow-pop) */
-    --shadow-1:0 1px 2px rgba(0,0,0,.28);
-    --shadow-pop:0 10px 26px rgba(0,0,0,.42),0 0 0 1px rgba(255,255,255,.06);
-    --shadow-modal:0 20px 52px rgba(0,0,0,.5);
+    --chip-wash:rgba(35,32,25,.03);
+    /* 字体 / 圆角 / 动效 */
+    --font-sans:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans SC",Roboto,sans-serif;
+    --mono:"Geist Mono",ui-monospace,"Cascadia Code","SF Mono",Consolas,"JetBrains Mono",monospace;
+    /* 编辑式:圆角略大更柔;真正该是药丸的(资产分段/胶囊/徽标)用 r-pill */
+    --r-lg:16px; --r-md:12px; --r-sm:8px; --r-btn:9px; --r-pill:999px;
+    /* 阴影极克制(编辑式靠 hairline + 留白,不靠光晕);暖色投影 */
+    --shadow-1:0 1px 2px rgba(60,50,30,.06);
+    --shadow-pop:0 14px 34px rgba(60,50,30,.14),0 0 0 1px rgba(35,32,25,.06);
+    --shadow-modal:0 22px 54px rgba(40,32,18,.2);
     --dur:.14s; --dur-smooth:.18s;
-    --selection:rgba(59,130,246,.32);
+    --selection:rgba(15,122,82,.16);
 }
 
-/* ---- 亮色变体(暗为主;文字阶梯按 WCAG AA 调深)---- */
-[data-theme="light"]{
-    /* massive.com 主站就是纯白背景 + hairline 灰边，亮色主题整体往这个方向靠 */
-    --bg0:#f7f8fa; --bg1:#ffffff;
-    --panel:#ffffff; --panel-2:#f9fafb; --panel-3:#f3f4f6;
-    --line:#e5e7eb; --line-2:#d1d5db;
-    --text:#101828; --muted:#4a5565; --muted-2:#6b7280;
-    --up:#0b7a50; --down:#c81f38;
-    --asset-ashare:#2166cc; --asset-us:#7c3aed; --asset-etf:#0d9488;
-    /* crypto 琥珀在白底上要调深才够对比度，跟旧版 gold-ink 同一取舍逻辑 */
-    --asset-crypto:#9a4f04; --asset-crypto-ink:#9a4f04; --asset-crypto-rgb:154,79,4;
-    /* 品牌蓝：massive.com 实测的按钮蓝 #155dfc 对白底本身已经 ≈5.2:1 达 AA，
-       无需像旧金色那样另配一个大幅调深的「ink」变体——三个 token 都在这个蓝色家族里 */
-    --gold:#155dfc; --gold-hi:#1447e1; --gold-ink:#1d4ed8; --gold-rgb:21,93,252;
-    /* --btn-fill 两个主题共用同一个值，不用在这里覆盖，见 :root 里的定义与注释 */
-    --bar-up:linear-gradient(90deg,rgba(11,122,80,.12),rgba(11,122,80,.72));
-    --bar-down:linear-gradient(90deg,rgba(200,31,56,.12),rgba(200,31,56,.72));
-    --bar-crypto:linear-gradient(90deg,rgba(154,79,4,.12),rgba(154,79,4,.6));
-    --th-bg:#f9fafb; --row-line:rgba(16,24,40,.08);
-    --hover-wash:rgba(16,24,40,.03); --active-wash:rgba(21,93,252,.08); --nav-hover:rgba(16,24,40,.04);
-    --header-bg:#ffffff; --dock-bg:#ffffff;
-    --group-dash:rgba(16,24,40,.09);
-    --modal-bg:#ffffff;
+/* ---- 暗色变体(暖炭,非 GitHub 蓝黑;文字阶梯保持 AA)---- */
+[data-theme="dark"]{
+    --bg0:#100f0c; --bg1:#141311;
+    --panel:#1b1915; --panel-2:#221f19; --panel-3:#2a261e;
+    --line:#2a2720; --line-2:#39352b;
+    --gold:#33c088; --gold-hi:#4dd29d; --gold-ink:#42ca90; --gold-rgb:51,192,136;
+    /* --btn-fill 两主题共用 :root 的 #0f7a52(白字达标),此处不覆盖 */
+    --up:#22c286; --down:#f2495e;
+    --warn:#e0a437;
+    --text:#ece7dc; --muted:#9c9587; --muted-2:#979082;
+    --asset-crypto:#f2a93c; --asset-crypto-ink:#f2a93c; --asset-crypto-rgb:242,169,60;
+    --asset-ashare:#6ab0ff; --asset-us:#a78bfa; --asset-etf:#2dd4bf;
+    --bar-up:linear-gradient(90deg,rgba(34,194,134,.12),rgba(34,194,134,.78));
+    --bar-down:linear-gradient(90deg,rgba(242,73,94,.12),rgba(242,73,94,.78));
+    --bar-crypto:linear-gradient(90deg,rgba(242,169,60,.10),rgba(242,169,60,.72));
+    --th-bg:#191712; --row-line:rgba(236,231,220,.06);
+    --hover-wash:rgba(236,231,220,.035); --active-wash:rgba(51,192,136,.12); --nav-hover:rgba(236,231,220,.045);
+    --header-bg:#141311; --dock-bg:#1b1915;
+    --group-dash:rgba(236,231,220,.06);
+    --modal-bg:#1b1915;
     --panel-hi:linear-gradient(transparent,transparent);
-    --chip-wash:rgba(16,24,40,.035);
-    --shadow-1:0 1px 2px rgba(16,24,40,.07);
-    --shadow-pop:0 12px 30px rgba(16,24,40,.14),0 0 0 1px rgba(16,24,40,.07);
-    --shadow-modal:0 20px 50px rgba(16,24,40,.18);
-    --selection:rgba(21,93,252,.18);
+    --chip-wash:rgba(236,231,220,.04);
+    --shadow-1:0 1px 2px rgba(0,0,0,.3);
+    --shadow-pop:0 14px 34px rgba(0,0,0,.5),0 0 0 1px rgba(236,231,220,.06);
+    --shadow-modal:0 22px 54px rgba(0,0,0,.55);
+    --selection:rgba(51,192,136,.26);
 }
 
 /* ---- 资产价格语义作用域(挂在 .app 上;A股 涨红跌绿)---- */
-/* --bar-neutral = 中性排序轴(RSI/成交额/资金强弱等非涨跌方向)时值列强度条的颜色，
-   跟随资产强调色。crypto 现指向独立的 --bar-crypto（琥珀），不再借用品牌蓝。 */
 [data-asset="crypto"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:var(--bar-crypto); --asset-accent:var(--asset-crypto); }
-[data-asset="ashare"]{ --price-up:var(--down); --price-down:var(--up); --bar-pos:var(--bar-down); --bar-neg:var(--bar-up); --bar-neutral:linear-gradient(90deg,rgba(106,176,255,.10),rgba(106,176,255,.72)); --asset-accent:var(--asset-ashare); }
-/* 美股涨绿跌红，跟国际习惯/crypto 一致，不像 A股 翻转 */
-[data-asset="us"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:linear-gradient(90deg,rgba(167,139,250,.10),rgba(167,139,250,.72)); --asset-accent:var(--asset-us); }
-/* ETF（美股上市大类资产）同美股：涨绿跌红 */
-[data-asset="etf"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:linear-gradient(90deg,rgba(45,212,191,.10),rgba(45,212,191,.72)); --asset-accent:var(--asset-etf); }
+[data-asset="ashare"]{ --price-up:var(--down); --price-down:var(--up); --bar-pos:var(--bar-down); --bar-neg:var(--bar-up); --bar-neutral:linear-gradient(90deg,rgba(33,102,204,.12),rgba(33,102,204,.7)); --asset-accent:var(--asset-ashare); }
+[data-asset="us"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:linear-gradient(90deg,rgba(124,58,237,.12),rgba(124,58,237,.7)); --asset-accent:var(--asset-us); }
+[data-asset="etf"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:linear-gradient(90deg,rgba(13,138,122,.12),rgba(13,138,122,.7)); --asset-accent:var(--asset-etf); }
 
 /* ---------------- reset + page ---------------- */
 *{margin:0;padding:0;box-sizing:border-box}
-/* hidden 属性必须赢过作者样式的 display:flex/grid(#pulse/#boardHead 等),
-   否则 UA 的 [hidden]{display:none} 会被击穿,隐藏逻辑全部失效(审计 P1-1) */
 [hidden]{display:none!important}
 html{scrollbar-color:var(--line-2) var(--bg1);-webkit-text-size-adjust:100%}
-/* massive.com 是纯平面站，没有暗色终端那种氛围光晕渐变——body 背景改纯色，
-   更贴近其"大面积留白/中性灰"的观感。GPU 三条硬约束跟这条无关(那三条管的是
-   backdrop-filter+fixed 组合/sticky/无限动画，纯色背景一直都是安全的)。 */
-body{font-family:var(--font-sans);color:var(--text);background:var(--bg1);min-height:100vh;-webkit-font-smoothing:antialiased}
-body.no-scroll{overflow:hidden} /* 抽屉开启时锁背景滚动 */
+body{font-family:var(--font-sans);color:var(--text);background:var(--bg1);min-height:100vh;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;font-feature-settings:"cv01","ss01"}
+body.no-scroll{overflow:hidden}
 ::selection{background:var(--selection)}
-a{color:var(--gold);text-decoration:none}
+a{color:var(--gold-ink);text-decoration:none}
 a:hover{color:var(--gold-hi)}
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px}
-/* 跳到主内容(键盘用户;平时藏在视口上方,聚焦滑入) */
-.skip-link{position:absolute;left:8px;top:-48px;z-index:200;padding:8px 14px;background:var(--bg1);color:var(--gold-ink);border:1px solid var(--line);border-radius:8px;font-size:13px;transition:top .15s}
+.skip-link{position:absolute;left:8px;top:-48px;z-index:200;padding:8px 14px;background:var(--panel);color:var(--gold-ink);border:1px solid var(--line);border-radius:8px;font-size:13px;transition:top .15s}
 .skip-link:focus{top:8px}
 .main:focus{outline:none}
 
-/* ---------------- app 骨架 ---------------- */
+/* ---------------- app 骨架(编辑式:更足的留白)---------------- */
 .app{min-height:100vh;padding-bottom:96px;color:var(--text)}
-.wrap{max-width:1280px;margin:0 auto;padding:20px 24px 0}
-.layout{display:grid;grid-template-columns:266px minmax(0,1fr);gap:22px;align-items:start}
+.wrap{max-width:1240px;margin:0 auto;padding:30px 26px 0}
+.layout{display:grid;grid-template-columns:252px minmax(0,1fr);gap:30px;align-items:start}
 .main{min-width:0}
 
 /* ---------------- topbar(实底填充,永不 blur/sticky)---------------- */
 .topbar{background:var(--header-bg);border-bottom:1px solid var(--line)}
-.topbar__inner{max-width:1280px;margin:0 auto;padding:0 24px;min-height:62px;display:flex;align-items:center;justify-content:space-between;gap:16px}
-.brand{display:flex;align-items:center;gap:11px}
+.topbar__inner{max-width:1240px;margin:0 auto;padding:0 26px;min-height:68px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{display:flex;align-items:center;gap:12px}
 .brand__logo{width:34px;height:34px;flex:none}
-.brand__name{font-size:17px;font-weight:700;letter-spacing:.4px;line-height:1.12;white-space:nowrap}
-/* massive.com 的顶栏文字是素色(纯 gray-900/白)不是渐变字——品牌副名跟着改成
-   克制的静态 muted 色，渐变字这个花活儿收起来（2026-07-22 重构） */
-.brand__latin{color:var(--muted-2);font-size:13px;font-weight:600;margin-left:2px}
-.brand__tag{font-size:10.5px;color:var(--muted-2);letter-spacing:1.6px;margin-top:2px;white-space:nowrap}
+.brand__name{font-size:17.5px;font-weight:700;letter-spacing:-.2px;line-height:1.12;white-space:nowrap}
+.brand__latin{color:var(--muted-2);font-size:12.5px;font-weight:500;margin-left:3px;letter-spacing:0}
+.brand__tag{font-size:10.5px;color:var(--muted-2);letter-spacing:1.4px;margin-top:3px;white-space:nowrap;text-transform:uppercase}
 .topbar__tools{display:flex;align-items:center;gap:10px}
 .hamburger{display:none;width:36px;height:36px;flex:none;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line);border-radius:var(--r-btn);color:var(--text);cursor:pointer}
 .theme-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex:none;background:transparent;border:1px solid var(--line);border-radius:var(--r-btn);color:var(--muted);cursor:pointer;font-size:14px;transition:color .15s,border-color .15s}
 .theme-btn:hover{color:var(--text);border-color:var(--muted)}
 
-/* 新鲜度胶囊(桌面双胶囊,非激活侧 .is-dim)*/
-/* 胶囊是 <button>（键盘/SR 可达，见 index.html）：appearance/font 复位按钮默认样式。
-   cursor 只给 .is-dim（= 点击真正有效的那一侧，切资产）；当前资产侧非 dim（含 ETF 视图下的
-   freshUS 空操作）用默认光标，不误导（2026-07-22 审计）。 */
+/* 新鲜度胶囊(桌面三胶囊,非激活侧 .is-dim)*/
 .fresh{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);border-radius:var(--r-pill);padding:5px 12px;font-variant-numeric:tabular-nums;white-space:nowrap;transition:opacity var(--dur-smooth),border-color .15s;font-family:inherit;appearance:none;-webkit-appearance:none}
 .fresh.is-dim{opacity:.5;cursor:pointer}
 .fresh.is-dim:hover{opacity:.85;border-color:var(--line-2)}
@@ -183,103 +158,88 @@ a:hover{color:var(--gold-hi)}
 .fresh b{color:var(--text);font-weight:600}
 .fresh__next{color:var(--muted-2)}
 
-/* 通行证状态徽章（顶栏 + 抽屉两份共用，见 renderLicenseStatus） */
+/* 通行证状态徽章(顶栏 + 抽屉共用)*/
 .lic-badge{display:inline-flex;align-items:center;font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:var(--r-pill)}
 .lic-off{color:var(--muted);background:var(--chip-wash);border:1px solid var(--line)}
-.lic-on{background:rgba(16,201,138,.12);color:var(--up);border:1px solid rgba(16,201,138,.28)}
-.lic-expired{background:rgba(246,70,93,.12);color:var(--down);border:1px solid rgba(246,70,93,.3)}
-.lic-btn-mini{background:rgba(var(--gold-rgb),.08);border:1px solid rgba(var(--gold-rgb),.45);color:var(--gold-ink);font-size:12px;font-weight:600;padding:6px 14px;border-radius:var(--r-btn);cursor:pointer;transition:all .18s;white-space:nowrap}
-.lic-btn-mini:hover{background:var(--btn-fill);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(var(--btn-fill-rgb),.35)}
+.lic-on{background:rgba(15,122,82,.12);color:var(--gold-ink);border:1px solid rgba(15,122,82,.3)}
+.lic-expired{background:rgba(196,33,58,.12);color:var(--down);border:1px solid rgba(196,33,58,.32)}
+.lic-btn-mini{background:rgba(var(--gold-rgb),.08);border:1px solid rgba(var(--gold-rgb),.42);color:var(--gold-ink);font-size:12px;font-weight:600;padding:6px 14px;border-radius:var(--r-btn);cursor:pointer;transition:all .18s;white-space:nowrap}
+.lic-btn-mini:hover{background:var(--btn-fill);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(var(--btn-fill-rgb),.3)}
 .drawer__license{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line)}
 
-/* buttons — massive.com 用 rounded-md(6px 量级)的矩形按钮,不是老版 to-999px 全药丸 */
+/* buttons */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:var(--font-sans);font-weight:600;line-height:1.2;border:1px solid transparent;border-radius:var(--r-btn);cursor:pointer;white-space:nowrap;padding:9px 18px;font-size:13px;transition:background .18s,color .18s,border-color .18s,box-shadow .18s,transform .15s}
 .btn--sm{padding:6px 14px;font-size:12px}
 .btn--primary{background:var(--btn-fill);color:#fff;font-weight:700}
-.btn--primary:hover{box-shadow:0 4px 14px rgba(var(--btn-fill-rgb),.35)}
+.btn--primary:hover{box-shadow:0 4px 14px rgba(var(--btn-fill-rgb),.32)}
 .btn--ghost{background:transparent;color:var(--muted);border-color:var(--line-2)}
 .btn--ghost:hover{color:var(--text);border-color:var(--muted)}
 
 /* ---------------- 横幅(A股快照说明 / 数据延迟)---------------- */
-/* 左右 padding 预留关闭按钮位,窄屏文字不钻到 ✕ 底下 */
 .banner{position:relative;padding:8px 36px;text-align:center;font-size:12.5px;color:var(--gold-ink);border-top:1px solid rgba(var(--gold-rgb),.3);background:rgba(var(--gold-rgb),.08)}
-.banner--down{color:var(--down);border-top-color:rgba(246,70,93,.3);background:rgba(246,70,93,.08)}
+.banner--down{color:var(--down);border-top-color:rgba(196,33,58,.3);background:rgba(196,33,58,.08)}
 .banner__close{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:inherit;cursor:pointer;font-size:13px;opacity:.7;padding:9px;line-height:1}
 .banner__close:hover{opacity:1}
 
-/* ---------------- rail 导航 ---------------- */
-.rail{display:flex;flex-direction:column;gap:14px;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px;box-shadow:var(--shadow-1)}
+/* ---------------- rail 导航(编辑式侧栏)---------------- */
+.rail{display:flex;flex-direction:column;gap:16px;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow-1)}
 .asset-seg{display:flex;gap:4px;padding:4px;background:var(--bg0);border:1px solid var(--line);border-radius:var(--r-pill)}
-/* transition 只留 color：实测(真实鼠标点击+多轮排查)发现 background/box-shadow 从
-   transparent/none 过渡到 var() 驱动的不透明纯色时,这套浏览器引擎会把过渡"卡死"在
-   起始值,导致切换资产后分段控件的激活态背景永远不出现（本轮改造前 active 态背景是
-   渐变——渐变本就不支持平滑过渡,天然规避了这个坑；本轮改成纯色 var() 后才踩中，
-   2026-07-22 真实复现：nav-item/sort-chip 用半透明 rgba→rgba 过渡不受影响，只有
-   这个"完全透明→不透明"的组合会卡死，别恢复 background/box-shadow 过渡）。 */
+/* transition 只留 color:实测「完全透明→不透明纯色」的 background/box-shadow 过渡会在
+   本引擎卡死在起始值(2026-07-22 真实复现),active 态改纯色后才踩中,别恢复。*/
 .asset-seg__opt{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:9px 0;font-size:13.5px;font-weight:700;border:none;border-radius:var(--r-pill);cursor:pointer;font-family:var(--font-sans);color:var(--muted);background:transparent;transition:color .16s}
 .asset-seg__dot{width:6px;height:6px;border-radius:50%;flex:none}
 .asset-seg__opt[data-k="crypto"] .asset-seg__dot{background:var(--asset-crypto)}
 .asset-seg__opt[data-k="ashare"] .asset-seg__dot{background:var(--asset-ashare)}
 .asset-seg__opt[data-k="us"] .asset-seg__dot{background:var(--asset-us)}
 .asset-seg__opt[data-k="etf"] .asset-seg__dot{background:var(--asset-etf)}
-/* 激活态改扁平实色块(massive.com 的按钮/激活态都是 flat fill + 极浅 shadow-xs，
-   不是旧版那种渐变+彩色光晕) */
-.asset-seg__opt[data-k="crypto"].is-active{background:var(--asset-crypto);color:#1a1000;box-shadow:var(--shadow-1)}
-.asset-seg__opt[data-k="ashare"].is-active{background:var(--asset-ashare);color:#03121f;box-shadow:var(--shadow-1)}
-.asset-seg__opt[data-k="us"].is-active{background:var(--asset-us);color:#160b2e;box-shadow:var(--shadow-1)}
-.asset-seg__opt[data-k="etf"].is-active{background:var(--asset-etf);color:#04211c;box-shadow:var(--shadow-1)}
-.asset-seg__opt.is-active .asset-seg__dot{background:rgba(0,0,0,.4)}
+/* 激活态 = 资产色实块 + 极浅 shadow。文字色按底色明度分别定(WCAG):亮色底盘下
+   crypto/ashare/us 三个深资产色配白字(5.5~6:1),etf 深青配近黑(6.4:1)。*/
+.asset-seg__opt[data-k="crypto"].is-active{background:var(--asset-crypto);color:#fff;box-shadow:var(--shadow-1)}
+.asset-seg__opt[data-k="ashare"].is-active{background:var(--asset-ashare);color:#fff;box-shadow:var(--shadow-1)}
+.asset-seg__opt[data-k="us"].is-active{background:var(--asset-us);color:#fff;box-shadow:var(--shadow-1)}
+.asset-seg__opt[data-k="etf"].is-active{background:var(--asset-etf);color:#fff;box-shadow:var(--shadow-1)}
+.asset-seg__opt.is-active .asset-seg__dot{background:rgba(255,255,255,.55)}
 .asset-seg__opt:not(.is-active):hover{color:var(--text);background:var(--nav-hover)}
-/* 审计发现的真实对比度 bug：上面 4 行固定文字色是按暗色主题较浅的资产色调的
-   （如 --asset-crypto 暗色 #f2a93c），近黑文字对比度很好；但亮色主题把 crypto/
-   ashare/us 三个资产色调深成中到深色（分别 #9a4f04/#2166cc/#7c3aed），近黑文字只剩
-   3.13~3.46:1，不达 WCAG AA 4.5:1。实测换成白字后这三个能到 5.5~6:1；唯独 etf
-   亮色调（#0d9488）比另外三个浅，白字反而只有 3.74:1，黑字则有 5.61:1——四个资产
-   不能用同一套文字色，逐个核对过换算数值才定的，不是拍脑袋。 */
-[data-theme="light"] .asset-seg__opt[data-k="crypto"].is-active,
-[data-theme="light"] .asset-seg__opt[data-k="ashare"].is-active,
-[data-theme="light"] .asset-seg__opt[data-k="us"].is-active{color:#fff}
-[data-theme="light"] .asset-seg__opt[data-k="etf"].is-active{color:#000}
-.board-nav{display:flex;flex-direction:column;gap:11px}
+/* 暗色底盘:资产色变亮,active 文字改近黑 */
+[data-theme="dark"] .asset-seg__opt[data-k="crypto"].is-active{color:#1a1000}
+[data-theme="dark"] .asset-seg__opt[data-k="ashare"].is-active{color:#03121f}
+[data-theme="dark"] .asset-seg__opt[data-k="us"].is-active{color:#160b2e}
+[data-theme="dark"] .asset-seg__opt[data-k="etf"].is-active{color:#04211c}
+[data-theme="dark"] .asset-seg__opt.is-active .asset-seg__dot{background:rgba(0,0,0,.4)}
+.board-nav{display:flex;flex-direction:column;gap:13px}
 .nav-group{display:flex;flex-direction:column;gap:3px}
-.nav-group+.nav-group{border-top:1px dashed var(--group-dash);padding-top:9px}
-.nav-group__label{font-size:11px;font-weight:700;letter-spacing:1.1px;color:var(--muted-2);padding:2px 8px 4px}
-.nav-item{position:relative;display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:transparent;border:none;border-radius:var(--r-btn);padding:8px 10px 8px 13px;cursor:pointer;font-family:var(--font-sans);color:var(--muted);font-size:13px;transition:background .14s,color .14s}
+.nav-group+.nav-group{border-top:1px dashed var(--group-dash);padding-top:11px}
+.nav-group__label{font-size:10.5px;font-weight:600;letter-spacing:.05em;color:var(--muted-2);padding:2px 8px 5px;text-transform:uppercase}
+.nav-item{position:relative;display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:transparent;border:none;border-radius:var(--r-btn);padding:9px 10px 9px 14px;cursor:pointer;font-family:var(--font-sans);color:var(--muted);font-size:13px;transition:background .14s,color .14s}
 .nav-item:hover{background:var(--nav-hover);color:var(--text)}
 .nav-item.is-active{background:var(--active-wash);color:var(--text)}
 [data-asset="crypto"] .nav-item.is-active{background:rgba(var(--asset-crypto-rgb),.12)}
-[data-asset="ashare"] .nav-item.is-active{background:rgba(90,160,255,.12)}
-[data-asset="us"] .nav-item.is-active{background:rgba(167,139,250,.14)}
-[data-asset="etf"] .nav-item.is-active{background:rgba(45,212,191,.13)}
+[data-asset="ashare"] .nav-item.is-active{background:rgba(33,102,204,.1)}
+[data-asset="us"] .nav-item.is-active{background:rgba(124,58,237,.1)}
+[data-asset="etf"] .nav-item.is-active{background:rgba(13,138,122,.1)}
 .nav-item__name{font-weight:500}
 .nav-item.is-active .nav-item__name{font-weight:600}
 .tab-lock{width:11px;height:11px;flex:none;opacity:.7;vertical-align:-1px}
-/* 策略榜命中数徽标(navHtml 渲染;0 命中调暗——「没命中」也是信号,不藏) */
 .nav-item__count{margin-left:auto;flex:none;font-family:var(--mono);font-size:10.5px;color:var(--muted-2);font-variant-numeric:tabular-nums}
 .nav-item__count.is-zero{opacity:.45}
 .nav-item.is-active .nav-item__count{color:var(--muted)}
 .nav-item__bar{position:absolute;left:0;top:50%;transform:translateY(-50%);height:0;width:2.5px;border-radius:3px;background:var(--asset-accent);opacity:0;transition:height .16s,opacity .16s}
-.nav-item.is-active .nav-item__bar{height:60%;opacity:1}
+.nav-item.is-active .nav-item__bar{height:62%;opacity:1}
 .tf-chip{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:4px;font-size:10px;font-weight:700;flex:none}
-/* 多字符周期角标（如 12H）：单字角标(日/周/月)保持 15×15 方形不变，多字的放宽成小药丸 */
 .tf-chip--wide{width:auto;min-width:15px;padding:0 4px;letter-spacing:.2px}
-[data-asset="crypto"] .tf-chip{background:rgba(var(--asset-crypto-rgb),.18);color:var(--asset-crypto-ink)}
-[data-asset="ashare"] .tf-chip{background:rgba(90,160,255,.18);color:var(--asset-ashare)}
-[data-asset="us"] .tf-chip{background:rgba(167,139,250,.18);color:var(--asset-us)}
-[data-asset="etf"] .tf-chip{background:rgba(45,212,191,.16);color:var(--asset-etf)}
-/* 亮色下 crypto 琥珀墨 #9a4f04 配 18% 琥珀底实测只有 ~3.95:1（10px 小字要 4.5），单独
-   调深一档到 6.4:1；蓝/紫/青三资产同法实测 4.6~5.6 达标不动（2026-07-22 深夜审美 PASS）。 */
-[data-theme="light"] [data-asset="crypto"] .tf-chip{color:#7a3e03}
-.rail-foot{margin-top:2px;padding:10px 8px 2px;border-top:1px solid var(--line);font-size:11px;color:var(--muted-2);letter-spacing:.3px;font-variant-numeric:tabular-nums}
+[data-asset="crypto"] .tf-chip{background:rgba(var(--asset-crypto-rgb),.16);color:var(--asset-crypto-ink)}
+[data-asset="ashare"] .tf-chip{background:rgba(33,102,204,.14);color:var(--asset-ashare)}
+[data-asset="us"] .tf-chip{background:rgba(124,58,237,.14);color:var(--asset-us)}
+[data-asset="etf"] .tf-chip{background:rgba(13,138,122,.14);color:var(--asset-etf)}
+/* 暗色下资产色变亮,tf-chip 底/字跟随(靠 token 自动翻,无需逐一覆盖)*/
+.rail-foot{margin-top:2px;padding:11px 8px 2px;border-top:1px solid var(--line);font-size:11px;color:var(--muted-2);letter-spacing:.02em;font-variant-numeric:tabular-nums}
 
 /* ---------------- 市场脉搏(无缝状态条)---------------- */
-.pulse{display:flex;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);overflow:hidden;margin-bottom:12px}
-.pulse__cell{flex:1;min-width:0;padding:13px 16px}
+.pulse{display:flex;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);overflow:hidden;margin-bottom:14px}
+.pulse__cell{flex:1;min-width:0;padding:15px 18px}
 .pulse__cell+.pulse__cell{border-left:1px solid var(--line)}
-.pulse__label{font-size:11px;color:var(--muted-2);letter-spacing:.5px;margin-bottom:5px;white-space:nowrap}
-/* massive.com 首页统计数字（"32,345+ TICKERS"式）字重更足、字号更大——
-   我们的脉搏值本身承担同样的角色(策略命中数/市场情绪等)，字重从 700 提到 800 */
-.pulse__value{font-size:19px;font-weight:800;letter-spacing:-.3px;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pulse__label{font-size:10.5px;color:var(--muted-2);letter-spacing:.05em;margin-bottom:7px;white-space:nowrap;text-transform:uppercase}
+.pulse__value{font-size:23px;font-weight:700;letter-spacing:-.02em;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.1}
 .pulse__value .is-gold{color:var(--gold-ink)}
 .pulse__value .is-up{color:var(--price-up)}
 .pulse__value .is-down{color:var(--price-down)}
@@ -287,67 +247,61 @@ a:hover{color:var(--gold-hi)}
 .pulse__suffix.is-up{color:var(--price-up)}
 .pulse__suffix.is-down{color:var(--price-down)}
 .pulse__suffix.is-muted{color:var(--muted-2)}
-.pulse__sub{font-size:10.5px;color:var(--muted-2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pulse__sub{font-size:10.5px;color:var(--muted-2);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ---------------- 市场概览全局条(免费,加密专属)---------------- */
-.mkt{background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);margin-bottom:12px;overflow:hidden}
+.mkt{background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);margin-bottom:14px;overflow:hidden}
 .mkt__inner{display:flex;flex-wrap:wrap;align-items:stretch}
-.mkt__item{display:flex;flex-direction:column;justify-content:center;gap:4px;padding:9px 16px;min-width:0;border-right:1px solid var(--line)}
+.mkt__item{display:flex;flex-direction:column;justify-content:center;gap:5px;padding:11px 18px;min-width:0;border-right:1px solid var(--line)}
 .mkt__item:last-child{border-right:none}
-.mkt__k{font-size:10.5px;color:var(--muted-2);letter-spacing:.4px;white-space:nowrap}
-.mkt__v{font-size:14px;font-weight:700;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--text)}
+.mkt__k{font-size:10px;color:var(--muted-2);letter-spacing:.05em;white-space:nowrap;text-transform:uppercase}
+.mkt__v{font-size:14.5px;font-weight:600;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--text)}
 .mkt__v .is-up{color:var(--price-up)}
 .mkt__v .is-down{color:var(--price-down)}
 .mkt__sub{font-size:11px;font-weight:600;color:var(--muted-2);margin-left:7px}
-/* 情绪仪表 */
 .mkt__senti{display:flex;align-items:center;gap:9px}
-.mkt__gauge{position:relative;width:78px;height:6px;border-radius:3px;background:linear-gradient(90deg,#e5484d 0%,#e5a23d 50%,#30a46c 100%);flex:none}
+.mkt__gauge{position:relative;width:80px;height:6px;border-radius:3px;background:linear-gradient(90deg,#c4213a 0%,#c4890f 50%,#0b7a50 100%);flex:none}
 .mkt__marker{position:absolute;top:50%;transform:translate(-50%,-50%);width:3px;height:13px;border-radius:2px;background:var(--text);box-shadow:0 0 0 2px var(--panel)}
-.mkt__score{font-size:15px;font-weight:800;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.mkt__score{font-size:15px;font-weight:700;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
 .mkt__score em{font-style:normal;font-size:11.5px;font-weight:700;margin-left:5px}
-.mkt-z--fear2{color:#e5484d}.mkt-z--fear{color:#e5844d}.mkt-z--neutral{color:var(--muted)}.mkt-z--greed{color:#46a758}.mkt-z--greed2{color:#30a46c}
-/* 亮色覆盖(.mkt__score 15px/800 粗体需 4.5:1,四档情绪色暗色专属值在亮色下不达标) */
-[data-theme="light"] .mkt-z--fear2{color:#c81f38}[data-theme="light"] .mkt-z--fear{color:#a8531a}[data-theme="light"] .mkt-z--greed{color:#1c7a3f}[data-theme="light"] .mkt-z--greed2{color:#0b7a50}
+/* 情绪五档(亮色底盘专属值;暗色在下方覆盖成更亮的档)*/
+.mkt-z--fear2{color:#c4213a}.mkt-z--fear{color:#a8531a}.mkt-z--neutral{color:var(--muted)}.mkt-z--greed{color:#1c7a3f}.mkt-z--greed2{color:#0b7a50}
+[data-theme="dark"] .mkt-z--fear2{color:#f2495e}[data-theme="dark"] .mkt-z--fear{color:#e5844d}[data-theme="dark"] .mkt-z--neutral{color:var(--muted)}[data-theme="dark"] .mkt-z--greed{color:#46a758}[data-theme="dark"] .mkt-z--greed2{color:#30c98a}
 
 /* ---------------- board 头(标识 + 搜索)---------------- */
-.board-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:13px 18px;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:12px}
-.board-head__title{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-/* massive.com 的标题字重普遍拉满(700/800)——榜单名字跟着加粗、字号略提 */
-.board-head__name{font-size:17px;font-weight:800;margin:0;letter-spacing:.2px}
-.board-head__note{font-size:12.5px;color:var(--muted);margin-top:6px;font-variant-numeric:tabular-nums}
-.asset-tag{font-size:12px;font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.5px;color:var(--asset-crypto-ink);background:rgba(var(--asset-crypto-rgb),.14);white-space:nowrap}
-.asset-tag.is-ashare{color:var(--asset-ashare);background:rgba(90,160,255,.15)}
-.asset-tag.is-us{color:var(--asset-us);background:rgba(167,139,250,.15)}
-.asset-tag.is-etf{color:var(--asset-etf);background:rgba(45,212,191,.14)}
-.tf-badge{font-size:12px;font-weight:700;padding:3px 9px;border-radius:6px;color:var(--text);background:rgba(128,128,128,.14);white-space:nowrap}
-.search{display:flex;align-items:center;gap:8px;width:250px;flex:none;padding:7px 12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-btn);transition:border-color var(--dur)}
-.search:focus-within{border-color:rgba(var(--gold-rgb),.5);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.12)}
+.board-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px 20px;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:14px}
+.board-head__title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.board-head__name{font-size:20px;font-weight:700;margin:0;letter-spacing:-.015em}
+.board-head__note{font-size:12.5px;color:var(--muted);margin-top:7px;font-variant-numeric:tabular-nums;line-height:1.5}
+.asset-tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.04em;color:var(--asset-crypto-ink);background:rgba(var(--asset-crypto-rgb),.14);white-space:nowrap}
+.asset-tag.is-ashare{color:var(--asset-ashare);background:rgba(33,102,204,.14)}
+.asset-tag.is-us{color:var(--asset-us);background:rgba(124,58,237,.14)}
+.asset-tag.is-etf{color:var(--asset-etf);background:rgba(13,138,122,.14)}
+.tf-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);white-space:nowrap;letter-spacing:.04em}
+.search{display:flex;align-items:center;gap:8px;width:250px;flex:none;padding:8px 12px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-btn);transition:border-color var(--dur),box-shadow var(--dur)}
+.search:focus-within{border-color:rgba(var(--gold-rgb),.5);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.1)}
 .search__icon{width:14px;height:14px;color:var(--muted-2);flex:none}
 .search__input{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font-size:13px;font-family:inherit}
 .search__input::placeholder{color:var(--muted-2)}
 
-/* ---------------- 排序条(多轴选择 chips;表头值列只显当前轴)----------------
-   2026-07-20 移动端重设计:5-6 个排序轴塞在值列表头里,手机上换行成 3-4 行 10px 小字。
-   现在轴选择住这条 chip 条(移动端横向滑动,真按钮触控目标),表头只标当前轴+方向。 */
-.sort-strip{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.sort-strip__label{flex:none;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted-2);user-select:none}
+/* ---------------- 排序条(多轴选择 chips;表头值列只显当前轴)---------------- */
+.sort-strip{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.sort-strip__label{flex:none;font-size:10px;font-weight:600;letter-spacing:.05em;color:var(--muted-2);user-select:none;text-transform:uppercase}
 .sort-strip__chips{display:flex;gap:6px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;padding:2px}
 .sort-strip__chips::-webkit-scrollbar{display:none}
 .sort-chip{flex:none;display:inline-flex;align-items:center;gap:4px;padding:6px 13px;font-size:12px;font-weight:600;font-family:var(--font-sans);color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);border-radius:var(--r-pill);cursor:pointer;white-space:nowrap;transition:color .14s,border-color .14s,background .14s}
 .sort-chip:hover{color:var(--text);border-color:var(--muted)}
 .sort-chip__arrow{font-size:9px;line-height:1}
-[data-asset="crypto"] .sort-chip.is-active{background:rgba(var(--asset-crypto-rgb),.15);border-color:rgba(var(--asset-crypto-rgb),.5);color:var(--asset-crypto-ink)}
-[data-asset="ashare"] .sort-chip.is-active{background:rgba(90,160,255,.15);border-color:rgba(90,160,255,.55);color:var(--asset-ashare)}
-[data-asset="us"] .sort-chip.is-active{background:rgba(167,139,250,.15);border-color:rgba(167,139,250,.55);color:var(--asset-us)}
-[data-asset="etf"] .sort-chip.is-active{background:rgba(45,212,191,.14);border-color:rgba(45,212,191,.55);color:var(--asset-etf)}
+[data-asset="crypto"] .sort-chip.is-active{background:rgba(var(--asset-crypto-rgb),.14);border-color:rgba(var(--asset-crypto-rgb),.5);color:var(--asset-crypto-ink)}
+[data-asset="ashare"] .sort-chip.is-active{background:rgba(33,102,204,.13);border-color:rgba(33,102,204,.5);color:var(--asset-ashare)}
+[data-asset="us"] .sort-chip.is-active{background:rgba(124,58,237,.13);border-color:rgba(124,58,237,.5);color:var(--asset-us)}
+[data-asset="etf"] .sort-chip.is-active{background:rgba(13,138,122,.13);border-color:rgba(13,138,122,.5);color:var(--asset-etf)}
 
 /* ---------------- 表格(表头/表体分离——表体内滚动,绝不 sticky)---------------- */
 .table{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-1);overflow:hidden}
-/* scrollbar-gutter:两侧同宽预留滚动条位,否则表头与表体列错开一个滚动条宽(审计 P2-4) */
 .thead{display:flex;align-items:stretch;background:var(--th-bg);border-bottom:1px solid var(--line);overflow-y:hidden;scrollbar-gutter:stable}
-.th{display:flex;align-items:center;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--muted-2);user-select:none;padding:11px 0}
-/* overscroll-behavior:contain——表体滚到头不再把整页带着滚(移动端嵌套滚动的常见恼点) */
-.tbody{max-height:min(58vh,620px);overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;overscroll-behavior:contain}
+.th{display:flex;align-items:center;font-size:10.5px;font-weight:600;letter-spacing:.05em;color:var(--muted);user-select:none;padding:12px 0;text-transform:uppercase}
+.tbody{max-height:min(60vh,640px);overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;overscroll-behavior:contain}
 .tbody::-webkit-scrollbar{width:11px}
 .tbody::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:6px;border:3px solid var(--panel)}
 .tr{display:flex;align-items:center;border-bottom:1px solid var(--row-line);transition:background .12s}
@@ -355,13 +309,9 @@ a:hover{color:var(--gold-hi)}
 .tr:hover{background:var(--hover-wash)}
 .c-check{width:46px;flex:none;display:flex;align-items:center;justify-content:center;position:relative}
 .c-rank{width:60px;flex:none;display:flex;align-items:center;padding-left:6px}
-.c-sym{flex:1;min-width:0;padding:9px 10px 9px 2px}
+.c-sym{flex:1;min-width:0;padding:11px 10px 11px 2px}
 .c-val{width:240px;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 18px 0 8px;white-space:nowrap}
-/* 表头值列现在只显「当前轴+箭头」单行(多轴选择在 .sort-strip)——此前塞下全部 5-6 轴
-   的 flex-wrap 撑高表头 + ≥1200px 加宽到 306px 的特例都随之移除,值列全宽统一 240px。 */
 .sort-opt{color:inherit;cursor:pointer;padding:2px 5px;border-radius:4px;transition:color .12s}
-/* 当前轴/箭头跟随资产主题色（此前写死金色，A股/美股/ETF 下与排序条 chips/nav
-   强调条不一致）。crypto 用 --asset-crypto-ink（琥珀），不再借用品牌蓝 */
 [data-asset="crypto"] .sort-opt.active,[data-asset="crypto"] .sort-arrow{color:var(--asset-crypto-ink)}
 [data-asset="ashare"] .sort-opt.active,[data-asset="ashare"] .sort-arrow{color:var(--asset-ashare)}
 [data-asset="us"] .sort-opt.active,[data-asset="us"] .sort-arrow{color:var(--asset-us)}
@@ -371,51 +321,46 @@ a:hover{color:var(--gold-hi)}
 .chk{accent-color:var(--gold);width:15px;height:15px;cursor:pointer}
 .chk--row{opacity:.32;transition:opacity .12s}
 .tr:hover .chk--row,.chk--row:checked{opacity:1}
-/* 触屏无 hover：未勾选态若停在 .32 几乎不可见，抬到 .62（:checked 特异性更高仍恒亮） */
 @media (hover:none){.chk--row{opacity:.62}}
 .row-accent{position:absolute;left:0;top:15%;height:70%;width:2.5px;border-radius:3px;background:var(--asset-accent);opacity:0;transition:opacity .14s}
 .tr:hover .row-accent{opacity:1}
-/* 奖牌：🥇🥈🥉是通用排名隐喻,跟品牌色/资产色无关,四资产统一保持金银铜三色不变 */
-.medal{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:8px;font-size:12px;font-weight:800;font-family:var(--mono)}
-.medal--1{background:linear-gradient(150deg,rgba(255,206,110,.30),rgba(242,169,60,.11));color:#ffd257;box-shadow:0 0 0 1px rgba(242,169,60,.4) inset}
-.medal--2{background:linear-gradient(150deg,rgba(214,222,235,.20),rgba(200,208,220,.06));color:#cdd5e1;box-shadow:0 0 0 1px rgba(200,208,220,.28) inset}
-.medal--3{background:linear-gradient(150deg,rgba(230,160,100,.24),rgba(205,127,50,.08));color:#e0995c;box-shadow:0 0 0 1px rgba(205,127,50,.32) inset}
+/* 名次:top-3 用扁平精修徽记(金/银/铜墨 + hairline 环,无渐变/无游戏感)*/
+.medal{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:7px;font-size:11.5px;font-weight:700;font-family:var(--mono)}
+.medal--1{background:rgba(180,140,40,.13);color:#7a5f10;box-shadow:inset 0 0 0 1px rgba(180,140,40,.42)}
+.medal--2{background:rgba(140,148,162,.14);color:#5c6472;box-shadow:inset 0 0 0 1px rgba(140,148,162,.4)}
+.medal--3{background:rgba(170,104,48,.13);color:#8a531f;box-shadow:inset 0 0 0 1px rgba(170,104,48,.4)}
+[data-theme="dark"] .medal--1{background:rgba(230,194,86,.13);color:#e6c256;box-shadow:inset 0 0 0 1px rgba(230,194,86,.34)}
+[data-theme="dark"] .medal--2{background:rgba(200,208,220,.12);color:#c8d0dc;box-shadow:inset 0 0 0 1px rgba(200,208,220,.3)}
+[data-theme="dark"] .medal--3{background:rgba(214,140,80,.13);color:#df9a5c;box-shadow:inset 0 0 0 1px rgba(214,140,80,.32)}
 .rank-num{color:var(--muted-2);font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px}
-[data-theme="light"] .rank-num{color:#2b3444}
-/* 亮色奖牌恢复金/银/铜三色(按对比度调深)——此前一刀切 #2b3444 抹掉了名次层级 */
-[data-theme="light"] .medal--1{color:#8a6400}
-[data-theme="light"] .medal--2{color:#4c5666}
-[data-theme="light"] .medal--3{color:#95541f}
 .sym{display:inline-flex;align-items:baseline;gap:7px;max-width:100%;color:inherit;text-decoration:none;cursor:pointer}
-.sym__base{font-weight:600;font-size:14px;letter-spacing:.2px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .12s}
-.tr:hover .sym__base{color:var(--gold-hi)}
-.sym__suffix{color:var(--muted-2);font-weight:500;font-size:10.5px;letter-spacing:.4px}
+.sym__base{font-weight:600;font-size:14px;letter-spacing:0;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .12s}
+.tr:hover .sym__base{color:var(--gold-ink)}
+.sym__suffix{color:var(--muted-2);font-weight:500;font-size:10.5px;letter-spacing:.02em}
 .sym__tv{opacity:0;font-size:10px;color:var(--muted-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;white-space:nowrap;transform:translateY(-1px);transition:opacity .15s,color .15s,border-color .15s;flex:none}
 .tr:hover .sym__tv{opacity:1;color:var(--gold-ink);border-color:rgba(var(--gold-rgb),.4)}
-.sub{font-size:11px;color:var(--muted-2);margin-top:3px;line-height:1.45;font-variant-numeric:tabular-nums}
-.val{position:relative;display:inline-block;padding-bottom:6px;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;font-size:15px;letter-spacing:-.2px;white-space:nowrap;color:var(--text)}
+.sub{font-size:11px;color:var(--muted-2);margin-top:4px;line-height:1.45;font-variant-numeric:tabular-nums}
+.val{position:relative;display:inline-block;padding-bottom:7px;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:15px;letter-spacing:-.01em;white-space:nowrap;color:var(--text)}
 .val--up{color:var(--price-up)}
 .val--down{color:var(--price-down)}
-.val__bar{position:absolute;bottom:0;right:0;height:3px;border-radius:3px;min-width:8px;max-width:100%;background:var(--bar-neutral)}
+/* 强度条更细更静(编辑式克制):2px,直角略收 */
+.val__bar{position:absolute;bottom:0;right:0;height:2px;border-radius:2px;min-width:8px;max-width:100%;background:var(--bar-neutral);opacity:.85}
 .val--up .val__bar{background:var(--bar-pos)}
 .val--down .val__bar{background:var(--bar-neg)}
-.table-foot{margin-top:10px;padding:0 4px;font-size:11.5px;color:var(--muted-2);text-align:right;letter-spacing:.3px;font-variant-numeric:tabular-nums}
-/* 橱窗榜未解锁时表尾的内联解锁小按钮（复用品牌蓝主按钮视觉,小号） */
+.table-foot{margin-top:12px;padding:0 4px;font-size:11.5px;color:var(--muted-2);text-align:right;letter-spacing:.02em;font-variant-numeric:tabular-nums}
 .foot-cta{margin-left:8px;padding:3px 12px;border-radius:6px;border:1px solid transparent;background:var(--btn-fill);color:#fff;font-weight:700;font-size:11.5px;cursor:pointer}
-.foot-cta:hover{box-shadow:0 3px 10px rgba(var(--btn-fill-rgb),.35)}
+.foot-cta:hover{box-shadow:0 3px 10px rgba(var(--btn-fill-rgb),.3)}
 
 /* ---------------- 状态(骨架=静态灰条;空态)---------------- */
-.skeleton-row{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--row-line)}
+.skeleton-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--row-line)}
 .sk{display:block;height:13px;border-radius:5px;background:var(--panel-3)}
-.empty{text-align:center;padding:54px 20px 60px}
+.empty{text-align:center;padding:56px 20px 62px}
 .empty__icon{width:44px;height:44px;margin:0 auto 14px;border-radius:50%;background:var(--panel-2);border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;font-size:19px}
 .empty__title{font-size:14.5px;color:var(--text);font-weight:600;margin-bottom:6px}
 .empty__desc{font-size:12px;color:var(--muted-2);line-height:1.7}
 .empty__cta{margin-top:18px;padding:10px 26px}
 
-/* 锁定橱窗(未解锁/失效的策略榜):模糊预览行做背景 + 品牌锁卡片浮于其上。2026-07-23
-   转化改造——替代旧的"光墙 + emoji 锁 + 折叠线以下的按钮",让人看见"满满一榜就差
-   解锁",CTA 顶到首屏。GPU 三约束不触碰:静态 blur(非动画)、无 sticky、无 backdrop-filter。 */
+/* 锁定橱窗(未解锁/失效的策略榜):模糊预览行 + 品牌锁卡片。GPU 三约束不触碰。*/
 .lockgate{position:relative;overflow:hidden;min-height:300px}
 .lockgate__rows{position:absolute;inset:0;filter:blur(5px);opacity:.5;pointer-events:none;user-select:none;
     -webkit-mask:linear-gradient(180deg,#000 0,#000 52%,transparent 94%);mask:linear-gradient(180deg,#000 0,#000 52%,transparent 94%)}
@@ -425,7 +370,7 @@ a:hover{color:var(--gold-hi)}
 .lockgate .skl--sym{height:13px;max-width:64%}
 .lockgate .lockval{position:relative;display:inline-block;padding-bottom:7px}
 .lockgate .skl--num{width:54px;height:15px}
-.lockgate .skl--bar{position:absolute;bottom:0;right:0;height:3px;border-radius:3px;background:var(--asset-accent);opacity:.55}
+.lockgate .skl--bar{position:absolute;bottom:0;right:0;height:2px;border-radius:2px;background:var(--asset-accent);opacity:.55}
 .lockgate__veil{position:relative;z-index:1;display:flex;justify-content:center;align-items:flex-start;padding:34px 18px 40px}
 .lockgate__card{display:flex;flex-direction:column;align-items:center;text-align:center;width:100%;max-width:344px;
     background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-pop);padding:26px 26px 28px}
@@ -443,20 +388,19 @@ a:hover{color:var(--gold-hi)}
 
 /* ---------------- 导出坞(一次性入场动画)---------------- */
 .dock{position:fixed;left:50%;bottom:22px;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:12px;max-width:92%;padding:9px 10px 9px 18px;background:var(--dock-bg);border:1px solid rgba(var(--gold-rgb),.4);border-radius:999px;font-size:13px;color:var(--text);box-shadow:var(--shadow-pop);animation:dock-in .22s ease-out}
-.dock__count{font-variant-numeric:tabular-nums;color:var(--gold-hi);font-weight:600;white-space:nowrap}
-[data-theme="light"] .dock__count{color:var(--gold-ink)}
+.dock__count{font-variant-numeric:tabular-nums;color:var(--gold-ink);font-weight:600;white-space:nowrap}
 @keyframes dock-in{from{transform:translate(-50%,14px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
 
 /* ---------------- 移动抽屉(≤640 显示;一次性滑入)---------------- */
-.scrim{position:fixed;inset:0;background:rgba(4,6,9,.5);opacity:0;pointer-events:none;transition:opacity .24s ease-out;z-index:69}
+.scrim{position:fixed;inset:0;background:rgba(30,24,14,.42);opacity:0;pointer-events:none;transition:opacity .24s ease-out;z-index:69}
 .scrim.is-open{opacity:1;pointer-events:auto}
 .drawer{position:fixed;top:0;left:0;bottom:0;width:286px;max-width:84%;display:flex;flex-direction:column;gap:14px;padding:14px;background:var(--panel-hi),var(--panel);border-right:1px solid var(--line);box-shadow:var(--shadow-pop);z-index:70;transform:translateX(-102%);transition:transform .24s ease-out;overflow-y:auto;overscroll-behavior:contain}
 .drawer.is-open{transform:translateX(0)}
-.drawer__head{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700;letter-spacing:1px;color:var(--muted-2)}
+.drawer__head{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;font-weight:600;letter-spacing:.05em;color:var(--muted-2);text-transform:uppercase}
 .drawer__close{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:4px;line-height:1}
 
 /* ---------------- 页脚 ---------------- */
-.footer{margin-top:26px;padding:18px 0 8px;text-align:center;border-top:1px solid var(--line)}
+.footer{margin-top:30px;padding:20px 0 8px;text-align:center;border-top:1px solid var(--line)}
 .footer-links{display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:9px}
 .flink{background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:2px 4px;transition:color .15s}
 .flink:hover{color:var(--gold-ink)}
@@ -464,22 +408,22 @@ a:hover{color:var(--gold-hi)}
 .footer-note{font-size:11px;color:var(--muted-2);line-height:1.8;max-width:640px;margin:0 auto}
 
 /* ---------------- 弹窗(通用 dialog)---------------- */
-.modal{margin:auto;background:var(--modal-bg);border:1px solid var(--line-2);border-radius:var(--r-lg);padding:24px;width:92%;max-width:390px;color:var(--text);box-shadow:var(--shadow-modal)}
+.modal{margin:auto;background:var(--modal-bg);border:1px solid var(--line-2);border-radius:var(--r-lg);padding:26px;width:92%;max-width:390px;color:var(--text);box-shadow:var(--shadow-modal)}
 .modal-wide{max-width:470px}
-.modal::backdrop{background:rgba(4,6,9,.6)}
-[data-theme="light"] .modal::backdrop{background:rgba(16,24,40,.4)}
-.modal h3{font-size:16px;margin-bottom:10px;font-weight:700}
-.modal-actions{display:flex;align-items:center;gap:8px;margin-top:16px}
+.modal::backdrop{background:rgba(30,24,14,.34)}
+[data-theme="dark"] .modal::backdrop{background:rgba(0,0,0,.6)}
+.modal h3{font-size:17px;margin-bottom:10px;font-weight:700;letter-spacing:-.01em}
+.modal-actions{display:flex;align-items:center;gap:8px;margin-top:18px}
 .spacer{flex:1}
 .modal-actions button,.modal-actions a{padding:9px 18px;border-radius:var(--r-btn);font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;transition:all .15s;text-align:center}
 .btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--muted)}
 .btn-ghost:hover{border-color:var(--muted);color:var(--text)}
 .modal-hint{font-size:12.5px;color:var(--muted);line-height:1.75;margin-bottom:16px}
 .btn-primary{background:var(--btn-fill);border:1px solid transparent;color:#fff;font-weight:700}
-.btn-primary:hover{box-shadow:0 4px 14px rgba(var(--btn-fill-rgb),.35)}
+.btn-primary:hover{box-shadow:0 4px 14px rgba(var(--btn-fill-rgb),.32)}
 .modal-foot{margin-top:13px;font-size:11.5px;color:var(--muted-2);line-height:1.65}
-.text-input{width:100%;padding:12px;background:var(--bg0);border:1px solid var(--line-2);border-radius:var(--r-sm);color:var(--text);font-size:14px;transition:border-color .15s,box-shadow .15s}
-[data-theme="light"] .text-input{background:var(--panel-2)}
+.text-input{width:100%;padding:12px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:var(--r-sm);color:var(--text);font-size:14px;transition:border-color .15s,box-shadow .15s}
+[data-theme="dark"] .text-input{background:var(--bg0)}
 .text-input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.15)}
 #licenseInput.text-input{font-family:var(--mono);letter-spacing:1px;text-transform:uppercase;text-align:center}
 .lic-msg{font-size:12px;min-height:18px;margin:9px 0 0;color:var(--muted);text-align:center}
@@ -500,7 +444,7 @@ a:hover{color:var(--gold-hi)}
 
 /* FAQ / 免责声明 */
 .faq{max-height:55vh;overflow-y:auto;font-size:13px;color:var(--muted);line-height:1.85;padding-right:4px;overscroll-behavior:contain}
-.faq h4{color:var(--text);font-size:13.5px;margin:15px 0 4px}
+.faq h4{color:var(--text);font-size:13.5px;margin:15px 0 4px;font-weight:600}
 .faq h4:first-child{margin-top:0}
 .faq p{margin-bottom:6px}
 .faq b{color:var(--text)}
@@ -508,86 +452,67 @@ a:hover{color:var(--gold-hi)}
 /* ---------------- ≤640px:抽屉导航 + 折叠表格 ---------------- */
 @media (max-width:640px){
     .app{padding-bottom:0}
-    .topbar__inner{padding:0 12px;min-height:52px;gap:8px}
+    .topbar__inner{padding:0 12px;min-height:54px;gap:8px}
     .hamburger{display:flex}
     .brand__logo{width:28px;height:28px}
     .brand__name{font-size:15px}
     .brand__tag{display:none}
     .topbar__tools .fresh.is-dim{display:none}
-    /* 顶栏放不下通行证状态+按钮（跟三个胶囊+汉堡+主题钮已经很挤），移动端只
-       走抽屉里的那份重复（#licenseStatusDrawer/#licenseBtnDrawer），逻辑同上面
-       "拉丁副名让位"那条注释——窄屏先保结构不溢出，功能挪到抽屉 */
     #licenseStatus,#licenseBtn{display:none}
     .fresh{padding:4px 10px;font-size:11.5px}
     .fresh__next{display:none}
-    .wrap{padding:12px 12px 84px;padding:12px 12px calc(84px + env(safe-area-inset-bottom,0px))}
+    .wrap{padding:14px 12px 84px;padding:14px 12px calc(84px + env(safe-area-inset-bottom,0px))}
     .layout{display:block}
     .rail{display:none}
-    .pulse{flex-wrap:wrap;border:none;background:none;box-shadow:none;overflow:visible;gap:7px}
-    .pulse__cell{flex:1 1 calc(50% - 4px);padding:9px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
-    .pulse__label{margin-bottom:3px}
-    .pulse__value{font-size:15px}
-    .pulse__sub{margin-top:2px}
-    /* 市场概览:移动端拆成卡片,情绪条占满一行(含仪表),其余 2 列 */
+    .pulse{flex-wrap:wrap;border:none;background:none;box-shadow:none;overflow:visible;gap:8px}
+    .pulse__cell{flex:1 1 calc(50% - 4px);padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
+    .pulse__cell+.pulse__cell{border-left:1px solid var(--line)}
+    .pulse__label{margin-bottom:4px}
+    .pulse__value{font-size:17px}
+    .pulse__sub{margin-top:3px}
     .mkt{border:none;background:none;box-shadow:none;overflow:visible}
-    .mkt__inner{gap:7px}
-    .mkt__item{flex:1 1 calc(50% - 4px);padding:8px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
+    .mkt__inner{gap:8px}
+    .mkt__item{flex:1 1 calc(50% - 4px);padding:9px 13px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
     .mkt__item--senti{flex-basis:100%}
     .mkt__gauge{flex:1}
-    .board-head{flex-direction:column;align-items:stretch;gap:7px;padding:11px 13px}
-    .board-head__name{font-size:16px}
-    .board-head__note{margin-top:4px;line-height:1.5}
+    .board-head{flex-direction:column;align-items:stretch;gap:9px;padding:13px 14px}
+    .board-head__name{font-size:18px}
+    .board-head__note{margin-top:5px;line-height:1.5}
     .search{width:100%}
-    /* 搜索框字号必须 ≥16px：iOS Safari 对 <16px 的输入框聚焦时会强制放大整页。
-       弹窗输入框(通行证/邮箱,付费转化路径)同理——原 14px 在 iOS 聚焦时也会放大整页 */
+    /* iOS Safari <16px 输入框聚焦会强制放大整页——搜索/弹窗输入统一 ≥16px */
     .search__input{font-size:16px}
     .text-input{font-size:16px}
-    /* 表体高度跟屏幕走(dvh 容忍手机地址栏伸缩;不支持 dvh 的老浏览器落回 420px) */
     .tbody{max-height:420px;max-height:min(64dvh,600px)}
-    .sort-chip{padding:7px 13px} /* 触控目标略放大 */
+    .sort-chip{padding:7px 13px}
     .c-check{width:36px}
     .c-check .chk{width:16px;height:16px}
     .c-rank{width:42px;padding-left:4px}
     .c-val{width:116px;padding:0 12px 0 6px;overflow:hidden;text-overflow:ellipsis}
-    .c-sym{padding:8px 6px 8px 2px}
+    .c-sym{padding:9px 6px 9px 2px}
     .sym__base{font-size:13px}
     .medal{width:21px;height:21px;font-size:11px;border-radius:6px}
     .sub{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .sym__tv{display:none}
     .val{font-size:13px}
     .table-foot{text-align:center}
-    /* iOS 底部安全区:导出坞抬离 Home 指示条(env 不支持的浏览器落回前一条声明)。
-       加「清空」后四元素在 ≤360px 偏挤:收紧 gap/内距,极窄屏(320)允许换行兜底 */
     .dock{bottom:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));width:calc(100% - 20px);justify-content:space-between;padding:8px 8px 8px 12px;gap:8px;flex-wrap:wrap;row-gap:6px;border-radius:22px}
 }
 @media (min-width:641px){ .scrim,.drawer{display:none} }
 
-/* 641–1080px（平板/小笔记本）：这一档走的是**桌面版**顶栏（移动端那套让位规则要
-   ≤640px 才生效），但桌面版顶栏实测需要 ~1060px 才放得下「logo + 品牌 + 副名 + 标语
-   + 3 个新鲜度胶囊(541px) + 通行证徽标 + 通行证按钮 + 主题钮」,中间这段一直在把整页
-   撑出横向滚动。按"信息重要性递减"依次让位:品牌副名(域名,用户已经在站内了,最没用)
-   → 品牌标语 → 胶囊的「· 下次 ≈ N 分」后缀(倒计时是锦上添花,新鲜度本身由圆点颜色表达)。 */
+/* 641–1080px:桌面顶栏按信息重要性递减依次让位(副名 → 标语 → 胶囊后缀)*/
 @media (max-width:1080px){
     .brand__latin{display:none}
     .brand__tag{display:none}
     .fresh__next{display:none}
 }
-/* 641–860px：上一档让位后仍差 ~110px——完整桌面顶栏实测需 **744px**（品牌 100 +
-   三个胶囊 398 + 通行证徽标 34 + 按钮 90 + 主题钮 32 + 间距），641px 放不下。
-   再让位两样：非当前资产的胶囊（与 ≤640px 移动端同款处理，资产切换在 rail/抽屉里
-   本来就有）、通行证徽标（「已解锁/未解锁」旁边的按钮文案已经在说「管理通行证」/
-   「输入通行证」，徽标是冗余的那一份，按钮保留）。
-   阈值取 860 而非贴着 744：媒体查询按 `innerWidth`（**含滚动条**）判定，布局可用的
-   是 `clientWidth`（少 ~15px），贴着实测值会在滚动条出现/消失时抖动。 */
+/* 641–860px:再让位非当前资产胶囊 + 通行证徽标 */
 @media (max-width:860px){
     .topbar__tools .fresh.is-dim{display:none}
     #licenseStatus{display:none}
 }
-/* 641–860px（P1 审计死区）：这一档仍是桌面双列布局（移动块要 ≤640px 才生效），但
-   266px rail + 22px gap 挤下，值列在 ~660–768px 被裁、标的列一度压到十几 px。收窄
-   rail 到 210px、缩固定列，把宽度让给标的列。与 ≤640px 移动块阈值不重叠、不冲突。 */
+/* 641–860px:桌面双列但收窄 rail、缩固定列,宽度让给标的列 */
 @media (min-width:641px) and (max-width:860px){
-    .layout{grid-template-columns:210px minmax(0,1fr);gap:16px}
+    .layout{grid-template-columns:210px minmax(0,1fr);gap:18px}
     .c-rank{width:48px}
     .c-val{width:150px;padding:0 12px 0 6px;overflow:hidden;text-overflow:ellipsis}
     .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -601,7 +526,7 @@ a:hover{color:var(--gold-hi)}
     .medal{width:19px;height:19px;font-size:10.5px}
     .sym__base{font-size:12.5px}
     .val{font-size:12.5px}
-    .pulse__value{font-size:13.5px}
+    .pulse__value{font-size:15px}
 }
 
 /* 硬约束兜底:reduced-motion 全禁(本就无循环动画,双保险) */

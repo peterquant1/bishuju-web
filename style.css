@@ -523,17 +523,20 @@ a:hover{color:var(--gold-hi)}
     .wrap{padding:12px 12px 84px;padding:12px 12px calc(84px + env(safe-area-inset-bottom,0px))}
     .layout{display:block}
     .rail{display:none}
-    .pulse{flex-wrap:wrap;border:none;background:none;box-shadow:none;overflow:visible;gap:8px}
-    .pulse__cell{flex:1 1 calc(50% - 4px);border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
+    .pulse{flex-wrap:wrap;border:none;background:none;box-shadow:none;overflow:visible;gap:7px}
+    .pulse__cell{flex:1 1 calc(50% - 4px);padding:9px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
+    .pulse__label{margin-bottom:3px}
     .pulse__value{font-size:15px}
+    .pulse__sub{margin-top:2px}
     /* 市场概览:移动端拆成卡片,情绪条占满一行(含仪表),其余 2 列 */
     .mkt{border:none;background:none;box-shadow:none;overflow:visible}
-    .mkt__inner{gap:8px}
-    .mkt__item{flex:1 1 calc(50% - 4px);border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
+    .mkt__inner{gap:7px}
+    .mkt__item{flex:1 1 calc(50% - 4px);padding:8px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
     .mkt__item--senti{flex-basis:100%}
     .mkt__gauge{flex:1}
-    .board-head{flex-direction:column;align-items:stretch;gap:9px;padding:12px 13px}
+    .board-head{flex-direction:column;align-items:stretch;gap:7px;padding:11px 13px}
     .board-head__name{font-size:16px}
+    .board-head__note{margin-top:4px;line-height:1.5}
     .search{width:100%}
     /* 搜索框字号必须 ≥16px：iOS Safari 对 <16px 的输入框聚焦时会强制放大整页。
        弹窗输入框(通行证/邮箱,付费转化路径)同理——原 14px 在 iOS 聚焦时也会放大整页 */

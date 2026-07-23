@@ -806,7 +806,9 @@ function renderTable() {
             if (cta) cta.addEventListener("click", ctaAction);
             const enter = document.getElementById("lockgateEnterBtn");
             if (enter) enter.addEventListener("click", () => openUnlockDialog());
-            if (foot) foot.hidden = true; // 命中数已在橱窗卡片里说清,页脚不再重复
+            // 页脚(role=status/aria-live)保留一句状态给 AT 用户(#rankBody 不朗读上千行,
+            // 空/锁定态一律靠页脚播报)——视觉上不重复卡片里的命中数,只说"这是锁定榜"
+            if (foot) { foot.textContent = expired ? "通行证已失效，续费后可继续查看" : "该策略榜需通行证解锁"; foot.hidden = false; }
             return;
         }
         let ico, title, desc;

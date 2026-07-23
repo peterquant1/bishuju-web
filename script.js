@@ -159,7 +159,7 @@ const TABS_CONFIG = {
     // 周线母集「周线启动」weeklyEmaExpansion（2026-07-23 站长新增，与 weeklyStrategy 同组）：
     // 最新已收盘周线 (9/21 ∪ 9/26) 扩张之一即入榜，纯周线值、无跨周期交集（那是 weeklyStrategy）。
     // 五轴 = 加密基础四轴 + 结构张开（emaGap＝周线 9/21 间距，行带 ema9/ema21，build 层算 emaGap）。
-    weeklyEmaExpansion: { sorts: [...cryptoRsiFirst("成交额"), AXIS_EMAGAP], subFormat: (v, sf) => axesSub(v, sf, "成交额") },
+    weeklyEmaExpansion: { sorts: [...cryptoRsiFirst("周成交额"), AXIS_EMAGAP], subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
 
     // === 加密 日线策略（七轴：基础四轴 + 参与度/结构张开/距前高，2026-07-22 深夜扩充）===
     // 行本就带 ema9/ema21（emaGap build 层现算），volRatio/highDist 由 get_daily_indicators
@@ -1564,6 +1564,11 @@ function initPaywallUI() {
             const freeUpdateTime = data ? data.updateTime : null;
             data = { ...data, ...paidData };
             if (freeUpdateTime) data.updateTime = freeUpdateTime;
+            // 首屏公开数据尚未到达（data 原为 null）时没有 build 时刻可恢复——必须删掉
+            // KV 带来的上传时刻，否则它可能晚于公开文件的 build 时刻（A股/美股上传也刷它），
+            // 下一轮 loadData 的单调性守卫会把正常公开数据误判成"回滚"整段拒收，
+            // 29 个免费榜空窗直到公开 updateTime 追过 KV 时刻（最长 ~1 小时）。
+            else delete data.updateTime;
             // 与 loadData 的 paidFetchKey 同款组合串语义（三时间戳）
             lastPaidUpdateTime = data ? (data.updateTime + "|" + data.ashareUpdateTime + "|" + data.usUpdateTime) : null;
             renderLicenseStatus();

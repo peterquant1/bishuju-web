@@ -192,8 +192,8 @@ a:hover{color:var(--gold-hi)}
 .asset-seg__opt[data-k="ashare"] .asset-seg__dot{background:var(--asset-ashare)}
 .asset-seg__opt[data-k="us"] .asset-seg__dot{background:var(--asset-us)}
 .asset-seg__opt[data-k="etf"] .asset-seg__dot{background:var(--asset-etf)}
-/* 激活态 = 资产色实块 + 极浅 shadow。文字色按底色明度分别定(WCAG):亮色底盘下
-   crypto/ashare/us 三个深资产色配白字(5.5~6:1),etf 深青配近黑(6.4:1)。*/
+/* 激活态 = 资产色实块 + 极浅 shadow。文字色按 WCAG 定:四资产深色底一律白字
+   (v5 审计实测 etf 深青底黑字仅 3.98:1 不达 AA,故 etf 也是白字,别按旧稿改回近黑)。*/
 .asset-seg__opt[data-k="crypto"].is-active{background:var(--asset-crypto);color:#fff;box-shadow:var(--shadow-1)}
 .asset-seg__opt[data-k="ashare"].is-active{background:var(--asset-ashare);color:#fff;box-shadow:var(--shadow-1)}
 .asset-seg__opt[data-k="us"].is-active{background:var(--asset-us);color:#fff;box-shadow:var(--shadow-1)}

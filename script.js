@@ -696,6 +696,55 @@ function renderSortStrip() {
     strip.hidden = false;
 }
 
+// 锁定橱窗的模糊预览行：8 行确定性假数据(宽度参差,模拟真实榜单的长短)。整体高斯
+// 模糊后当"橱窗背景",让未解锁用户看见"这里满满一榜标的,就差解锁"——比一堵光墙 +
+// emoji 锁的转化力强得多(2026-07-23 转化改造)。宽度写死不用随机,避免每次重渲染抖动。
+const LOCK_PREVIEW_ROWS = [
+    { sym: 82, bar: 96 }, { sym: 104, bar: 78 }, { sym: 66, bar: 64 }, { sym: 92, bar: 55 },
+    { sym: 74, bar: 47 }, { sym: 110, bar: 39 }, { sym: 70, bar: 30 }, { sym: 88, bar: 23 },
+];
+function lockPreviewRowsHtml() {
+    return `<div class="lockgate__rows" aria-hidden="true">` + LOCK_PREVIEW_ROWS.map((r, i) => {
+        const rank = i + 1;
+        const rankCell = rank <= 3
+            ? `<span class="medal medal--${rank}">${rank}</span>`
+            : `<span class="rank-num">${rank}</span>`;
+        return `<div class="tr lockrow">
+            <div class="c-check"><span class="skl skl--dot"></span></div>
+            <div class="c-rank">${rankCell}</div>
+            <div class="c-sym"><span class="skl skl--sym" style="width:${r.sym}px"></span></div>
+            <div class="c-val"><span class="lockval"><span class="skl skl--num"></span><span class="skl skl--bar" style="width:${r.bar}%"></span></span></div>
+        </div>`;
+    }).join("") + `</div>`;
+}
+// 锁定橱窗卡片：模糊预览行 + 品牌锁(LOCK_SVG,统一视觉,不用 emoji) + 命中数 + 醒目 CTA。
+// n=命中数(paidMeta,可为 null)。CTA 沿用 #emptyUnlockBtn 的 id,由调用方绑定动作。
+function lockGateHtml(n, opts) {
+    const count = n != null ? `已找到 <b>${n}</b> 个标的` : (opts.fallbackTitle || "该榜已锁定");
+    return `<div class="lockgate">
+        ${lockPreviewRowsHtml()}
+        <div class="lockgate__veil">
+            <div class="lockgate__card">
+                <div class="lockgate__icon">${LOCK_SVG}</div>
+                <div class="lockgate__count">${count}</div>
+                <div class="lockgate__desc">${opts.desc}</div>
+                <button type="button" class="btn-primary lockgate__cta" id="emptyUnlockBtn">${opts.ctaLabel}</button>
+                ${opts.hintHtml || ""}
+            </div>
+        </div>
+    </div>`;
+}
+// 锁定态收起"假控件"(搜索框/排序条/表头)：无数据可搜、可排,点了没反应 = 首屏空间
+// 浪费 + 误导;收起后橱窗 CTA 卡片直接顶到看板头下方(首屏可见)。非锁定态恢复显示。
+function setLockedChrome(hide) {
+    const search = document.querySelector(".board-head .search");
+    if (search) search.hidden = hide;
+    // renderSortStrip 已按 config 置 hidden=false;锁定时在其之后覆盖为收起
+    if (hide) { const strip = document.getElementById("sortStrip"); if (strip) strip.hidden = true; }
+    const thead = document.querySelector(".table .thead");
+    if (thead) thead.hidden = hide;
+}
+
 function renderTable() {
     // 榜单标识不依赖数据(命中数自带空守卫),放在 !data 早退之前——
     // 否则首屏数据未到时切 tab,nav 高亮已变而标识栏还是旧内容(审计 P2-9)
@@ -713,6 +762,11 @@ function renderTable() {
     const tbody = document.getElementById("rankBody");
     const header = document.getElementById("valueHeader");
     if (!tbody || !header) return;
+
+    // 锁定态(公开 JSON 不含该 key)：提前判定,据此收起搜索/排序条/表头等"假控件",
+    // 并在下方空状态里渲染橱窗卡片(模糊预览 + CTA)。data 此处已保证非空(上方早退)。
+    const locked = PAYWALL_ENABLED && data[currentTab] === undefined && currentTab !== TEASER_TAB && !FREE_TABS.has(currentTab);
+    setLockedChrome(locked);
 
     const arrow = sortAsc ? " ▲" : " ▼";
     if (config.sorts) {
@@ -732,34 +786,35 @@ function renderTable() {
         // 修正：此前只判 A股、美股落进 else 显示加密的「合约/整点后重算」——误导更新预期）
         const dailyAsset = isAshareTab(currentTab) || isUsTab(currentTab) || isEtfTab(currentTab);
         const strict = isStrategyTab(currentTab);
-        // 锁定态：data[currentTab] 整个 key 都不存在（TEASER_TAB 之外的榜锁定后公开 JSON
-        // 根本不含它），跟"筛选严格 0 命中"（key 存在、数组是空的）是两种不同情形，
-        // 优先判断——用户没解锁时,"去解锁"比"换个搜索词"更是真正有用的下一步。
-        const locked = PAYWALL_ENABLED && data && data[currentTab] === undefined && currentTab !== TEASER_TAB && !FREE_TABS.has(currentTab);
-        let ico, title, desc, cta = "";
-        let lockedCtaAction = null;
-        if (locked) {
+        // 锁定态(见上方 locked 判定)优先于"筛选严格 0 命中"(key 存在、数组为空)：
+        // 未解锁 / 通行证失效 → 橱窗卡片(模糊预览 + 醒目 CTA,顶到首屏);有有效通行证
+        // 只是付费数据暂时没拉到 → 加载态(不催已付费的人重复付款,Worker 抖动时这文案
+        // 就是事故现场),落到下方通用 .empty 分支。
+        if (locked && !license.valid) {
             const n = tabCount(currentTab);
-            // 三种锁定成因分开说（2026-07-22 审计）：对**有有效通行证只是数据暂时没拉到**
-            // 的付费用户显示"购买通行证+立即解锁"是在催已付费的人重复付款——Worker 抖动
-            // /网络失败时这文案就是事故现场。key 失效（过期/吊销）引导重输/续费而非购买。
-            if (license.valid) {
-                ico = "⏳";
-                title = n != null ? `已找到 ${n} 个标的，解锁数据加载中…` : "解锁数据加载中…";
-                desc = "通行证有效，付费数据暂时拉取失败<br>30 秒内自动重试，无需任何操作";
-            } else if (license.key) {
-                ico = "🔒";
-                title = n != null ? `已找到 ${n} 个标的，解锁查看` : "该榜已锁定";
-                desc = "通行证已失效（过期或被停用）";
-                cta = `<button type="button" class="btn-primary empty__cta" id="emptyUnlockBtn">重新输入 / 续费</button>`;
-                lockedCtaAction = () => openUnlockDialog();
-            } else {
-                ico = "🔒";
-                title = n != null ? `已找到 ${n} 个标的，解锁查看` : "该榜已锁定";
-                desc = "购买通行证解锁全部策略榜";
-                cta = `<button type="button" class="btn-primary empty__cta" id="emptyUnlockBtn">立即解锁</button>`;
-                lockedCtaAction = openPurchaseDialog;
-            }
+            const expired = !!license.key; // 有 key 但 !valid = 过期/吊销
+            const desc = expired
+                ? "通行证已失效（过期或被停用）<br>续费后即可继续查看完整名单"
+                : "购买通行证，解锁本站全部策略榜的完整名单与多轴排序";
+            const ctaLabel = expired ? "重新输入 / 续费" : "立即解锁";
+            const ctaAction = expired ? () => openUnlockDialog() : openPurchaseDialog;
+            // 未解锁时额外给一条"已有通行证？"入口(回访用户直接输码,不必先进购买弹窗)
+            const hintHtml = expired ? ""
+                : `<button type="button" class="lockgate__link" id="lockgateEnterBtn">已有通行证？点此输入</button>`;
+            tbody.innerHTML = lockGateHtml(n, { desc, ctaLabel, hintHtml });
+            const cta = document.getElementById("emptyUnlockBtn");
+            if (cta) cta.addEventListener("click", ctaAction);
+            const enter = document.getElementById("lockgateEnterBtn");
+            if (enter) enter.addEventListener("click", () => openUnlockDialog());
+            if (foot) foot.hidden = true; // 命中数已在橱窗卡片里说清,页脚不再重复
+            return;
+        }
+        let ico, title, desc;
+        if (locked && license.valid) {
+            const n = tabCount(currentTab);
+            ico = "⏳";
+            title = n != null ? `已找到 ${n} 个标的，解锁数据加载中…` : "解锁数据加载中…";
+            desc = "通行证有效，付费数据暂时拉取失败<br>30 秒内自动重试，无需任何操作";
         } else if (searchQuery) {
             ico = "🔍";
             // escapeHtml：searchQuery 是唯一进 innerHTML 的用户输入，必须转义（自 XSS）
@@ -781,12 +836,7 @@ function renderTable() {
                 <div class="empty__icon">${ico}</div>
                 <div class="empty__title">${title}</div>
                 <div class="empty__desc">${desc}</div>
-                ${cta}
             </div>`;
-        if (locked && lockedCtaAction) {
-            const btn = document.getElementById("emptyUnlockBtn");
-            if (btn) btn.addEventListener("click", lockedCtaAction);
-        }
         // 空状态也给 #tableFoot(role=status/aria-live)一句话,让 AT 用户得到反馈
         // (#rankBody 不设 live——30s 刷新会朗读上千行)。搜索分支用原始 searchQuery,
         // textContent 自动转义;非搜索用 title(不含用户输入,无双重转义问题)。

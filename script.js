@@ -70,29 +70,28 @@ function changeSub(v, sf, volLabel, priceCtx) {
 }
 
 // 共享 sort-item 定义（key = 行字段名，全 tab 统一）
-// ⚠️ 2026-07-21 晚：**label 一并脱敏**。榜名/desc 已经不写指标了，但排序轴原来直接叫
-// 「RSI」「CVD强弱」「订单流」「EMA间距」——配上榜名等于把用了哪些指标又漏回去
-// （例：一个叫「趋势启动」的榜挂着「EMA间距」轴 = 明示它看均线间距）。改为行情语言，
-// **key 不动**（key 是行字段名，动了要连累后端 payload 和 getSortedItems）。
-const AXIS_RSI = { key: "rsi", label: "强度", format: v => fmtRsiVal(v.rsi) };
-const AXIS_CVD = { key: "cvdStrength", label: "资金强弱", format: v => fmtCvdVal(v.cvdStrength) };
+// ⚠️ 2026-07-23：随 tab 显示名恢复直白命名（见 TAB_GROUPS 顶部注释），排序轴 label 同批
+// 恢复指标原名（2026-07-21 那轮「强度/资金强弱/买卖失衡/参与度/结构张开」的脱敏标签作废）。
+// **key 仍不动**（key 是行字段名，动了要连累后端 payload 和 getSortedItems）。
+const AXIS_RSI = { key: "rsi", label: "RSI", format: v => fmtRsiVal(v.rsi) };
+const AXIS_CVD = { key: "cvdStrength", label: "CVD强弱", format: v => fmtCvdVal(v.cvdStrength) };
 // **加密独有轴**：A股/美股 数据源没有主动买卖归边字段，物理上给不了，股票系 tab 不挂。
-const AXIS_TAKER = { key: "takerStrength", label: "买卖失衡", format: v => fmtCvdVal(v.takerStrength) };
+const AXIS_TAKER = { key: "takerStrength", label: "订单流", format: v => fmtCvdVal(v.takerStrength) };
 const axisVol = label => ({ key: "volume", label, format: v => fmtVolVal(v) });
 const axisChg = label => ({ key: "value", label, format: v => formatPercent(v.value) });
 // 参与度/结构张开度（2026-07-20 深夜加，A股/美股/ETF 独有轴——「参与度」补成交活跃
 // 程度维度（「资金强弱」只量方向失衡），「结构张开」升序=结构刚成立的早期、降序=最
 // 舒展的阶段）。crypto 管道未挂：后端未产出这两个字段（挂上要动周/月线缓存 schema，
 // 站长没要求前不扩），crypto 行上没这两个 key。
-const AXIS_VOLRATIO = { key: "volRatio", label: "参与度", format: v => fmtRatioVal(v.volRatio) };
-const AXIS_EMAGAP = { key: "emaGap", label: "结构张开", format: v => fmtGapVal(v.emaGap) };
+const AXIS_VOLRATIO = { key: "volRatio", label: "量比", format: v => fmtRatioVal(v.volRatio) };
+const AXIS_EMAGAP = { key: "emaGap", label: "EMA间距", format: v => fmtGapVal(v.emaGap) };
 // 距前高/周线强度（2026-07-22 深夜加，加密日线策略行家族独有——dailyEma921/weeklyStrategy）：
 // 距前高 = (收盘−近499日最高)/最高×100，恒 ≤0（0=正在创新高）——价格结构位置维度，
 // 降序=贴近前高的强势（上方无套牢盘），升序=深水区早期反转（空间大但阻力多）。
 // 周线强度 = 周线 RSI（仅 weeklyStrategy 行有，锚定大级别强弱；日线 RSI 看「谁启动最热」，
 // 周线 RSI 看「谁的大趋势最强」，两个维度都要给交易员）。
 const AXIS_HIGHDIST = { key: "highDist", label: "距前高", format: v => fmtGapVal(v.highDist) };
-const AXIS_WRSI = { key: "weeklyRsi", label: "周线强度", format: v => fmtRsiVal(v.weeklyRsi) };
+const AXIS_WRSI = { key: "weeklyRsi", label: "周线RSI", format: v => fmtRsiVal(v.weeklyRsi) };
 // A股/美股/ETF 五/六轴：主轴（RSI 或 成交额 或 涨幅）排最前，其余跟上
 const sortsRsiFirst = volLabel => [AXIS_RSI, axisVol(volLabel), AXIS_CVD, AXIS_VOLRATIO, AXIS_EMAGAP];
 const sortsVolFirst = volLabel => [axisVol(volLabel), AXIS_RSI, AXIS_CVD, AXIS_VOLRATIO, AXIS_EMAGAP];
@@ -249,9 +248,9 @@ const stockGroups = (assetCN, p, changeDescs) => [
         // 宽→严（后者 ⊆ 前者）
         label: `${assetCN}日线策略`, asset: assetCN, tf: "日线",
         tabs: [
-            { key: `${p}DailyTripleEmaCvd`, name: "主升结构 · 资金",
+            { key: `${p}DailyTripleEmaCvd`, name: "三线扩张＋CVD走强",
               desc: "中短期结构完整成型、多周期同向，且资金正在持续流入的标的。" },
-            { key: `${p}DailyFourEma`, name: "主升结构 · 资金强化",
+            { key: `${p}DailyFourEma`, name: "四线扩张＋CVD走强",
               desc: "在上一榜基础上追加长周期确认，更严格，命中通常明显更少。" },
         ],
     },
@@ -259,11 +258,11 @@ const stockGroups = (assetCN, p, changeDescs) => [
         // 宽→严（子集链）
         label: `${assetCN}周线策略`, asset: assetCN, tf: "周线",
         tabs: [
-            { key: `${p}WeeklyEma921`, name: "周线趋势 · 确认",
+            { key: `${p}WeeklyEma921`, name: "两线扩张＋SAR＋CVD",
               desc: "周线级别结构转强，并通过方向与资金双重确认。级别比日线大、持续性更强。" },
-            { key: `${p}WeeklyTripleEma`, name: "周线主升 · 确认",
+            { key: `${p}WeeklyTripleEma`, name: "三线扩张＋SAR＋CVD",
               desc: "周线结构完整成型并通过双重确认，比上一榜严格。" },
-            { key: `${p}WeeklyFourEma`, name: "周线主升 · 强化确认",
+            { key: `${p}WeeklyFourEma`, name: "四线扩张＋SAR＋CVD",
               desc: "在上一榜基础上追加长周期确认，本组最严格的一档。" },
         ],
     },
@@ -272,37 +271,28 @@ const stockGroups = (assetCN, p, changeDescs) => [
         // 共振两档 = 月线命中 ∩ 日线两档（母集→子集排列）
         label: `${assetCN}月线策略`, asset: assetCN, tf: "月线",
         tabs: [
-            { key: `${p}MonthlyStrategy`, name: "月线趋势",
+            { key: `${p}MonthlyStrategy`, name: "两线扩张",
               desc: "月线级别结构转强的标的——级别最大、信号最少，是下面两个共振榜的母集。" },
-            { key: `${p}MonthlyDailyTriple`, name: "月线趋势 × 日线主升",
+            { key: `${p}MonthlyDailyTriple`, name: "月线两线＋日线三线",
               desc: "大级别定方向、小级别定时机：月线级别已转强，同时日线级别结构成型且资金流入。表格显示的是日线数值。" },
-            { key: `${p}MonthlyDailyFour`, name: "月线趋势 × 日线主升强化",
+            { key: `${p}MonthlyDailyFour`, name: "月线两线＋日线四线",
               desc: "同上，但日线一侧换成更严格的那一档。" },
         ],
     },
 ];
 
 const TAB_GROUPS = [
-    // ⚠️⚠️ 2026-07-21 晚二次重命名：**筛选规则从此不对外公开**（站长要求"把所有 TAB 的
-    // 真实逻辑隐藏起来并重新取名"）。站点当晚已改为付费制——**筛选规则本身就是商品**，
-    // 白纸黑字写在页面上等于免费送。
-    //
-    // **本次规矩，与同日早些时候那版正好相反，改名前务必读完**：
-    //   ① **名字和 desc 只描述"这个榜在找什么样的行情"，绝不描述怎么算出来的。**
-    //   ② **禁用词**（name 和 desc 里一律不许出现）：EMA / RSI / SAR / CVD / 均线 /
-    //      两线·三线·四线 / 扩张 / 连阳 / 间距 / 金叉，以及任何参数数字（9/21/55/200/50…）。
-    //   ③ **仍然要能让站长自己分得清哪个是哪个**——他每天在用。所以保留「宽→严」的
-    //      语义梯度（母集叫「趋势启动」，加严的叫「趋势启动 · X」），只是梯度用行情
-    //      语言表达，不用条件个数表达。
-    //
-    // **同日早些时候那版规矩（"名字必须写全筛选条件"）已作废**，别照着它把名字改回去：
-    // 那是站点还全站免费时定的，当时目标是"规则一个字都不能丢"；现在目标正相反。
-    // 历史版本要考古见 git（PR #121）。
+    // ⚠️⚠️ 2026-07-23 三次命名：站长要求「把所有 TAB 的命名恢复到自己一眼就能理解的
+    // 名字」——显示名重新写明筛选条件（两线/三线/四线扩张、SAR、CVD…），2026-07-21
+    // 深夜那版「脱敏、禁用指标词」的规矩就此作废。历史：PR #121 写全条件版 → PR #124
+    // 脱敏版 → 本次恢复直白版（站长知情决定：付费墙照旧锁"榜单内容"，但筛选规则
+    // 重新对页面访客可见）。
+    // 命名约定：name 写"怎么算"（条件用 ＋/× 连接，宽→严梯度用条件个数表达）；
+    // desc 保持白话讲"这榜在找什么行情"，两层互补。
     //
     // ⚠️ **内部 key 一律不动**（`dailyEma921` 等）：改 key 会连累三条抓取管道 + 公开
-    // JSON + 缓存 schema，且 key 本身已在公开 JSON 的 paidMeta 里暴露——那是另一个
-    // 层面的问题，见 CLAUDE.md「残留暴露面」，不在改名范围内解决。
-    // `desc` 渲染在表格上方（renderBoardHead），现在讲的是"这榜干什么用"，不是"怎么算"。
+    // JSON + 缓存 schema——key 与显示名是两回事，历史上因此定过"key 固定、只改显示名"
+    // 的规矩（*MonthlyStrategy / weeklyStrategy 先例），继续有效。
     {
         // 行情组＝免费引流层（2026-07-22）：涨跌幅 3（全量）+ 成交额/振幅（TOP200）+
         // 资金费率（永续独有）。都是通用公开行情，不泄露任何策略逻辑，整榜免费。
@@ -333,25 +323,25 @@ const TAB_GROUPS = [
         // 注释）——desc 里"多周期共振"那句是那层门槛的措辞，跟着一起去掉，别再写回去。
         label: "日线策略", asset: "加密", tf: "日线",
         tabs: [
-            { key: "dailyEma921", name: "趋势启动",
+            { key: "dailyEma921", name: "两线扩张＋CVD走强",
               desc: "短期结构刚刚转强、资金同步流入——早期趋势启动信号。" },
         ],
     },
     {
         label: "周线策略", asset: "加密", tf: "周线",
         tabs: [
-            { key: "weeklyStrategy", name: "周线趋势 × 日线启动",
+            { key: "weeklyStrategy", name: "周线SAR多头 × 日线两线扩张",
               desc: "周线大级别方向已确认向上，且日线端刚出现启动信号——顺大势、做小势的入场扫描视角。" },
-            { key: "weeklyEmaExpansion", name: "周线启动",
+            { key: "weeklyEmaExpansion", name: "周线两线扩张",
               desc: "周线级别趋势结构刚刚张开、上行动能初步确立——周线视角的早期启动信号。" },
         ],
     },
     {
         label: "月线策略", asset: "加密", tf: "月线",
         tabs: [
-            { key: "monthlySarBreakout", name: "月线拐点突破",
+            { key: "monthlySarBreakout", name: "SAR翻多＋突破",
               desc: "月线级别方向发生反转、且价格已确认突破的标的——级别最大、信号最少。" },
-            { key: "monthlyFourBull", name: "月线加速",
+            { key: "monthlyFourBull", name: "四连阳",
               desc: "月线级别连续推进的标的；纯价格行为判断，不带结构条件。" },
         ],
     },

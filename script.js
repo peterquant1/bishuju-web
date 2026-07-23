@@ -37,18 +37,20 @@ function fmtAmpVal(x) { return x == null ? "—" : x.toFixed(2) + "%"; }
 const SUB_AXES_MAX = 4;
 function axesSub(item, sf, volLabel, extra) {
     const seg = [];
-    if (sf !== "rsi") seg.push(`强度 ${fmtRsiVal(item.rsi)}`);
+    // ⚠️ 标签与 AXIS_* 常量的 label 保持一致（2026-07-23 恢复直白命名时这里漏改过一次，
+    // 排序条已是 RSI/CVD强弱 而副行还是 强度/资金强弱——改轴标签时两处一起改）。
+    if (sf !== "rsi") seg.push(`RSI ${fmtRsiVal(item.rsi)}`);
     if (sf !== "volume") seg.push(`${volLabel} ${fmtVolVal(item)}`);
-    if (sf !== "cvdStrength") seg.push(`资金强弱 ${fmtCvdVal(item.cvdStrength)}`);
-    if ("weeklyRsi" in item && sf !== "weeklyRsi") seg.push(`周线强度 ${fmtRsiVal(item.weeklyRsi)}`);
+    if (sf !== "cvdStrength") seg.push(`CVD强弱 ${fmtCvdVal(item.cvdStrength)}`);
+    if ("weeklyRsi" in item && sf !== "weeklyRsi") seg.push(`周线RSI ${fmtRsiVal(item.weeklyRsi)}`);
     // 订单流（真实 taker 归边比）只有加密行有——A股 数据源无归边字段，行上没这个 key，
     // 数据驱动判断即可，无需 per-tab 配置。与 CVD强弱 背离时（阴线+订单流正=借跌吸筹）
     // 正是这轴的价值所在。
-    if ("takerStrength" in item && sf !== "takerStrength") seg.push(`买卖失衡 ${fmtCvdVal(item.takerStrength)}`);
+    if ("takerStrength" in item && sf !== "takerStrength") seg.push(`订单流 ${fmtCvdVal(item.takerStrength)}`);
     // 量比/EMA间距：A股/美股/ETF 行 + 加密日线策略行家族（dailyEma921/weeklyStrategy）有，
     // 数据驱动判断。距前高 只有加密日线策略行家族有。
-    if ("volRatio" in item && sf !== "volRatio") seg.push(`参与度 ${fmtRatioVal(item.volRatio)}`);
-    if ("emaGap" in item && sf !== "emaGap") seg.push(`结构张开 ${fmtGapVal(item.emaGap)}`);
+    if ("volRatio" in item && sf !== "volRatio") seg.push(`量比 ${fmtRatioVal(item.volRatio)}`);
+    if ("emaGap" in item && sf !== "emaGap") seg.push(`EMA间距 ${fmtGapVal(item.emaGap)}`);
     if ("highDist" in item && sf !== "highDist") seg.push(`距前高 ${fmtGapVal(item.highDist)}`);
     // 振幅 只有免费行情榜（涨跌幅/成交额/振幅）的行有——策略榜行没这个 key，数据驱动跳过。
     if ("amplitude" in item && sf !== "amplitude") seg.push(`振幅 ${fmtAmpVal(item.amplitude)}`);

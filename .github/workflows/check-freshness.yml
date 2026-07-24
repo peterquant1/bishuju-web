@@ -39,18 +39,18 @@ jobs:
               return (datetime.now(timezone.utc) - ts).total_seconds() / 60
 
           a = age_min("updateTime")
-          print(f"updateTime: {data['updateTime']}  (落后 {a:.0f} 分钟，crypto 独占字段——A股/美股 不写它)")
+          print(f"updateTime: {data['updateTime']}  (落后 {a:.0f} 分钟，crypto 独占字段——美股不写它)")
           if a > 150:
               print("::error::加密数据已超过 2.5 小时未更新 —— 本机每小时计划任务可能挂了，去看机器！")
               sys.exit(1)
 
-          # A股/美股独立新鲜度检查：两者都是 daily cadence（A股 每天 15:05 北京时间收盘后、
-          # 美股 每天 21:20 UTC 触发后还要等发布+增量补缓存），用远大于 crypto 的 30 小时
-          # 阈值（容忍节假日/偶发延迟）；字段不存在（该管道还没跑过第一次）时跳过而非报警。
-          # updateTime 是"谁最后写谁生效"，crypto 每小时都会刷新它，光看它无法发现
-          # A股/美股 任务本身挂了。
+          # 美股独立新鲜度检查：daily cadence（每天 21:20 UTC 触发后还要等发布+增量补缓存），
+          # 用远大于 crypto 的 30 小时阈值（容忍节假日/偶发延迟）；字段不存在（该管道还没跑过
+          # 第一次）时跳过而非报警。updateTime 是"谁最后写谁生效"，crypto 每小时都会刷新它，
+          # 光看它无法发现美股任务本身挂了。
+          # （A股 的 ashareUpdateTime 检查 2026-07-24 随 A股 整体退役删除——管道已 disable，
+          #  留着必然在 30 小时后开始每 2 小时报一次警。）
           for field, label, task in [
-              ("ashareUpdateTime", "A股", "A股每日计划任务"),
               ("usUpdateTime", "美股", "美股每日计划任务"),
           ]:
               if field not in data:

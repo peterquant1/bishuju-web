@@ -94,9 +94,9 @@ const AXIS_EMAGAP = { key: "emaGap", label: "EMA间距", format: v => fmtGapVal(
 // 周线 RSI 看「谁的大趋势最强」，两个维度都要给交易员）。
 const AXIS_HIGHDIST = { key: "highDist", label: "距前高", format: v => fmtGapVal(v.highDist) };
 const AXIS_WRSI = { key: "weeklyRsi", label: "周线RSI", format: v => fmtRsiVal(v.weeklyRsi) };
-// 月线RSI（2026-07-24 加，只挂 monthlyWeeklyDaily 月×周×日三级共振榜）：那榜的行同时
-// 锚定三个周期，日线 RSI 看"谁启动最热"、周线看"大趋势多强"、月线看"最大级别多强"，
-// 三个都给才对得上它的语义。需 ≥16 根已收盘月 K，历史短的新合约为 null（前端沉底）。
+// 月线RSI（2026-07-24 加，只挂 A股 ashareMonthlyWeeklyDaily 月×周×日三级共振榜）：
+// 那榜的行同时锚定三个周期，日线 RSI 看"谁启动最热"、周线看"大趋势多强"、月线看
+// "最大级别多强"，三个都给才对得上它的语义。需 ≥16 根已收盘月 K，次新股 null 沉底。
 const AXIS_MRSI = { key: "monthlyRsi", label: "月线RSI", format: v => fmtRsiVal(v.monthlyRsi) };
 // A股/美股/ETF 五/六轴：主轴（RSI 或 成交额 或 涨幅）排最前，其余跟上
 const sortsRsiFirst = volLabel => [AXIS_RSI, axisVol(volLabel), AXIS_CVD, AXIS_VOLRATIO, AXIS_EMAGAP];
@@ -157,12 +157,6 @@ const TABS_CONFIG = {
     // 月线SAR × 周线SAR 双多头（2026-07-24 站长新增，月×周跨周期 SAR 共振）：行 payload 全部
     // 月线数值（同 monthlySarBreakout/monthlyFourBull），四轴，默认按月成交额排序（月线 RSI 对新合约常缺）。
     monthlyWeeklySar: { sorts: cryptoVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.changePercent != null ? `月涨幅 ${formatPercent(v.changePercent)}` : null) },
-    // 月×周×日 三级共振 monthlyWeeklyDaily（2026-07-24 站长新增）：月线SAR多头 ∩ 周线SAR
-    // 多头 ∩ 日线(EMA9/21 扩张 + CVD走强)。行 payload 是**日线**数值（入场扫描视角，同
-    // weeklyStrategy），故走日线策略行家族的轴集而不是 cryptoVolFirst——
-    // 九轴 = 加密基础四轴 + 参与度/结构张开/距前高 + 周线RSI + 月线RSI，全部可升可降。
-    // 默认按日线 RSI 降序（cryptoRsiFirst 首轴），与后端装配顺序一致。
-    monthlyWeeklyDaily: { sorts: [...cryptoRsiFirst("成交额"), AXIS_VOLRATIO, AXIS_EMAGAP, AXIS_HIGHDIST, AXIS_WRSI, AXIS_MRSI], subFormat: (v, sf) => axesSub(v, sf, "成交额") },
 
     // === 加密 周线策略 weeklyStrategy「周线趋势 × 日线启动」（2026-07-22 深夜站长定版，
     // 取代 weeklyEma921 母集；weeklyRsi 周线强度池 同日早些时候已移除）===
@@ -186,6 +180,14 @@ const TABS_CONFIG = {
     // cryptoRsiFirst（基础四轴工厂保持通用，行上没这些字段的榜用它不会多出恒 null 轴），
     // 而是就地追加，只影响日线策略行家族（本榜 + 上方 weeklyStrategy）。
     dailyEma921: { sorts: [...cryptoRsiFirst("成交额"), AXIS_VOLRATIO, AXIS_EMAGAP, AXIS_HIGHDIST], subFormat: (v, sf) => axesSub(v, sf, "成交额") },
+
+    // === A股（2026-07-24 站长定「A股只保留这个TAB」，全资产就这一个榜）===
+    // ashareMonthlyWeeklyDaily「月线SAR × 周线SAR × 日线扩张＋CVD」：月×周×日三级共振，
+    // 行 payload 是**日线**数值（入场扫描视角）。**七轴**＝股票系五轴（RSI/成交额/
+    // CVD强弱/量比/EMA间距）+ 周线RSI + 月线RSI，全部可升可降。
+    // 没有订单流轴（tushare 日线无 taker 归边字段，数据源硬边界）、没有距前高轴
+    // （compute_ashare_daily 未算该字段）——两者都不是遗漏，加轴前先去后端加字段。
+    ashareMonthlyWeeklyDaily: { sorts: [...sortsRsiFirst("成交额"), AXIS_WRSI, AXIS_MRSI], subFormat: (v, sf) => axesSub(v, sf, "成交额") },
 
     // === 美股 日线策略（跟 crypto 共用同一套指标/表格组件，见 fetch_us.py）===
     // sorts 用股票系 factory（sortsRsiFirst/sortsVolFirst/sortsChange，无订单流末轴）
@@ -349,8 +351,18 @@ const TAB_GROUPS = [
               desc: "月线级别连续推进的标的；纯价格行为判断，不带结构条件。" },
             { key: "monthlyWeeklySar", name: "月线SAR多头 × 周线SAR多头",
               desc: "月线与周线的 SAR 同时翻多——两个大级别趋势同向共振的标的，每月 1 号新月开盘后刷新。" },
-            { key: "monthlyWeeklyDaily", name: "月线SAR × 周线SAR × 日线扩张＋CVD",
-              desc: "在上一榜的月周双多头基础上，再要求日线端刚刚启动（EMA9/21 张开且资金同步流入）——大级别定方向、小级别定时机，是上一榜的子集。表格显示的是日线数值。" },
+        ],
+    },
+    // === A股（2026-07-24 站长定「A股只保留这个TAB」）===
+    // **刻意不走 stockGroups() 工厂**——那个一次生成 4 组 15 个 tab（行情/日线/周线/月线），
+    // 而 A股 现在总共只有 1 个榜。手写这一组是正确的，别为了"对称"把它塞回工厂。
+    // 组名「策略」而非「月线策略」：只有一个组时，rail 上再标周期就成了废话
+    // （周期已由 tab 的 tf 角标表达）。
+    {
+        label: "A股策略", asset: "A股", tf: "月线",
+        tabs: [
+            { key: "ashareMonthlyWeeklyDaily", name: "月线SAR × 周线SAR × 日线扩张＋CVD",
+              desc: "月线与周线的 SAR 同时多头（两个大级别方向都已确立），且日线端刚刚启动——EMA9/21 张开、资金同步流入。大级别定方向、小级别定时机；表格显示的是日线数值。" },
         ],
     },
     // === 美股 / ETF ===
@@ -362,8 +374,9 @@ const TAB_GROUPS = [
     // 标的范围各有各的说明），用 changeDescs 参数注入。
     // 各资产独有的差异（前缀、TV 代码格式）都不在这里，分别由后端 build_* 和 CSS 的
     // [data-asset] 处理。
-    // ⚠️ A股 曾是这里的第三个调用（...stockGroups("A股","ashare",…)），2026-07-24 站长
-    // 要求「移除所有A股的TAB」后整段删除；后端抓取层保留为休眠件，复活见 fetch_ashare.py 顶部。
+    // ⚠️ A股 曾也是这个工厂的一个调用（...stockGroups("A股","ashare",…) → 4 组 15 tab），
+    // 2026-07-24 站长「移除所有A股的TAB…A股只保留这个TAB」后改为上方手写的单组单 tab。
+    // 后端 compute 层各 dict 仍照常产出（保留组），复活整套见 fetch_ashare.py 顶部。
     ...stockGroups("美股", "us", [
         "最新交易日涨跌幅（相对上一交易日收盘）；上市首日的标的只有一根收盘价、算不出涨跌幅，不入榜",
         "最新已收盘周 K：本周收盘价 vs 上周收盘价",
@@ -489,6 +502,18 @@ function isCryptoSymbol(symbol) {
     return symbol.endsWith("USDT");
 }
 
+// A股 symbol 形如 "600000.SH"/"000001.SZ"：6 位数字 + 点 + 交易所后缀，精确正则匹配。
+// **不能用"带不带点"当判据**（2026-07-20 接入美股时修：美股有些 ticker 本身带点，
+// 如 BRK.B / BF.B 这类 class share 后缀，includes(".") 会把它们误判成 A股 代码，
+// 导致 symbolDisplayParts/tvSymbolFor 按 A股 逻辑错误拆分）。
+function isAshareSymbol(symbol) {
+    return /^\d{6}\.(SH|SZ)$/.test(symbol);
+}
+
+function isAshareTab(tab) {
+    return tab.startsWith("ashare");
+}
+
 function isUsTab(tab) {
     return tab.startsWith("us");
 }
@@ -506,6 +531,11 @@ function isEtfTab(tab) {
 // ⚠️ 美股有些 ticker 本身带点（BRK.B / BF.B 这类 class share 后缀），任何按"带不带点"
 // 分流的写法都会误伤它们——2026-07-20 接入美股时踩过（当时是 A股 分支用了 includes(".")）。
 function tvSymbolFor(symbol) {
+    if (isAshareSymbol(symbol)) {
+        const [code, ex] = symbol.split(".");
+        const prefix = ex === "SH" ? "SSE" : ex === "SZ" ? "SZSE" : ex;
+        return `${prefix}:${code}`;
+    }
     if (isCryptoSymbol(symbol)) {
         return `BINANCE:${symbol}.P`;
     }
@@ -520,6 +550,10 @@ function tvUrlFor(symbol) {
 // 后缀——item.name 存在时 renderTable 优先显示公司名，suffix 派不上用场，但仍返回空串
 // 保持函数签名一致，防御 name 缺失的边缘情况）。
 function symbolDisplayParts(symbol) {
+    if (isAshareSymbol(symbol)) {
+        const [code, ex] = symbol.split(".");
+        return { base: code, suffix: ex };
+    }
     if (isCryptoSymbol(symbol)) {
         return { base: stripUSDT(symbol), suffix: "USDT" };
     }
@@ -561,10 +595,11 @@ function getSortedItems() {
 // 同屏全见、一键直达；rail 激活态随资产变色（--asset-accent）。
 // 移动端 rail 隐藏，同一份导航渲染进抽屉（#drawerBody）。
 const TF_SHORT = { "日线": "日", "周线": "周", "月线": "月" };
-const ASSET_KEY = { "加密": "crypto", "美股": "us", "ETF": "etf" };   // TAB_GROUPS.asset → data-asset
-const ASSET_CN = { crypto: "加密", us: "美股", etf: "ETF" };          // data-asset → TAB_GROUPS.asset
+const ASSET_KEY = { "加密": "crypto", "A股": "ashare", "美股": "us", "ETF": "etf" };  // TAB_GROUPS.asset → data-asset
+const ASSET_CN = { crypto: "加密", ashare: "A股", us: "美股", etf: "ETF" };           // data-asset → TAB_GROUPS.asset
 let currentAsset = "crypto";                                // 当前资产（由 tab 派生/资产切换驱动）
-const lastTabByAsset = { crypto: "yesterdayChange", us: "usChange", etf: "etfChange" }; // 各资产记住上次看的榜
+// 各资产记住上次看的榜。A股 只有一个榜，"上次看的"恒等于它。
+const lastTabByAsset = { crypto: "yesterdayChange", ashare: "ashareMonthlyWeeklyDaily", us: "usChange", etf: "etfChange" };
 
 function assetOfTab(tab) {
     const m = TAB_META[tab];
@@ -573,7 +608,7 @@ function assetOfTab(tab) {
 
 // rail 组标签统一显示"周期/行情"（资产已由分段控件表达,组名不再重复"美股"/"ETF"前缀）
 function navGroupLabel(g) {
-    return g.label.replace(/^(美股|ETF)/, "") || g.label;
+    return g.label.replace(/^(A股|美股|ETF)/, "") || g.label;
 }
 
 function navHtml() {
@@ -615,7 +650,10 @@ function renderNav() {
     if (foot && data) {
         const assetCn = ASSET_CN[currentAsset];
         const n = TAB_GROUPS.filter(g => g.asset === assetCn).reduce((s, g) => s + g.tabs.length, 0);
-        const uni = currentAsset === "us" ? `${tabCount("usChange") || 0} 只美股`
+        // A股 现在没有全量涨跌幅榜可以数（唯一的榜是筛选后的策略榜），故写标的范围
+        // 而不是数量——写 tabCount("ashareMonthlyWeeklyDaily") 会变成"监控 N 只"却是命中数，误导。
+        const uni = currentAsset === "ashare" ? "沪深 A 股全市场"
+            : currentAsset === "us" ? `${tabCount("usChange") || 0} 只美股`
             : currentAsset === "etf" ? `${tabCount("etfChange") || 0} 只大类资产 ETF`
             : `${tabCount("yesterdayChange") || 0} 个合约`;
         foot.innerHTML = `<b>${n}</b> 个榜单 · 监控 ${uni}`;
@@ -630,6 +668,7 @@ function renderBoardHead() {
     if (!m) { head.hidden = true; return; }
     const tagEl = document.getElementById("bhAsset");
     tagEl.textContent = m.asset;
+    tagEl.classList.toggle("is-ashare", m.asset === "A股");
     tagEl.classList.toggle("is-us", m.asset === "美股");
     tagEl.classList.toggle("is-etf", m.asset === "ETF");
     const tfEl = document.getElementById("bhTf");
@@ -759,9 +798,9 @@ function renderTable() {
 
     if (items.length === 0) {
         // 空状态三种情形：搜索无匹配 / 策略榜 0 命中（筛选严格的信号，不是故障）/ 数据未生成
-        // 美股/ETF 同为"每交易日收盘后更新"的日更资产，共用同一套文案（2026-07-20 审计
+        // A股/美股/ETF 同为"每交易日收盘后更新"的日更资产，共用同一套文案（2026-07-20 审计
         // 修正：此前漏判美股，落进 else 显示加密的「合约/整点后重算」——误导更新预期）
-        const dailyAsset = isUsTab(currentTab) || isEtfTab(currentTab);
+        const dailyAsset = isAshareTab(currentTab) || isUsTab(currentTab) || isEtfTab(currentTab);
         const strict = isStrategyTab(currentTab);
         // 锁定态(见上方 locked 判定)优先于"筛选严格 0 命中"(key 存在、数组为空)：
         // 未解锁 / 通行证失效 → 橱窗卡片(模糊预览 + 醒目 CTA,顶到首屏);有有效通行证
@@ -954,7 +993,8 @@ function switchAsset(assetK) {
     if (assetK === currentAsset) return;
     // 兜底：lastTabByAsset 全量初始化后正常不可达，但兜底若被触发（未来改坏），
     // 二分写法会把「ETF」误跳去加密榜（2026-07-20 审计补的防御）
-    const fallback = assetK === "us" ? "usChange"
+    const fallback = assetK === "ashare" ? "ashareMonthlyWeeklyDaily"
+        : assetK === "us" ? "usChange"
         : assetK === "etf" ? "etfChange" : "yesterdayChange";
     switchTab(lastTabByAsset[assetK] || fallback);
 }
@@ -965,16 +1005,19 @@ function switchAsset(assetK) {
 // ——它从 2026-07-20 起就覆盖多个资产，名字早已名不副实。⚠️ localStorage 的 key 保持
 // 原样不动：改了会让所有已关过横幅的老用户重新看到它。）
 const SNAPSHOT_BANNER_TEXT = {
+    ashare: "A股 数据为每个交易日收盘后更新的快照，不是盘中实时行情。",
     us: "美股 数据为每个交易日收盘后更新的快照，不是盘中实时行情。",
     etf: "ETF 数据为每个美股交易日收盘后更新的快照，不是盘中实时行情。",
 };
 function snapshotBannerDismissKey() {
-    return currentAsset === "etf" ? "bsj_etf_banner_dismissed" : "bsj_us_banner_dismissed";
+    return currentAsset === "etf" ? "bsj_etf_banner_dismissed"
+        : currentAsset === "ashare" ? "bsj_ashare_banner_dismissed"
+        : "bsj_us_banner_dismissed";
 }
 function renderSnapshotBanner() {
     const el = document.getElementById("snapshotBanner");
     if (!el) return;
-    const applicable = currentAsset === "us" || currentAsset === "etf";
+    const applicable = currentAsset === "ashare" || currentAsset === "us" || currentAsset === "etf";
     if (applicable) {
         const textEl = el.querySelector("[data-banner-text]");
         if (textEl) textEl.textContent = SNAPSHOT_BANNER_TEXT[currentAsset];
@@ -1001,11 +1044,11 @@ function renderStaleBanner() {
     const el = document.getElementById("staleBanner");
     if (!el || !data) return;
 
-    if (isUsTab(currentTab) || isEtfTab(currentTab)) {
-        // 美股/ETF 都是每个交易日收盘后更新一次，阈值远比 crypto 的小时级宽松
+    if (isAshareTab(currentTab) || isUsTab(currentTab) || isEtfTab(currentTab)) {
+        // A股/美股/ETF 都是每个交易日收盘后更新一次，阈值远比 crypto 的小时级宽松
         // （容忍节假日/偶发延迟），跟 check-freshness.yml 的 30 小时口径一致。
         // ETF 与美股同管道同次运行产出，读同一个 usUpdateTime。
-        const t = parseUpdateTime(data.usUpdateTime);
+        const t = parseUpdateTime(isAshareTab(currentTab) ? data.ashareUpdateTime : data.usUpdateTime);
         el.hidden = !(t && Date.now() - t > 30 * 3600 * 1000);
         return;
     }
@@ -1014,15 +1057,16 @@ function renderStaleBanner() {
     el.hidden = !(t && Date.now() - t > 2.5 * 3600 * 1000);
 }
 
-/** 顶栏新鲜度胶囊（Claude Design 重设计）：加密（小时级倒计时）+ 美股（收盘日更）并置，
- *  当前资产侧高亮、另一侧 .is-dim；移动端 CSS 只显示激活侧。
- *  美股 显示 usDataDate（数据实际对应的交易日）——任务跑了但数据源迟发布时它会落后于
- *  更新时间，显示出来用户能看出"今天的数据其实还是昨天的"。
- *  （A股 胶囊 2026-07-24 随 A股 退役删除。） */
+/** 顶栏新鲜度胶囊（Claude Design 重设计）：加密（小时级倒计时）+ A股 + 美股（均收盘
+ *  日更）并置，当前资产侧高亮、其余 .is-dim；移动端 CSS 只显示激活侧。
+ *  A股/美股 显示各自的 DataDate（数据实际对应的交易日）——任务跑了但数据源迟发布时
+ *  它会落后于更新时间，显示出来用户能看出"今天的数据其实还是昨天的"。
+ *  ETF 无独立胶囊：与美股同管道同时间戳，复用 freshUS。 */
 function renderUpdatePill() {
     const elC = document.getElementById("freshCrypto");
+    const elA = document.getElementById("freshAshare");
     const elU = document.getElementById("freshUS");
-    if (!elC || !elU || !data) return;
+    if (!elC || !elA || !elU || !data) return;
 
     // --- 加密胶囊 ---
     const tC = parseUpdateTime(data.updateTime);
@@ -1036,6 +1080,21 @@ function renderUpdatePill() {
         ` <span class="fresh__next">· 下次 ≈ ${nextMin} 分</span>`;
     document.getElementById("freshCryptoTxt").innerHTML = data.updateTime
         ? ` · <b>${data.updateTime.slice(11, 16)}</b>&nbsp;UTC${nextTxt}` : " · —";
+
+    // --- A股胶囊（收盘日更；ashareDataDate 是 tushare 的 'YYYYMMDD'，无分隔符，
+    // 与美股的 ISO 'YYYY-MM-DD' slice 位置不同，别抄错）---
+    const tA = parseUpdateTime(data.ashareUpdateTime);
+    let clsA = "fresh--bad";
+    if (tA) {
+        const ageA = (Date.now() - tA) / 60000;
+        // 每天 07:05 UTC 触发后等 tushare 发布 → 25.5h 内新鲜，30h（与 check-freshness
+        // 同阈值）以上才红
+        clsA = ageA <= 25.5 * 60 ? "fresh--ok" : ageA <= 30 * 60 ? "fresh--warn" : "fresh--bad";
+    }
+    const dd = data.ashareDataDate
+        ? `<b>${data.ashareDataDate.slice(4, 6)}-${data.ashareDataDate.slice(6, 8)}</b> 收盘`
+        : (tA ? `<b>${data.ashareUpdateTime.slice(11, 16)}</b> UTC` : "—");
+    document.getElementById("freshAshareTxt").innerHTML = ` · ${dd} <span class="fresh__next">· 日更</span>`;
 
     // --- 美股胶囊（收盘日更；usDataDate 是 'YYYY-MM-DD' ISO 格式）---
     const tU = parseUpdateTime(data.usUpdateTime);
@@ -1053,11 +1112,13 @@ function renderUpdatePill() {
     // 状态类 + 当前资产侧高亮。ETF 资产没有第四个胶囊——它与美股同管道同时间戳，
     // 高亮美股胶囊即是它的新鲜度指示（移动端只显非 dim 的那一个，必须有一个亮着）。
     elC.className = `fresh ${clsC}${currentAsset === "crypto" ? "" : " is-dim"}`;
+    elA.className = `fresh ${clsA}${currentAsset === "ashare" ? "" : " is-dim"}`;
     elU.className = `fresh ${clsU}${(currentAsset === "us" || currentAsset === "etf") ? "" : " is-dim"}`;
 }
 
 // 各资产的策略 tab 数，pulse "N 榜" 用；按资产从 TAB_GROUPS 算，不硬编码。
 const CRYPTO_STRATEGY_TABS = TAB_GROUPS.filter(g => g.asset === "加密").flatMap(g => g.tabs).filter(t => isStrategyTab(t.key)).length;
+const ASHARE_STRATEGY_TABS = TAB_GROUPS.filter(g => g.asset === "A股").flatMap(g => g.tabs).filter(t => isStrategyTab(t.key)).length;
 const US_STRATEGY_TABS = TAB_GROUPS.filter(g => g.asset === "美股").flatMap(g => g.tabs).filter(t => isStrategyTab(t.key)).length;
 const ETF_STRATEGY_TABS = TAB_GROUPS.filter(g => g.asset === "ETF").flatMap(g => g.tabs).filter(t => isStrategyTab(t.key)).length;
 
@@ -1149,7 +1210,8 @@ function renderPulse() {
     try { renderMarketOverview(); } catch (e) { console.warn("市场概览渲染失败", e); }
     const el = document.getElementById("pulse");
     if (!el || !data) return;
-    const tiles = currentAsset === "us" ? usPulseTiles()
+    const tiles = currentAsset === "ashare" ? asharePulseTiles()
+        : currentAsset === "us" ? usPulseTiles()
         : currentAsset === "etf" ? etfPulseTiles()
         : cryptoPulseTiles();
     if (!tiles) { el.hidden = true; return; }
@@ -1183,8 +1245,17 @@ function cryptoPulseTiles() {
     ].filter(Boolean);
 }
 
+// A股 脉搏：**没有全量涨跌幅榜可用**（2026-07-24 起 A股 只剩一个筛选后的策略榜），
+// 所以给不了"今日领涨/红盘家数"那种全市场磁贴——只放命中数。lockedPulseTile 本就是
+// "拿不到具体行、但命中数是公开数据(paidMeta)"的那条路径，锁定态/解锁态都正确，
+// 直接复用它即是本资产的完整脉搏。**别为了凑满 4 格去 data[唯一的榜] 里取行**：
+// 那是筛选结果不是全市场，写成"监控 N 只"会误导。
+function asharePulseTiles() {
+    return lockedPulseTile("A股", ASHARE_STRATEGY_TABS);
+}
+
 // is-up/is-down 是语义类名，实际颜色由 [data-asset] 作用域的 CSS 变量决定，
-// 这里不用关心具体色值。（asharePulseTiles 2026-07-24 随 A股 退役删除。）
+// 这里不用关心具体色值。
 function usPulseTiles() {
     const uc = data.usChange || [];
     if (!uc.length) return lockedPulseTile("美股", US_STRATEGY_TABS);
@@ -1315,15 +1386,18 @@ async function loadData() {
         // 单调性守卫：busted 请求直穿源站拿到新数据后，下一次普通轮询可能从 CDN 边缘
         // 缓存拿回**上一小时的旧体**（max-age=600 内边缘不回源）。无条件采信会出现
         // 新旧数据每小时来回翻转 + 反复触发 due→全量强拉。旧于手头的数据直接丢弃。
-        // crypto/美股 两条管道独立写各自的时间戳，缺一个检查就会被另一个放过——
-        // 只查 updateTime 会让 usUpdateTime 被回滚（美股每天只更新一次，回滚后要等
-        // 下一次 crypto 整点刷新 updateTime 才会被下面的 render-key 检查带出来重渲染）。
-        // （A股 的 ashareUpdateTime 2026-07-24 随 A股 退役从本守卫与下方两处组合键中删除。）
+        // crypto/A股/美股 三条管道独立写各自的时间戳，缺一个检查就会被另一个放过——
+        // 只查 updateTime 会让 ashareUpdateTime/usUpdateTime 被回滚（它们每天只更新
+        // 一次，回滚后要等下一次 crypto 整点刷新 updateTime 才会被下面的 render-key
+        // 检查带出来重渲染）。
         const freshT = parseUpdateTime(fresh.updateTime);
         const haveT = data ? parseUpdateTime(data.updateTime) : null;
+        const freshAshareT = parseUpdateTime(fresh.ashareUpdateTime);
+        const haveAshareT = data ? parseUpdateTime(data.ashareUpdateTime) : null;
         const freshUsT = parseUpdateTime(fresh.usUpdateTime);
         const haveUsT = data ? parseUpdateTime(data.usUpdateTime) : null;
         const rolledBack = (haveT && freshT && freshT < haveT)
+            || (haveAshareT && freshAshareT && freshAshareT < haveAshareT)
             || (haveUsT && freshUsT && freshUsT < haveUsT);
         // 强穿退避：这次强穿真拿回更新的数据 → 复位到 2.5min；否则（同一/更旧的
         // updateTime，线上还在陈旧）退避加倍，最多 20min 一次（bustStreak 封 3）。
@@ -1335,13 +1409,13 @@ async function loadData() {
         }
 
         // 免费橱窗和付费全量来自同一批管道，所以只在任一资产的时间戳变化时才打
-        // Worker，否则每 30s 轮询会把 CF 免费额度打爆。触发键用两时间戳组合（与下方
-        // renderKey 同款）：美股收盘后只刷新自己的时间戳，只盯 crypto 的 updateTime
-        // 会让它写进 KV 的新付费数据最多晚 ~1 小时（等下一个 crypto 整点）才被拉取。
-        // 付费墙关闭时 fresh 本身已是全量，完全不打 Worker。
+        // Worker，否则每 30s 轮询会把 CF 免费额度打爆。触发键用三时间戳组合（与下方
+        // renderKey 同款）：A股/美股 各自收盘后只刷新自己的时间戳，只盯 crypto 的
+        // updateTime 会让它们写进 KV 的新付费数据最多晚 ~1 小时（等下一个 crypto
+        // 整点）才被拉取。付费墙关闭时 fresh 本身已是全量，完全不打 Worker。
         // ⚠️ 本键与下方 renderKey、以及初始化处的 lastPaidUpdateTime **必须同构**
         // （同样的字段、同样的顺序），改一处要三处一起改。
-        const paidFetchKey = fresh.updateTime + "|" + fresh.usUpdateTime;
+        const paidFetchKey = fresh.updateTime + "|" + fresh.ashareUpdateTime + "|" + fresh.usUpdateTime;
         if (PAYWALL_ENABLED && license.key && paidFetchKey !== lastPaidUpdateTime) {
             const paid = await fetchPaidData();
             // KV 的 updateTime 是**上传时刻**（三条管道谁上传谁刷新，见 upload_paid_data
@@ -1372,14 +1446,14 @@ async function loadData() {
         renderUpdatePill();   // 倒计时每轮都要走
         renderStaleBanner();
 
-        // 渲染键 = updateTime + usUpdateTime 组合：两条管道各自独立刷新，只看其中一个
-        // 会让另一条的更新落地却不触发重渲染——美股数据到位后表格/导航/脉搏条会停留
-        // 在上一交易日的行，直到下一次 crypto 整点刷新才顺带带出来（此时顶部胶囊已经
-        // 先一步显示新日期，出现"胶囊新、表格旧"的错位）。
+        // 渲染键 = updateTime + ashareUpdateTime + usUpdateTime 组合：三条管道各自独立
+        // 刷新，只看其中一个会让另外两条的更新落地却不触发重渲染——A股/美股 数据到位后
+        // 表格/导航/脉搏条会停留在上一交易日的行，直到下一次 crypto 整点刷新才顺带带
+        // 出来（此时顶部胶囊已经先一步显示新日期，出现"胶囊新、表格旧"的错位）。
         // 另加两个付费维度（2026-07-22 审计）：paidData 的到位时刻（首轮拉取失败、次轮
         // 成功时免费时间戳没变，不加这维付费内容落地也不重渲染，锁定态要钉到下个整点）
         // 和 license.valid（挂机中被吊销/过期时表格要重新上锁，不能冻结在旧付费内容）。
-        const renderKey = fresh.updateTime + "|" + fresh.usUpdateTime
+        const renderKey = fresh.updateTime + "|" + fresh.ashareUpdateTime + "|" + fresh.usUpdateTime
             + "|" + (paidData ? paidData.updateTime : "") + "|" + (license.valid ? "1" : "0");
         if (renderKey !== lastRenderKey) {
             lastRenderKey = renderKey;
@@ -1389,11 +1463,12 @@ async function loadData() {
         }
     } catch (e) {
         // 失败指示染**当前资产**的胶囊：移动端只显示非 dim 的那一个,写死 freshCrypto 时
-        // 用户在美股视图下失败完全不可见(2026-07-20 审计修正)。当前资产的胶囊本就无
-        // is-dim,另一个保持原样(dim 状态由 renderUpdatePill 管理)。
+        // 用户在 A股/美股 视图下失败完全不可见(2026-07-20 审计修正)。当前资产的胶囊本就
+        // 无 is-dim,其余保持原样(dim 状态由 renderUpdatePill 管理)。
         // ETF 没有自己的胶囊,与 renderUpdatePill 同款归并到美股胶囊(2026-07-21 审计补漏:
         // 此前 etf 落进兜底 freshCrypto——ETF 视图下它是 dim 的,移动端整个被隐藏)。
-        const pillId = (currentAsset === "us" || currentAsset === "etf") ? "freshUS" : "freshCrypto";
+        const pillId = currentAsset === "ashare" ? "freshAshare"
+            : (currentAsset === "us" || currentAsset === "etf") ? "freshUS" : "freshCrypto";
         const pill = document.getElementById(pillId);
         if (pill) {
             pill.className = "fresh fresh--bad";
@@ -1546,8 +1621,8 @@ function initPaywallUI() {
             // 下一轮 loadData 的单调性守卫会把正常公开数据误判成"回滚"整段拒收，
             // 22 个免费榜空窗直到公开 updateTime 追过 KV 时刻（最长 ~1 小时）。
             else delete data.updateTime;
-            // ⚠️ 必须与 loadData 的 paidFetchKey **同构**（同字段同顺序，现为两时间戳）
-            lastPaidUpdateTime = data ? (data.updateTime + "|" + data.usUpdateTime) : null;
+            // ⚠️ 必须与 loadData 的 paidFetchKey **同构**（同字段同顺序，现为三时间戳）
+            lastPaidUpdateTime = data ? (data.updateTime + "|" + data.ashareUpdateTime + "|" + data.usUpdateTime) : null;
             renderLicenseStatus();
             if (msg) { msg.textContent = "解锁成功！"; msg.className = "lic-msg lic-ok"; }
             // 首屏公开数据(~8MB)还没到达时(freeUpdateTime 为空)，此刻 data 是"付费 only"
@@ -1745,6 +1820,7 @@ document.getElementById("drawerScrim").addEventListener("click", closeDrawer);
 document.getElementById("drawerBody").innerHTML = `
     <div class="asset-seg">
         <button class="asset-seg__opt is-active" data-k="crypto"><span class="asset-seg__dot"></span>加密</button>
+        <button class="asset-seg__opt" data-k="ashare"><span class="asset-seg__dot"></span>A股</button>
         <button class="asset-seg__opt" data-k="us"><span class="asset-seg__dot"></span>美股</button>
         <button class="asset-seg__opt" data-k="etf"><span class="asset-seg__dot"></span>ETF</button>
     </div>
@@ -1785,6 +1861,7 @@ document.getElementById("snapshotBannerClose").addEventListener("click", () => {
 // "us" !== "etf" → 会把用户切离 ETF。手机端 .is-dim 胶囊隐藏后它还是屏幕上唯一可点的
 // 资产控件,必须显式空操作(2026-07-21 审计)。
 document.getElementById("freshCrypto").addEventListener("click", () => switchAsset("crypto"));
+document.getElementById("freshAshare").addEventListener("click", () => switchAsset("ashare"));
 document.getElementById("freshUS").addEventListener("click", () => {
     if (currentAsset === "etf") return;
     switchAsset("us");

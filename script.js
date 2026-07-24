@@ -122,29 +122,32 @@ const TABS_CONFIG = {
     monthlyChange: { sorts: cryptoChange("月涨幅", "月成交额"), subFormat: (v, sf) => changeSub(v, sf, "月成交额", `${v.open} → ${v.close}`) },
 
     // === 加密 免费行情榜（引流）：成交额（日/周/月）/ 振幅 / 资金费率 ===
-    turnover: { sorts: cryptoTurnoverSorts, subFormat: (v, sf) => axesSub(v, sf, "成交额") },
+    // ⚠️ extra 补「涨幅」：这些榜的轴集里没有 axisChg（主轴是成交额/振幅），而行 payload
+    // 带 value=当日涨跌幅——不补 extra 它就既不在轴里也不在副行，整个榜看不到涨跌幅
+    // （2026-07-24 审计抓出；周/月成交额榜一直是补了的，只有日线这 8 个漏了）。
+    turnover: { sorts: cryptoTurnoverSorts, subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
     // 周/月成交额榜复用周/月涨跌幅行（无 amplitude），排序轴不含振幅，走 cryptoVolFirst
     weeklyTurnover: { sorts: cryptoVolFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额", v.value != null ? `周涨幅 ${formatPercent(v.value)}` : null) },
     monthlyTurnover: { sorts: cryptoVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.value != null ? `月涨幅 ${formatPercent(v.value)}` : null) },
-    amplitude: { sorts: cryptoAmpSorts, subFormat: (v, sf) => axesSub(v, sf, "成交额") },
+    amplitude: { sorts: cryptoAmpSorts, subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
     // 资金费率榜行字段稀疏（只有 费率+成交额），不走 axesSub（会硬显 强度/资金强弱 的 N/A）
     fundingRate: { sorts: cryptoFundingSorts, subFormat: (v, sf) => sf === "fundingRate" ? `成交额 ${fmtVolVal(v)}` : `资金费率 ${formatPercent(v.fundingRate)}` },
 
     // === A股/美股/ETF 免费行情榜（引流）：成交额 / 振幅（复用各自涨跌幅的富行切片；
     // 股票系无资金费率——无永续合约）。TABS_CONFIG 是平查找表，与 TAB_GROUPS 分离，
     // 故这 6 条手写；stockGroups 工厂只管导航，不管这里。===
-    ashareTurnover: { sorts: stockTurnoverSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
+    ashareTurnover: { sorts: stockTurnoverSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
     ashareWeeklyTurnover: { sorts: sortsVolFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额", v.value != null ? `周涨幅 ${formatPercent(v.value)}` : null) },
     ashareMonthlyTurnover: { sorts: sortsVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.value != null ? `月涨幅 ${formatPercent(v.value)}` : null) },
-    ashareAmplitude: { sorts: stockAmpSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
-    usTurnover: { sorts: stockTurnoverSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
+    ashareAmplitude: { sorts: stockAmpSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
+    usTurnover: { sorts: stockTurnoverSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
     usWeeklyTurnover: { sorts: sortsVolFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额", v.value != null ? `周涨幅 ${formatPercent(v.value)}` : null) },
     usMonthlyTurnover: { sorts: sortsVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.value != null ? `月涨幅 ${formatPercent(v.value)}` : null) },
-    usAmplitude: { sorts: stockAmpSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
-    etfTurnover: { sorts: stockTurnoverSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
+    usAmplitude: { sorts: stockAmpSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
+    etfTurnover: { sorts: stockTurnoverSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
     etfWeeklyTurnover: { sorts: sortsVolFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额", v.value != null ? `周涨幅 ${formatPercent(v.value)}` : null) },
     etfMonthlyTurnover: { sorts: sortsVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.value != null ? `月涨幅 ${formatPercent(v.value)}` : null) },
-    etfAmplitude: { sorts: stockAmpSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
+    etfAmplitude: { sorts: stockAmpSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
 
     // === 加密 月线策略（四轴：成交额 / RSI / CVD强弱 / 订单流，默认按成交额——月线 RSI 对新合约常缺）===
     // （monthlySarBreakoutPrev「SAR翻多突破·上根」已于 2026-07-20 移除,后端字段保留,复活看 git）
@@ -554,7 +557,7 @@ function symbolDisplayParts(symbol) {
 }
 
 function escapeHtml(s) {
-    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
 function getSortedItems() {
@@ -814,14 +817,29 @@ function renderTable() {
             // 页脚(role=status/aria-live)保留一句状态给 AT 用户(#rankBody 不朗读上千行,
             // 空/锁定态一律靠页脚播报)——视觉上不重复卡片里的命中数,只说"这是锁定榜"
             if (foot) { foot.textContent = expired ? "通行证已失效，续费后可继续查看" : "该策略榜需通行证解锁"; foot.hidden = false; }
+            updateExportBar();  // 锁定态也要刷：否则切榜后导出坞仍显示上一榜的「已选 N 个」+ 表头勾选态残留
             return;
         }
         let ico, title, desc;
         if (locked && license.valid) {
             const n = tabCount(currentTab);
-            ico = "⏳";
-            title = n != null ? `已找到 ${n} 个标的，解锁数据加载中…` : "解锁数据加载中…";
-            desc = "通行证有效，付费数据暂时拉取失败<br>30 秒内自动重试，无需任何操作";
+            // ⚠️ 两种情况必须分开说，别一律许诺"30 秒自动重试"（2026-07-24 审计）：
+            //  a) paidData == null —— 整包没拉到（5xx/网络）。fetchPaidData 失败时不推进
+            //     lastPaidUpdateTime，所以下一轮轮询确实会重试，许诺成立。
+            //  b) paidData 有、但缺这个 key —— 整包拉到了，是**服务端没产出这个榜**
+            //     （2026-07-22 split_output 400 事故就是这样：us/etf/ashare 33 个 tab
+            //     从未进 KV）。此时 paidFetchKey 不变，整点前不会再打 Worker，"30 秒重试"
+            //     是假的，用户会盯着"加载中"直到下次数据更新。这里如实说，且**不**自动
+            //     重试——真坏掉时每 30s 打一次 Worker 会撞上付费侧的节流纪律。
+            const missingKey = paidData && !(currentTab in paidData);
+            ico = missingKey ? "🛠️" : "⏳";
+            if (missingKey) {
+                title = n != null ? `该榜暂时缺数据（命中 ${n} 个）` : "该榜暂时缺数据";
+                desc = "通行证有效，但服务端本次未提供这个榜<br>下次数据更新后自动恢复，无需重新解锁";
+            } else {
+                title = n != null ? `已找到 ${n} 个标的，解锁数据加载中…` : "解锁数据加载中…";
+                desc = "通行证有效，付费数据暂时拉取失败<br>30 秒内自动重试，无需任何操作";
+            }
         } else if (searchQuery) {
             ico = "🔍";
             // escapeHtml：searchQuery 是唯一进 innerHTML 的用户输入，必须转义（自 XSS）
@@ -848,6 +866,7 @@ function renderTable() {
         // (#rankBody 不设 live——30s 刷新会朗读上千行)。搜索分支用原始 searchQuery,
         // textContent 自动转义;非搜索用 title(不含用户输入,无双重转义问题)。
         if (foot) { foot.textContent = searchQuery ? `没有匹配「${searchQuery}」的标的` : title; foot.hidden = false; }
+        updateExportBar();  // 同上：0 行/空状态分支也要刷导出坞，别把上一榜的勾选计数留在屏幕上
         return;
     }
 
@@ -883,17 +902,22 @@ function renderTable() {
             const subInfo = config.subFormat ? `<div class="sub">${config.subFormat(item, sortField)}</div>` : "";
 
             const tvUrl = tvUrlFor(item.symbol);
-            const { base: symBase, suffix: symSuffix } = symbolDisplayParts(item.symbol);
+            // symbol 与 name 同样来自数据管道，一律转义后再进 innerHTML（2026-07-24 审计：
+            // 原先只转 name、symbol 裸拼，防御不一致——标的池目前全是 [A-Z0-9.] 所以是潜伏面
+            // 不是活 bug，但 ticker 一旦含 " 或 < 就会撑破行结构/属性逃逸）。data-symbol 转义
+            // 无副作用：浏览器读 dataset 时会自动解码回原值。
+            const symSafe = escapeHtml(item.symbol);
+            const { base: symBase0, suffix: symSuffix0 } = symbolDisplayParts(item.symbol);
+            const symBase = escapeHtml(symBase0), symSuffix = escapeHtml(symSuffix0);
             // A股行带 name（股票名），比 "/ SH" 后缀对用户有用得多；crypto 行维持 "/ USDT"。
-            // name 来自数据管道,进 innerHTML 前防御性转义(审计 P2-8)
             const symLabel = item.name
                 ? `${symBase} <span class="sym__suffix">${escapeHtml(item.name)}</span>`
                 : `${symBase} <span class="sym__suffix">/ ${symSuffix}</span>`;
             return `<div class="tr" role="row">
-                <div class="c-check" role="cell"><span class="row-accent"></span><input type="checkbox" class="chk chk--row symbol-check" data-symbol="${item.symbol}" aria-label="选择 ${item.symbol}" ${checked}></div>
+                <div class="c-check" role="cell"><span class="row-accent"></span><input type="checkbox" class="chk chk--row symbol-check" data-symbol="${symSafe}" aria-label="选择 ${symSafe}" ${checked}></div>
                 <div class="c-rank" role="cell">${rankCell}</div>
                 <div class="c-sym" role="cell">
-                    <a class="sym" href="${tvUrl}" target="_blank" rel="noopener noreferrer" title="在 TradingView 打开 ${item.symbol} 图表">
+                    <a class="sym" href="${escapeHtml(tvUrl)}" target="_blank" rel="noopener noreferrer" title="在 TradingView 打开 ${symSafe} 图表">
                         <span class="sym__base">${symLabel}</span>
                         <span class="sym__tv">TV ↗</span>
                     </a>${subInfo}
@@ -1199,7 +1223,9 @@ function cryptoPulseTiles() {
     const topW = wc.length ? wc.reduce((a, b) => (b.value > a.value ? b : a), wc[0]) : null;
     const hits = strategyHits("加密");
     return [
-        pulseTile("监控合约", `${yc.length}<span class="pulse__suffix is-muted">个</span>`, "币安 USDT 永续全量"),
+        // ⚠️ 副标题不写数据源名（2026-07-22 站长要求前端一切数据来源署名脱敏）——这里
+        // 曾漏改成「币安 USDT 永续全量」，是加密视图首屏常驻可见的一处，2026-07-24 审计抓出。
+        pulseTile("监控合约", `${yc.length}<span class="pulse__suffix is-muted">个</span>`, "USDT 永续合约全量"),
         pulseTile("昨日领涨", `${stripUSDT(topD.symbol)}<span class="pulse__suffix ${topD.value >= 0 ? "is-up" : "is-down"}">${topD.value >= 0 ? "+" : ""}${topD.value.toFixed(1)}%</span>`, "日 K 收盘涨跌幅第一"),
         topW ? pulseTile("周线领涨", `${stripUSDT(topW.symbol)}<span class="pulse__suffix ${topW.value >= 0 ? "is-up" : "is-down"}">${topW.value >= 0 ? "+" : ""}${topW.value.toFixed(1)}%</span>`, "最新已收盘周 K") : "",
         hits != null ? pulseTile("策略命中", `<span class="is-gold">${hits}</span><span class="pulse__suffix is-muted">次 · ${CRYPTO_STRATEGY_TABS} 榜</span>`, "加密策略筛选当前命中") : "",
@@ -1316,9 +1342,17 @@ async function fetchPaidData() {
     }
 }
 
+// in-flight 守卫（2026-07-24 审计）：setInterval 不 await，visibilitychange 也直接调——
+// 慢网下单次拉取超过 30s（8MB / gzip 2MB，50kB/s 就要 ~40s）定时器会叠加。真正值钱的不是
+// 省那次公开 JSON，而是**付费侧的竞态**：两个重叠调用都在 lastPaidUpdateTime 被写之前读到
+// 旧值，于是同一小时打两次 Worker /api/data（每次 ~1.3MB KV 读），绕过"不能每 30s 打 Worker"
+// 那条节流纪律。finally 复位，异常路径也不会把轮询永久卡死。
+let loadInFlight = false;
 async function loadData() {
+    if (loadInFlight) return;
+    loadInFlight = true;
     try {
-        // 带宽策略（rankings.json 已 ~5.5MB / gzip ~1MB，绝不能每 30s 全量拉）：
+        // 带宽策略（rankings.json 已 ~8.0MB / gzip ~2.0MB，绝不能每 30s 全量拉）：
         // 默认 {cache:'no-cache'} 走条件请求——数据没变时 CDN/浏览器返回 304，几乎零流量；
         // 只有当手头数据已到期（>61 分钟没更新 = 新一轮抓取该到了）才带 cache-buster
         // 强穿 CDN 缓存，且强穿最密 2.5 分钟一次（防线上抓取中断时每 30s 白拉全量）。
@@ -1429,6 +1463,8 @@ async function loadData() {
             document.getElementById("rankBody").innerHTML =
                 '<div class="empty"><div class="empty__icon">⚠️</div><div class="empty__title">无法加载数据</div><div class="empty__desc">稍后自动重试</div></div>';
         }
+    } finally {
+        loadInFlight = false;   // 见函数上方 in-flight 守卫注释；必须在 finally 里复位
     }
 }
 

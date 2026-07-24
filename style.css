@@ -42,9 +42,17 @@
     --text:#232019; --muted:#6c665a; --muted-2:#757060;
     /* 四资产识别色(功能性,非装饰;亮色下均已按 WCAG 调深)：加密琥珀/A股蓝/美股紫/ETF 深青
        —— 与品牌祖母绿、涨跌绿红均可区分(青 vs 绿靠色相分开)*/
-    --asset-crypto:#9a4f04; --asset-crypto-ink:#9a4f04; --asset-crypto-rgb:154,79,4;
+    --asset-crypto:#9a4f04; --asset-crypto-ink:#8b4704; --asset-crypto-rgb:154,79,4;
     /* ashare/etf 审计后调深保证「作标签文字」在自身淡色底上 ≥4.5:1 */
     --asset-ashare:#1d5cbf; --asset-us:#7c3aed; --asset-etf:#0a7061;
+    /* ⚠️ -ink = 作「文字」用的墨色，比同名填充色更深，四资产各一份（2026-07-24 审美 PASS 加）。
+       起因：上面那行只按「单层淡底」调过，但 .tf-chip 实际嵌在**同色系选中态**里
+       （.nav-item.is-active 自带 rgba(asset,.10~.12)），底色叠两层后深一档，实测四资产
+       全部跌破 AA —— crypto 4.01 / ashare 4.48 / us 3.97 / etf 4.42（.sort-chip.is-active
+       单层也带崩 crypto 4.49 / us 4.30 / etf 4.48）。改用 ink 后最差 4.66。
+       **只给文字用**：填充语义（分段控件 is-active 背景、圆点、强度条、--asset-accent
+       装饰条）一律仍用不带 -ink 的原色，别混。*/
+    --asset-ashare-ink:#1a53ac; --asset-us-ink:#6a2ed0; --asset-etf-ink:#086055;
     /* directional(在 [data-asset] 下翻转)*/
     --price-up:var(--up); --price-down:var(--down); --asset-accent:var(--asset-crypto);
     /* 强度条渐变 */
@@ -88,6 +96,8 @@
     --text:#ece7dc; --muted:#9c9587; --muted-2:#979082;
     --asset-crypto:#f2a93c; --asset-crypto-ink:#f2a93c; --asset-crypto-rgb:242,169,60;
     --asset-ashare:#6ab0ff; --asset-us:#a78bfa; --asset-etf:#2dd4bf;
+    /* 暗色两层叠色实测最差 4.92（全过），无需调深；ink 与填充同值，仅为让 var() 两个主题都解析 */
+    --asset-ashare-ink:#6ab0ff; --asset-us-ink:#a78bfa; --asset-etf-ink:#2dd4bf;
     --bar-up:linear-gradient(90deg,rgba(34,194,134,.12),rgba(34,194,134,.78));
     --bar-down:linear-gradient(90deg,rgba(242,73,94,.12),rgba(242,73,94,.78));
     --bar-crypto:linear-gradient(90deg,rgba(242,169,60,.10),rgba(242,169,60,.72));
@@ -153,10 +163,13 @@ a:hover{color:var(--gold-hi)}
 .fresh--bad .fresh__dot{background:var(--down)}
 .fresh__asset{font-weight:700}
 .fresh__asset.crypto{color:var(--asset-crypto-ink)}
-.fresh__asset.ashare{color:var(--asset-ashare)}
-.fresh__asset.us{color:var(--asset-us)}
+.fresh__asset.ashare{color:var(--asset-ashare-ink)}
+.fresh__asset.us{color:var(--asset-us-ink)}
 .fresh b{color:var(--text);font-weight:600}
-.fresh__next{color:var(--muted-2)}
+/* 用 --muted 不用 --muted-2：muted-2 是按 panel/panel-2 校准的，而 .fresh 药丸自带
+   rgba(--text,.03) 底比它们更暗一档，muted-2 在这里只有 4.26:1（2026-07-24 审美 PASS
+   实测）。改元素而非调深 token，保住 muted-2「比 muted 浅一档」的二级弱化层次。*/
+.fresh__next{color:var(--muted)}
 
 /* 通行证状态徽章(顶栏 + 抽屉共用)*/
 .lic-badge{display:inline-flex;align-items:center;font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:var(--r-pill)}
@@ -228,9 +241,9 @@ a:hover{color:var(--gold-hi)}
 .tf-chip{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:4px;font-size:10px;font-weight:700;flex:none}
 .tf-chip--wide{width:auto;min-width:15px;padding:0 4px;letter-spacing:.2px}
 [data-asset="crypto"] .tf-chip{background:rgba(var(--asset-crypto-rgb),.16);color:var(--asset-crypto-ink)}
-[data-asset="ashare"] .tf-chip{background:rgba(33,102,204,.14);color:var(--asset-ashare)}
-[data-asset="us"] .tf-chip{background:rgba(124,58,237,.14);color:var(--asset-us)}
-[data-asset="etf"] .tf-chip{background:rgba(13,138,122,.14);color:var(--asset-etf)}
+[data-asset="ashare"] .tf-chip{background:rgba(33,102,204,.14);color:var(--asset-ashare-ink)}
+[data-asset="us"] .tf-chip{background:rgba(124,58,237,.14);color:var(--asset-us-ink)}
+[data-asset="etf"] .tf-chip{background:rgba(13,138,122,.14);color:var(--asset-etf-ink)}
 /* 暗色下资产色变亮,tf-chip 底/字跟随(靠 token 自动翻,无需逐一覆盖)*/
 .rail-foot{margin-top:2px;padding:11px 8px 2px;border-top:1px solid var(--line);font-size:11px;color:var(--muted-2);letter-spacing:.02em;font-variant-numeric:tabular-nums}
 
@@ -274,9 +287,9 @@ a:hover{color:var(--gold-hi)}
 .board-head__name{font-size:20px;font-weight:700;margin:0;letter-spacing:-.015em}
 .board-head__note{font-size:12.5px;color:var(--muted);margin-top:7px;font-variant-numeric:tabular-nums;line-height:1.5}
 .asset-tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.04em;color:var(--asset-crypto-ink);background:rgba(var(--asset-crypto-rgb),.14);white-space:nowrap}
-.asset-tag.is-ashare{color:var(--asset-ashare);background:rgba(33,102,204,.14)}
-.asset-tag.is-us{color:var(--asset-us);background:rgba(124,58,237,.14)}
-.asset-tag.is-etf{color:var(--asset-etf);background:rgba(13,138,122,.14)}
+.asset-tag.is-ashare{color:var(--asset-ashare-ink);background:rgba(33,102,204,.14)}
+.asset-tag.is-us{color:var(--asset-us-ink);background:rgba(124,58,237,.14)}
+.asset-tag.is-etf{color:var(--asset-etf-ink);background:rgba(13,138,122,.14)}
 .tf-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);white-space:nowrap;letter-spacing:.04em}
 .search{display:flex;align-items:center;gap:8px;width:250px;flex:none;padding:8px 12px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-btn);transition:border-color var(--dur),box-shadow var(--dur)}
 .search:focus-within{border-color:rgba(var(--gold-rgb),.5);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.1)}
@@ -293,9 +306,9 @@ a:hover{color:var(--gold-hi)}
 .sort-chip:hover{color:var(--text);border-color:var(--muted)}
 .sort-chip__arrow{font-size:9px;line-height:1}
 [data-asset="crypto"] .sort-chip.is-active{background:rgba(var(--asset-crypto-rgb),.14);border-color:rgba(var(--asset-crypto-rgb),.5);color:var(--asset-crypto-ink)}
-[data-asset="ashare"] .sort-chip.is-active{background:rgba(33,102,204,.13);border-color:rgba(33,102,204,.5);color:var(--asset-ashare)}
-[data-asset="us"] .sort-chip.is-active{background:rgba(124,58,237,.13);border-color:rgba(124,58,237,.5);color:var(--asset-us)}
-[data-asset="etf"] .sort-chip.is-active{background:rgba(13,138,122,.13);border-color:rgba(13,138,122,.5);color:var(--asset-etf)}
+[data-asset="ashare"] .sort-chip.is-active{background:rgba(33,102,204,.13);border-color:rgba(33,102,204,.5);color:var(--asset-ashare-ink)}
+[data-asset="us"] .sort-chip.is-active{background:rgba(124,58,237,.13);border-color:rgba(124,58,237,.5);color:var(--asset-us-ink)}
+[data-asset="etf"] .sort-chip.is-active{background:rgba(13,138,122,.13);border-color:rgba(13,138,122,.5);color:var(--asset-etf-ink)}
 
 /* ---------------- 表格(表头/表体分离——表体内滚动,绝不 sticky)---------------- */
 .table{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-1);overflow:hidden}
@@ -313,9 +326,9 @@ a:hover{color:var(--gold-hi)}
 .c-val{width:240px;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 18px 0 8px;white-space:nowrap}
 .sort-opt{color:inherit;cursor:pointer;padding:2px 5px;border-radius:4px;transition:color .12s}
 [data-asset="crypto"] .sort-opt.active,[data-asset="crypto"] .sort-arrow{color:var(--asset-crypto-ink)}
-[data-asset="ashare"] .sort-opt.active,[data-asset="ashare"] .sort-arrow{color:var(--asset-ashare)}
-[data-asset="us"] .sort-opt.active,[data-asset="us"] .sort-arrow{color:var(--asset-us)}
-[data-asset="etf"] .sort-opt.active,[data-asset="etf"] .sort-arrow{color:var(--asset-etf)}
+[data-asset="ashare"] .sort-opt.active,[data-asset="ashare"] .sort-arrow{color:var(--asset-ashare-ink)}
+[data-asset="us"] .sort-opt.active,[data-asset="us"] .sort-arrow{color:var(--asset-us-ink)}
+[data-asset="etf"] .sort-opt.active,[data-asset="etf"] .sort-arrow{color:var(--asset-etf-ink)}
 .sort-opt:hover{color:var(--text)}
 .sort-arrow{color:var(--asset-crypto-ink);font-size:10px;margin-left:2px}
 .chk{accent-color:var(--gold);width:15px;height:15px;cursor:pointer}

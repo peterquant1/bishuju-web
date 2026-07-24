@@ -175,7 +175,10 @@ a:hover{color:var(--gold-hi)}
 .lic-badge{display:inline-flex;align-items:center;font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:var(--r-pill)}
 .lic-off{color:var(--muted);background:var(--chip-wash);border:1px solid var(--line)}
 .lic-on{background:rgba(15,122,82,.12);color:var(--gold-ink);border:1px solid rgba(15,122,82,.3)}
-.lic-expired{background:rgba(196,33,58,.12);color:var(--down);border:1px solid rgba(196,33,58,.32)}
+/* 失效徽章:亮色下 --down(#c4213a) 落在 rgba(down,.12) 粉底上仅 4.37:1(2026-07-24 审美 PASS
+   实测),深一档到 #a81c31=5.5:1 达 AA;暗色底极深,--down(#f2495e) 本就达标,单独保持 */
+.lic-expired{background:rgba(196,33,58,.12);color:#a81c31;border:1px solid rgba(196,33,58,.32)}
+[data-theme="dark"] .lic-expired{color:var(--down)}
 .lic-btn-mini{background:rgba(var(--gold-rgb),.08);border:1px solid rgba(var(--gold-rgb),.42);color:var(--gold-ink);font-size:12px;font-weight:600;padding:6px 14px;border-radius:var(--r-btn);cursor:pointer;transition:all .18s;white-space:nowrap}
 .lic-btn-mini:hover{background:var(--btn-fill);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(var(--btn-fill-rgb),.3)}
 .drawer__license{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line)}

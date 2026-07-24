@@ -131,7 +131,7 @@ const TABS_CONFIG = {
     monthlyTurnover: { sorts: cryptoVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.value != null ? `月涨幅 ${formatPercent(v.value)}` : null) },
     amplitude: { sorts: cryptoAmpSorts, subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
     // 资金费率榜行字段稀疏（只有 费率+成交额），不走 axesSub（会硬显 强度/资金强弱 的 N/A）
-    fundingRate: { sorts: cryptoFundingSorts, subFormat: (v, sf) => sf === "fundingRate" ? `成交额 ${fmtVolVal(v)}` : `资金费率 ${formatPercent(v.fundingRate)}` },
+    fundingRate: { sorts: cryptoFundingSorts, subFormat: (v, sf) => sf === "fundingRate" ? `成交额 ${fmtVolVal(v)}` : (v.fundingRate == null ? "资金费率 —" : `资金费率 ${formatPercent(v.fundingRate)}`) },
 
     // === A股/美股/ETF 免费行情榜（引流）：成交额 / 振幅（复用各自涨跌幅的富行切片；
     // 股票系无资金费率——无永续合约）。TABS_CONFIG 是平查找表，与 TAB_GROUPS 分离，
@@ -436,6 +436,7 @@ let sortAsc = false; // false=降序, true=升序
 let sortField = "value"; // 当前排序字段；默认 value，带 sorts 的 tab 可切 RSI/成交额
 let searchQuery = ""; // 表格搜索（代码/名称子串），切 tab 时清空
 let lastBustAt = 0; // 上次带 cache-buster 强拉的时间（限流用，见 loadData）
+let bustStreak = 0; // 连续强穿仍拿到同一 updateTime 的次数，驱动 loadData 的指数退避（线上抓取中断时省带宽）
 let license = { key: safeStore.get("localStorage", LS_LICENSE) || "", valid: false, expiresAt: null, plan: null, reason: null };
 let paidData = null; // Worker 返回的全量付费数据（未解锁或未拉到时为 null）
 let lastPaidUpdateTime = null; // 上次成功拉到付费数据时对应的 updateTime，避免每 30s 轮询都打 Worker
@@ -1364,9 +1365,15 @@ async function loadData() {
         const lastT = data ? parseUpdateTime(data.updateTime) : null;
         const due = lastT != null && Date.now() - lastT > 61 * 60 * 1000;
         let url = "data/rankings.json";
-        if (due && Date.now() - lastBustAt > 150000) {
+        // 强穿基线 2.5 分钟一次；但线上抓取长时间中断时每次强穿都拿回同一份陈旧数据
+        // = 纯浪费带宽（~2MB gzip/次 × 24 次/小时 ≈ 1.15GB/天/标签页）。连续强穿仍拿到
+        // 同一 updateTime 就指数退避（2.5→5→10→20min 封顶），数据一旦真更新立即复位（见下）。
+        let busted = false;
+        const bustGap = Math.min(150000 * (2 ** bustStreak), 20 * 60 * 1000);
+        if (due && Date.now() - lastBustAt > bustGap) {
             url += "?" + Date.now();
             lastBustAt = Date.now();
+            busted = true;
         }
         const resp = await fetch(url, { cache: "no-cache" });
         const fresh = await resp.json();
@@ -1387,6 +1394,9 @@ async function loadData() {
         const rolledBack = (haveT && freshT && freshT < haveT)
             || (haveAshareT && freshAshareT && freshAshareT < haveAshareT)
             || (haveUsT && freshUsT && freshUsT < haveUsT);
+        // 强穿退避：这次强穿真拿回更新的数据 → 复位到 2.5min；否则（同一/更旧的
+        // updateTime，线上还在陈旧）退避加倍，最多 20min 一次（bustStreak 封 3）。
+        if (busted) bustStreak = (freshT != null && (haveT == null || freshT > haveT)) ? 0 : Math.min(bustStreak + 1, 3);
         if (rolledBack) {
             renderUpdatePill();   // 倒计时照常走（用手头数据）
             renderStaleBanner();
@@ -1608,9 +1618,11 @@ function initPaywallUI() {
             lastPaidUpdateTime = data ? (data.updateTime + "|" + data.ashareUpdateTime + "|" + data.usUpdateTime) : null;
             renderLicenseStatus();
             if (msg) { msg.textContent = "解锁成功！"; msg.className = "lic-msg lic-ok"; }
-            renderNav();
-            renderTable();
-            renderPulse();
+            // 首屏公开数据(~8MB)还没到达时(freeUpdateTime 为空)，此刻 data 是"付费 only"
+            // 对象——直接渲会让免费榜/脉搏/命中数瞬时空白(自愈但难看)。这种竞态交由在飞/
+            // 下一轮 loadData 完成完整合并+渲染；常见路径(已在浏览、公开数据在手)立即渲染。
+            if (freeUpdateTime) { renderNav(); renderTable(); renderPulse(); }
+            else loadData();
             setTimeout(() => document.getElementById("licenseDialog").close(), 700);
         } else {
             if (sbtn) sbtn.disabled = false;

@@ -35,23 +35,35 @@ function fmtAmpVal(x) { return x == null ? "—" : x.toFixed(2) + "%"; }
 // 段落顺序即优先级——weeklyRsi 排在 cvdStrength 后（周线强度是 weeklyStrategy 的锚点
 // 维度；只有该榜的行有这个 key，其他榜不受影响）。移动端 .sub 本就 nowrap 截断，不受此限。
 const SUB_AXES_MAX = 4;
+/** 副行里某个轴的标签：**优先取当前 tab 自己 sorts 里的 label**，取不到才用兜底。
+ *  2026-07-24 改成查表式，替掉了原来"副行硬编码一份标签、必须和 AXIS_* 常量手工保持
+ *  一致"的写法——那个坑 2026-07-23 真的踩过一次（排序条已改成 RSI/CVD强弱，副行还是
+ *  旧的 强度/资金强弱）。这轮给股票系单策略榜的轴加了周期前缀（日线RSI/日CVD强弱/
+ *  日量比/日EMA间距），若还是硬编码就会**第二次**踩同一个坑，索性从根上消掉。
+ *  对加密各榜零视觉变化：它们 sorts 里的 label 与原硬编码值逐字相同。 */
+function axisLabelFor(key, fallback) {
+    const sorts = (TABS_CONFIG[currentTab] || {}).sorts || [];
+    const hit = sorts.find(x => x.key === key);
+    return hit ? hit.label : fallback;
+}
 function axesSub(item, sf, volLabel, extra) {
     const seg = [];
-    // ⚠️ 标签与 AXIS_* 常量的 label 保持一致（2026-07-23 恢复直白命名时这里漏改过一次，
-    // 排序条已是 RSI/CVD强弱 而副行还是 强度/资金强弱——改轴标签时两处一起改）。
-    if (sf !== "rsi") seg.push(`RSI ${fmtRsiVal(item.rsi)}`);
+    if (sf !== "rsi") seg.push(`${axisLabelFor("rsi", "RSI")} ${fmtRsiVal(item.rsi)}`);
+    // volLabel 由调用方显式传（同一个 volume 字段在日/周/月榜含义不同，且免费行情榜
+    // 的主轴就是它，不能反查自己）
     if (sf !== "volume") seg.push(`${volLabel} ${fmtVolVal(item)}`);
-    if (sf !== "cvdStrength") seg.push(`CVD强弱 ${fmtCvdVal(item.cvdStrength)}`);
-    if ("weeklyRsi" in item && sf !== "weeklyRsi") seg.push(`周线RSI ${fmtRsiVal(item.weeklyRsi)}`);
+    if (sf !== "cvdStrength") seg.push(`${axisLabelFor("cvdStrength", "CVD强弱")} ${fmtCvdVal(item.cvdStrength)}`);
+    if ("weeklyRsi" in item && sf !== "weeklyRsi") seg.push(`${axisLabelFor("weeklyRsi", "周线RSI")} ${fmtRsiVal(item.weeklyRsi)}`);
+    if ("monthlyRsi" in item && sf !== "monthlyRsi") seg.push(`${axisLabelFor("monthlyRsi", "月线RSI")} ${fmtRsiVal(item.monthlyRsi)}`);
     // 订单流（真实 taker 归边比）只有加密行有——A股 数据源无归边字段，行上没这个 key，
     // 数据驱动判断即可，无需 per-tab 配置。与 CVD强弱 背离时（阴线+订单流正=借跌吸筹）
     // 正是这轴的价值所在。
     if ("takerStrength" in item && sf !== "takerStrength") seg.push(`订单流 ${fmtCvdVal(item.takerStrength)}`);
     // 量比/EMA间距：A股/美股/ETF 行 + 加密日线策略行家族（dailyEma921/weeklyStrategy）有，
     // 数据驱动判断。距前高 只有加密日线策略行家族有。
-    if ("volRatio" in item && sf !== "volRatio") seg.push(`量比 ${fmtRatioVal(item.volRatio)}`);
-    if ("emaGap" in item && sf !== "emaGap") seg.push(`EMA间距 ${fmtGapVal(item.emaGap)}`);
-    if ("highDist" in item && sf !== "highDist") seg.push(`距前高 ${fmtGapVal(item.highDist)}`);
+    if ("volRatio" in item && sf !== "volRatio") seg.push(`${axisLabelFor("volRatio", "量比")} ${fmtRatioVal(item.volRatio)}`);
+    if ("emaGap" in item && sf !== "emaGap") seg.push(`${axisLabelFor("emaGap", "EMA间距")} ${fmtGapVal(item.emaGap)}`);
+    if ("highDist" in item && sf !== "highDist") seg.push(`${axisLabelFor("highDist", "距前高")} ${fmtGapVal(item.highDist)}`);
     // 振幅 只有免费行情榜（涨跌幅/成交额/振幅）的行有——策略榜行没这个 key，数据驱动跳过。
     if ("amplitude" in item && sf !== "amplitude") seg.push(`振幅 ${fmtAmpVal(item.amplitude)}`);
     const shown = seg.slice(0, SUB_AXES_MAX);
@@ -94,14 +106,30 @@ const AXIS_EMAGAP = { key: "emaGap", label: "EMA间距", format: v => fmtGapVal(
 // 周线 RSI 看「谁的大趋势最强」，两个维度都要给交易员）。
 const AXIS_HIGHDIST = { key: "highDist", label: "距前高", format: v => fmtGapVal(v.highDist) };
 const AXIS_WRSI = { key: "weeklyRsi", label: "周线RSI", format: v => fmtRsiVal(v.weeklyRsi) };
-// 月线RSI（2026-07-24 加，只挂 A股 ashareMonthlyWeeklyDaily 月×周×日三级共振榜）：
-// 那榜的行同时锚定三个周期，日线 RSI 看"谁启动最热"、周线看"大趋势多强"、月线看
-// "最大级别多强"，三个都给才对得上它的语义。需 ≥16 根已收盘月 K，次新股 null 沉底。
+// 月线RSI（2026-07-24 加，挂三个股票系单策略榜）：那榜的行同时锚定三个周期，日线 RSI
+// 看"谁启动最热"、周线看"大趋势多强"、月线看"最大级别多强"，三个都给才对得上语义。
+// 需 ≥16 根已收盘月 K，次新股 null 沉底。
 const AXIS_MRSI = { key: "monthlyRsi", label: "月线RSI", format: v => fmtRsiVal(v.monthlyRsi) };
-// A股/美股/ETF 五/六轴：主轴（RSI 或 成交额 或 涨幅）排最前，其余跟上
-const sortsRsiFirst = volLabel => [AXIS_RSI, axisVol(volLabel), AXIS_CVD, AXIS_VOLRATIO, AXIS_EMAGAP];
-const sortsVolFirst = volLabel => [axisVol(volLabel), AXIS_RSI, AXIS_CVD, AXIS_VOLRATIO, AXIS_EMAGAP];
-const sortsChange = (chgLabel, volLabel) => [axisChg(chgLabel), AXIS_RSI, axisVol(volLabel), AXIS_CVD, AXIS_VOLRATIO, AXIS_EMAGAP];
+
+// === 股票系单策略榜专用轴：**每个轴都写明周期** ===
+// ⚠️ 这不是啰嗦：那张表的筛选条件横跨月/周/日三个周期，而**行里的值全是日线的**，
+// 光写「成交额」「RSI」根本看不出是哪根 K —— 2026-07-24 站长直接问了「当前A股的成交额
+// 升降序是基于日线还是什么周期的？」，说明这个歧义是真会绊人的。既然同一条排序条上
+// 已经并排站着「周线RSI」「月线RSI」，日线那几个轴就必须自报周期，否则对比时更糊涂。
+// key 全部不动（key 是行字段名，动了要连累后端 payload 与 getSortedItems）。
+// 语义提醒：`volume` 是**最新已收盘那一个交易日的单日成交额**（不是周/月累计、不是
+// 均值），A股 为人民币元、美股/ETF 为 USD，格式化由后端 volumeFormatted 定。
+const AXIS_D_RSI = { key: "rsi", label: "日线RSI", format: v => fmtRsiVal(v.rsi) };
+const AXIS_D_VOL = { key: "volume", label: "日成交额", format: v => fmtVolVal(v) };
+const AXIS_D_CVD = { key: "cvdStrength", label: "日CVD强弱", format: v => fmtCvdVal(v.cvdStrength) };
+const AXIS_D_VOLRATIO = { key: "volRatio", label: "日量比", format: v => fmtRatioVal(v.volRatio) };
+const AXIS_D_EMAGAP = { key: "emaGap", label: "日EMA间距", format: v => fmtGapVal(v.emaGap) };
+// 七轴：日线五轴（行里的值都是日线）+ 周线RSI + 月线RSI 两个大级别强度锚点。
+// 无「订单流」（tushare/Massive 日线都没有 taker 归边字段，数据源硬边界）；
+// 无「距前高」（compute_ashare_daily / compute_us_daily 未算该字段）。要加先加后端字段。
+const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO, AXIS_D_EMAGAP, AXIS_WRSI, AXIS_MRSI];
+// （股票系旧轴工厂 sortsRsiFirst/sortsVolFirst/sortsChange 2026-07-24 删除：A股/美股/ETF
+//  各只剩 1 个榜、统一走下方 singleStrategySorts（**每个轴写明周期**）。复活多榜时从 git 捞。）
 // 加密变体：**独立定义、不再 spread 股票系 factory**（2026-07-20 起两族轴集分叉：股票系
 // 有 量比/EMA间距 无 订单流，加密反之——spread 会让加密 tab 多出两个恒 null 轴）
 const cryptoRsiFirst = volLabel => [AXIS_RSI, axisVol(volLabel), AXIS_CVD, AXIS_TAKER];
@@ -112,12 +140,12 @@ const cryptoChange = (chgLabel, volLabel) => [axisChg(chgLabel), AXIS_RSI, axisV
 const AXIS_AMPLITUDE = { key: "amplitude", label: "振幅", format: v => fmtAmpVal(v.amplitude) };
 const AXIS_FUNDING = { key: "fundingRate", label: "资金费率", format: v => v.fundingRate == null ? "—" : formatPercent(v.fundingRate) };
 // 成交额/振幅榜复用涨跌幅的富行（有 rsi/cvd/amplitude…），只换主轴顺序；资金费率榜行
-// 只有 费率+成交额 两字段，轴集单独定义。股票系另带 参与度/结构张开（数据源有）。
+// 只有 费率+成交额 两字段，轴集单独定义。**这三个轴集现在只服务加密**——股票系
+// 2026-07-24 起没有免费行情榜了。
 const cryptoTurnoverSorts = [axisVol("成交额"), AXIS_AMPLITUDE, AXIS_RSI, AXIS_CVD, AXIS_TAKER];
 const cryptoAmpSorts = [AXIS_AMPLITUDE, axisVol("成交额"), AXIS_RSI, AXIS_CVD, AXIS_TAKER];
 const cryptoFundingSorts = [AXIS_FUNDING, axisVol("成交额")];
-const stockTurnoverSorts = volLabel => [axisVol(volLabel), AXIS_AMPLITUDE, AXIS_RSI, AXIS_CVD, AXIS_VOLRATIO, AXIS_EMAGAP];
-const stockAmpSorts = volLabel => [AXIS_AMPLITUDE, axisVol(volLabel), AXIS_RSI, AXIS_CVD, AXIS_VOLRATIO, AXIS_EMAGAP];
+// （stockTurnoverSorts/stockAmpSorts 2026-07-24 删除：股票系已无免费成交额/振幅榜。）
 
 const TABS_CONFIG = {
     // === 加密 涨跌幅（五轴：涨幅 / RSI / 成交额 / CVD强弱 / 订单流）===
@@ -137,19 +165,6 @@ const TABS_CONFIG = {
     // 资金费率榜行字段稀疏（只有 费率+成交额），不走 axesSub（会硬显 强度/资金强弱 的 N/A）
     fundingRate: { sorts: cryptoFundingSorts, subFormat: (v, sf) => sf === "fundingRate" ? `成交额 ${fmtVolVal(v)}` : (v.fundingRate == null ? "资金费率 —" : `资金费率 ${formatPercent(v.fundingRate)}`) },
 
-    // === 美股/ETF 免费行情榜（引流）：成交额 / 振幅（复用各自涨跌幅的富行切片；
-    // 股票系无资金费率——无永续合约）。TABS_CONFIG 是平查找表，与 TAB_GROUPS 分离，
-    // 故这几条手写；stockGroups 工厂只管导航，不管这里。
-    // （A股 的 4 条 2026-07-24 随 A股 整体退役删除，见 fetch_ashare.py 顶部）===
-    usTurnover: { sorts: stockTurnoverSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
-    usWeeklyTurnover: { sorts: sortsVolFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额", v.value != null ? `周涨幅 ${formatPercent(v.value)}` : null) },
-    usMonthlyTurnover: { sorts: sortsVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.value != null ? `月涨幅 ${formatPercent(v.value)}` : null) },
-    usAmplitude: { sorts: stockAmpSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
-    etfTurnover: { sorts: stockTurnoverSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
-    etfWeeklyTurnover: { sorts: sortsVolFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额", v.value != null ? `周涨幅 ${formatPercent(v.value)}` : null) },
-    etfMonthlyTurnover: { sorts: sortsVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.value != null ? `月涨幅 ${formatPercent(v.value)}` : null) },
-    etfAmplitude: { sorts: stockAmpSorts("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
-
     // === 加密 月线策略（四轴：成交额 / RSI / CVD强弱 / 订单流，默认按成交额——月线 RSI 对新合约常缺）===
     // （monthlySarBreakoutPrev「SAR翻多突破·上根」已于 2026-07-20 移除,后端字段保留,复活看 git）
     monthlySarBreakout: { sorts: cryptoVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.changePercent != null ? `月涨幅 ${formatPercent(v.changePercent)}` : null) },
@@ -161,7 +176,7 @@ const TABS_CONFIG = {
     // === 加密 周线策略 weeklyStrategy「周线趋势 × 日线启动」（2026-07-22 深夜站长定版，
     // 取代 weeklyEma921 母集；weeklyRsi 周线强度池 同日早些时候已移除）===
     // 逻辑：周线 SAR 多头（硬过滤）∩ 日线策略 dailyEma921 命中集。行 payload 全部日线
-    // 数值（入场扫描视角，镜像 A股 月×日共振先例）+ weeklyRsi（周线强度轴）。
+    // 数值（入场扫描视角）+ weeklyRsi（周线强度轴）。
     // 八轴 = 加密基础四轴 + 参与度/结构张开/距前高 + 周线强度（key 固定，调条件不改 key）。
     weeklyStrategy: { sorts: [...cryptoRsiFirst("成交额"), AXIS_VOLRATIO, AXIS_EMAGAP, AXIS_HIGHDIST, AXIS_WRSI], subFormat: (v, sf) => axesSub(v, sf, "成交额") },
     // 周线母集「周线启动」weeklyEmaExpansion（2026-07-23 站长新增，与 weeklyStrategy 同组）：
@@ -181,45 +196,15 @@ const TABS_CONFIG = {
     // 而是就地追加，只影响日线策略行家族（本榜 + 上方 weeklyStrategy）。
     dailyEma921: { sorts: [...cryptoRsiFirst("成交额"), AXIS_VOLRATIO, AXIS_EMAGAP, AXIS_HIGHDIST], subFormat: (v, sf) => axesSub(v, sf, "成交额") },
 
-    // === A股（2026-07-24 站长定「A股只保留这个TAB」，全资产就这一个榜）===
-    // ashareMonthlyWeeklyDaily「月线SAR × 周线SAR × 日线扩张＋CVD」：月×周×日三级共振，
-    // 行 payload 是**日线**数值（入场扫描视角）。**七轴**＝股票系五轴（RSI/成交额/
-    // CVD强弱/量比/EMA间距）+ 周线RSI + 月线RSI，全部可升可降。
-    // 没有订单流轴（tushare 日线无 taker 归边字段，数据源硬边界）、没有距前高轴
-    // （compute_ashare_daily 未算该字段）——两者都不是遗漏，加轴前先去后端加字段。
-    ashareMonthlyWeeklyDaily: { sorts: [...sortsRsiFirst("成交额"), AXIS_WRSI, AXIS_MRSI], subFormat: (v, sf) => axesSub(v, sf, "成交额") },
+    // === A股 / 美股 / ETF：各自唯一的单策略榜（2026-07-24 站长两步定版）===
+    // 三者口径与轴集完全一致，共用 singleStrategySorts（见上方定义：日线五轴 +
+    // 周线RSI + 月线RSI，**每个轴都写明周期**）。副行的成交额标签同样写「日成交额」。
+    // ⚠️ TABS_CONFIG 是平查找表、与 TAB_GROUPS 分离，所以这三条要手写；
+    // singleStrategyGroup 工厂只管导航，不管这里。三条必须保持一致，改一条要改三条。
+    ashareMonthlyWeeklyDaily: { sorts: singleStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    usMonthlyWeeklyDaily: { sorts: singleStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    etfMonthlyWeeklyDaily: { sorts: singleStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
-    // === 美股 日线策略（跟 crypto 共用同一套指标/表格组件，见 fetch_us.py）===
-    // sorts 用股票系 factory（sortsRsiFirst/sortsVolFirst/sortsChange，无订单流末轴）
-    // ——Massive 分组日线没有 taker 买卖归边字段，是数据源硬边界，不是遗漏，误用
-    // cryptoRsiFirst 等带订单流的 factory 会导致排序条多出一个恒 null 的轴。
-    usChange: { sorts: sortsChange("涨幅", "成交额"), subFormat: (v, sf) => changeSub(v, sf, "成交额", `昨收 ${v.preClose} → ${v.close}`) },
-    usWeeklyChange: { sorts: sortsChange("周涨幅", "周成交额"), subFormat: (v, sf) => changeSub(v, sf, "周成交额", `上周收 ${v.preClose} → ${v.close}`) },
-    usMonthlyChange: { sorts: sortsChange("月涨幅", "月成交额"), subFormat: (v, sf) => changeSub(v, sf, "月成交额", `上月收 ${v.preClose} → ${v.close}`) },
-    usDailyTripleEmaCvd: { sorts: sortsRsiFirst("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
-    usDailyFourEma: { sorts: sortsRsiFirst("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
-    usWeeklyEma921: { sorts: sortsRsiFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
-    usWeeklyTripleEma: { sorts: sortsRsiFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
-    usWeeklyFourEma: { sorts: sortsRsiFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
-    usMonthlyStrategy: { sorts: sortsRsiFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.changePercent != null ? `月涨幅 ${formatPercent(v.changePercent)}` : null) },
-    usMonthlyDailyTriple: { sorts: sortsRsiFirst("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
-    usMonthlyDailyFour: { sorts: sortsRsiFirst("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
-
-    // === ETF·大类资产（2026-07-20 加：黄金/白银/原油/指数/国别等 ~42 个精选主流 ETF，
-    // 清单见 fetch_us.py US_ETF_UNIVERSE）。与美股同一条管道同一次运行产出（共用
-    // usUpdateTime），tab 结构/factory 与美股 21 tab 完全镜像，只是标的池换成精选 ETF、
-    // name 是中文标注（"GLD 黄金"）。同样无订单流轴（同一数据源边界）。===
-    etfChange: { sorts: sortsChange("涨幅", "成交额"), subFormat: (v, sf) => changeSub(v, sf, "成交额", `昨收 ${v.preClose} → ${v.close}`) },
-    etfWeeklyChange: { sorts: sortsChange("周涨幅", "周成交额"), subFormat: (v, sf) => changeSub(v, sf, "周成交额", `上周收 ${v.preClose} → ${v.close}`) },
-    etfMonthlyChange: { sorts: sortsChange("月涨幅", "月成交额"), subFormat: (v, sf) => changeSub(v, sf, "月成交额", `上月收 ${v.preClose} → ${v.close}`) },
-    etfDailyTripleEmaCvd: { sorts: sortsRsiFirst("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
-    etfDailyFourEma: { sorts: sortsRsiFirst("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
-    etfWeeklyEma921: { sorts: sortsRsiFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
-    etfWeeklyTripleEma: { sorts: sortsRsiFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
-    etfWeeklyFourEma: { sorts: sortsRsiFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
-    etfMonthlyStrategy: { sorts: sortsRsiFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.changePercent != null ? `月涨幅 ${formatPercent(v.changePercent)}` : null) },
-    etfMonthlyDailyTriple: { sorts: sortsRsiFirst("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
-    etfMonthlyDailyFour: { sorts: sortsRsiFirst("成交额"), subFormat: (v, sf) => axesSub(v, sf, "成交额") },
 };
 
 // 分组导航。每组带 asset（资产类别）、tf（周期）：驱动组标签、chip 上的周期角标、
@@ -229,61 +214,25 @@ const TABS_CONFIG = {
 // full = 标识栏用的完整名（涨跌幅组的 chip 名是"昨天/周线/月线"=周期本身，标识栏里
 // 周期已由 tf 角标表达，名字统一显示"涨跌幅"不重复）。data-tab key 不变。
 
-/** 美股/ETF 两个资产的四组导航生成器（它们结构与口径完全一致，见下方调用处注释）。
- *  assetCN = "美股"/"ETF"（也是 TAB_GROUPS.asset 的值）；
- *  p = tab key 前缀（"us"/"etf"）；
- *  changeDescs = 涨跌幅三榜的说明（当日/周线/月线），只有这三条按资产不同。 */
-const stockGroups = (assetCN, p, changeDescs) => [
-    {
-        // 行情组＝免费引流层（2026-07-22 站长定：通用行情开放引流，策略筛选付费）。
-        // 涨跌幅 3（全量）+ 成交额榜 + 振幅榜（各 TOP200）；股票系无资金费率（无永续）。
-        label: `${assetCN}行情`, asset: assetCN,
-        tabs: [
-            { key: `${p}Change`, name: "当日", tf: "日线", full: "涨跌幅", desc: changeDescs[0] },
-            { key: `${p}WeeklyChange`, name: "周线", tf: "周线", full: "涨跌幅", desc: changeDescs[1] },
-            { key: `${p}MonthlyChange`, name: "月线", tf: "月线", full: "涨跌幅", desc: changeDescs[2] },
-            { key: `${p}Turnover`, name: "成交额", tf: "日线", full: "成交额榜", desc: "最新交易日成交额最大的标的（最活跃 TOP200）" },
-            { key: `${p}WeeklyTurnover`, name: "周成交额", tf: "周线", full: "成交额榜", desc: "最新已收盘周 K 成交额最大的标的（TOP200）" },
-            { key: `${p}MonthlyTurnover`, name: "月成交额", tf: "月线", full: "成交额榜", desc: "最新已收盘月 K 成交额最大的标的（TOP200）" },
-            { key: `${p}Amplitude`, name: "振幅", tf: "日线", full: "振幅榜", desc: "最新交易日振幅（日内高低波动幅度）最大的标的（TOP200）" },
-        ],
-    },
-    {
-        // 宽→严（后者 ⊆ 前者）
-        label: `${assetCN}日线策略`, asset: assetCN, tf: "日线",
-        tabs: [
-            { key: `${p}DailyTripleEmaCvd`, name: "三线扩张＋CVD走强",
-              desc: "中短期结构完整成型、多周期同向，且资金正在持续流入的标的。" },
-            { key: `${p}DailyFourEma`, name: "四线扩张＋CVD走强",
-              desc: "在上一榜基础上追加长周期确认，更严格，命中通常明显更少。" },
-        ],
-    },
-    {
-        // 宽→严（子集链）
-        label: `${assetCN}周线策略`, asset: assetCN, tf: "周线",
-        tabs: [
-            { key: `${p}WeeklyEma921`, name: "两线扩张＋SAR＋CVD",
-              desc: "周线级别结构转强，并通过方向与资金双重确认。级别比日线大、持续性更强。" },
-            { key: `${p}WeeklyTripleEma`, name: "三线扩张＋SAR＋CVD",
-              desc: "周线结构完整成型并通过双重确认，比上一榜严格。" },
-            { key: `${p}WeeklyFourEma`, name: "四线扩张＋SAR＋CVD",
-              desc: "在上一榜基础上追加长周期确认，本组最严格的一档。" },
-        ],
-    },
-    {
-        // key 固定 MonthlyStrategy 不再随条件改名（历史上改过四次 key，见 CLAUDE.md）。
-        // 共振两档 = 月线命中 ∩ 日线两档（母集→子集排列）
-        label: `${assetCN}月线策略`, asset: assetCN, tf: "月线",
-        tabs: [
-            { key: `${p}MonthlyStrategy`, name: "两线扩张",
-              desc: "月线级别结构转强的标的——级别最大、信号最少，是下面两个共振榜的母集。" },
-            { key: `${p}MonthlyDailyTriple`, name: "月线两线＋日线三线",
-              desc: "大级别定方向、小级别定时机：月线级别已转强，同时日线级别结构成型且资金流入。表格显示的是日线数值。" },
-            { key: `${p}MonthlyDailyFour`, name: "月线两线＋日线四线",
-              desc: "同上，但日线一侧换成更严格的那一档。" },
-        ],
-    },
-];
+/** 三个股票系资产（A股/美股/ETF）的**单策略组**生成器。
+ *  2026-07-24 站长两步定版：「A股只保留这个TAB」→「美股对齐A股的TAB和逻辑，也是保留
+ *  一个」（ETF 由后端 build_etf_rankings 的 us→etf 前缀重映射自动跟随）。三者的筛选
+ *  口径、行字段、排序轴**完全相同**，只有 key 前缀和标的范围说明不同。
+ *
+ *  ⚠️ 这个工厂取代了旧的 `stockGroups()`（那个一次生成 4 组 15 个 tab：行情/日线/
+ *  周线/月线）。**别把它改回按资产手写三份**——本项目吃过多次"几处该同步的地方漏改
+ *  一处"的亏（排序轴 factory 选错、tab 计数不一致…），生成式让三者**结构上不可能漂移**。
+ *  组名统一叫「策略」：只有一个组时，rail 上再标周期是废话（周期已由 tf 角标表达）。
+ *
+ *  assetCN = "A股"/"美股"/"ETF"（也是 TAB_GROUPS.asset 的值）；
+ *  p = tab key 前缀（"ashare"/"us"/"etf"）；universe = 该资产的标的范围一句话。 */
+const singleStrategyGroup = (assetCN, p, universe) => ({
+    label: `${assetCN}策略`, asset: assetCN, tf: "月线",
+    tabs: [
+        { key: `${p}MonthlyWeeklyDaily`, name: "月线SAR × 周线SAR＋扩张 × 日线扩张＋CVD",
+          desc: `月线 SAR 多头（最大级别方向已确立）× 周线 SAR 多头且 EMA9/21 张开（中级别趋势正在加速）× 日线 EMA9/21 张开且资金同步流入——三个周期同时点头才入榜，全站最严格的一档。${universe}表格显示的是日线数值。` },
+    ],
+});
 
 const TAB_GROUPS = [
     // ⚠️⚠️ 2026-07-23 三次命名：站长要求「把所有 TAB 的命名恢复到自己一眼就能理解的
@@ -353,40 +302,13 @@ const TAB_GROUPS = [
               desc: "月线与周线的 SAR 同时翻多——两个大级别趋势同向共振的标的，每月 1 号新月开盘后刷新。" },
         ],
     },
-    // === A股（2026-07-24 站长定「A股只保留这个TAB」）===
-    // **刻意不走 stockGroups() 工厂**——那个一次生成 4 组 15 个 tab（行情/日线/周线/月线），
-    // 而 A股 现在总共只有 1 个榜。手写这一组是正确的，别为了"对称"把它塞回工厂。
-    // 组名「策略」而非「月线策略」：只有一个组时，rail 上再标周期就成了废话
-    // （周期已由 tab 的 tf 角标表达）。
-    {
-        label: "A股策略", asset: "A股", tf: "月线",
-        tabs: [
-            { key: "ashareMonthlyWeeklyDaily", name: "月线SAR × 周线SAR × 日线扩张＋CVD",
-              desc: "月线与周线的 SAR 同时多头（两个大级别方向都已确立），且日线端刚刚启动——EMA9/21 张开、资金同步流入。大级别定方向、小级别定时机；表格显示的是日线数值。" },
-        ],
-    },
-    // === 美股 / ETF ===
-    // 这两个资产的四组结构、筛选口径、显示名**完全相同**（2026-07-20 晚站长定版
-    // 「纯多周期 EMA 矩阵」；其余策略后端为保留组）。
-    // 2026-07-21 重命名时改成由 stockGroups() 工厂生成，不再多份手写——这个项目吃过
-    // 多次"几处该同步的地方漏改一处"的亏（排序轴 factory 选错、tab 计数不一致…），
-    // 生成式让它们**结构上不可能漂移**。只有涨跌幅三榜的 desc 按资产不同（上市首日/
-    // 标的范围各有各的说明），用 changeDescs 参数注入。
-    // 各资产独有的差异（前缀、TV 代码格式）都不在这里，分别由后端 build_* 和 CSS 的
-    // [data-asset] 处理。
-    // ⚠️ A股 曾也是这个工厂的一个调用（...stockGroups("A股","ashare",…) → 4 组 15 tab），
-    // 2026-07-24 站长「移除所有A股的TAB…A股只保留这个TAB」后改为上方手写的单组单 tab。
-    // 后端 compute 层各 dict 仍照常产出（保留组），复活整套见 fetch_ashare.py 顶部。
-    ...stockGroups("美股", "us", [
-        "最新交易日涨跌幅（相对上一交易日收盘）；上市首日的标的只有一根收盘价、算不出涨跌幅，不入榜",
-        "最新已收盘周 K：本周收盘价 vs 上周收盘价",
-        "最新已收盘月 K：本月收盘价 vs 上月收盘价",
-    ]),
-    ...stockGroups("ETF", "etf", [
-        "最新交易日涨跌幅（相对上一交易日收盘）；范围是约 42 个精选大类资产 ETF（黄金/白银/原油/指数/债券/国别/行业/加密现货）",
-        "最新已收盘周 K：本周收盘价 vs 上周收盘价",
-        "最新已收盘月 K：本月收盘价 vs 上月收盘价",
-    ]),
+    // === A股 / 美股 / ETF（2026-07-24 站长两步定版：三者各只保留 1 个榜，口径完全一致）===
+    // 见上方 singleStrategyGroup 工厂的注释。universe 参数是各资产的标的范围说明，
+    // 是三者唯一的差异（前缀/成交额单位/TV 代码格式/涨跌配色都不在这里，分别由后端
+    // build_* 和 CSS 的 [data-asset] 处理）。
+    singleStrategyGroup("A股", "ashare", "范围是全部沪深 A 股（当日停牌的不入榜）。"),
+    singleStrategyGroup("美股", "us", "范围是美股全市场普通股与 ADR。"),
+    singleStrategyGroup("ETF", "etf", "范围是约 42 个精选大类资产 ETF（黄金/白银/原油/指数/债券/国别/行业/加密现货）。"),
 ];
 
 // tab key → {asset, tf, name, full}。组的 asset/tf 下发到每个 tab；tab 自带的 tf 优先
@@ -469,7 +391,8 @@ function tabCount(key) {
 }
 
 // 涨跌幅榜：无筛选、全量入榜、值是涨跌幅，走红绿配色（getColorClass）。
-const CHANGE_PCT_TABS = new Set(["yesterdayChange", "weeklyChange", "monthlyChange", "usChange", "usWeeklyChange", "usMonthlyChange", "etfChange", "etfWeeklyChange", "etfMonthlyChange"]);
+// 2026-07-24 起只剩加密三个：股票系已无涨跌幅榜（各只保留 1 个策略榜）。
+const CHANGE_PCT_TABS = new Set(["yesterdayChange", "weeklyChange", "monthlyChange"]);
 
 // 免费引流层（2026-07-22 站长定：通用行情开放引流，策略筛选付费）。整榜免费的通用
 // 行情榜：涨跌幅 + 成交额 + 振幅 + 资金费率。**必须跟后端 fetch_data.py 的同名
@@ -479,9 +402,10 @@ const CHANGE_PCT_TABS = new Set(["yesterdayChange", "weeklyChange", "monthlyChan
 const FREE_TABS = new Set([
     ...CHANGE_PCT_TABS,
     "turnover", "weeklyTurnover", "monthlyTurnover", "amplitude", "fundingRate",
-    "usTurnover", "usWeeklyTurnover", "usMonthlyTurnover", "usAmplitude",
-    "etfTurnover", "etfWeeklyTurnover", "etfMonthlyTurnover", "etfAmplitude",
 ]);
+// ⚠️ **只有加密有免费榜**（共 8 个）：A股/美股/ETF 各只保留 1 个纯付费策略榜，
+// 原本各 7 个免费行情榜已随 2026-07-24 的两次收敛移除。**这里没有 us/etf/ashare
+// 条目不是漏写**，后端 fetch_data.py 的 FREE_TABS 也是同样的 8 条，两边必须一致。
 // 策略榜 = 非免费榜（有筛选条件，"0 命中"是正常信号而非故障，值是 RSI/成交额等指标）。
 // 空状态文案、脉搏策略计数、导航命中徽标都据此——免费行情榜不参与这些语义。
 const isStrategyTab = tab => !FREE_TABS.has(tab);
@@ -599,7 +523,7 @@ const ASSET_KEY = { "加密": "crypto", "A股": "ashare", "美股": "us", "ETF":
 const ASSET_CN = { crypto: "加密", ashare: "A股", us: "美股", etf: "ETF" };           // data-asset → TAB_GROUPS.asset
 let currentAsset = "crypto";                                // 当前资产（由 tab 派生/资产切换驱动）
 // 各资产记住上次看的榜。A股 只有一个榜，"上次看的"恒等于它。
-const lastTabByAsset = { crypto: "yesterdayChange", ashare: "ashareMonthlyWeeklyDaily", us: "usChange", etf: "etfChange" };
+const lastTabByAsset = { crypto: "yesterdayChange", ashare: "ashareMonthlyWeeklyDaily", us: "usMonthlyWeeklyDaily", etf: "etfMonthlyWeeklyDaily" };
 
 function assetOfTab(tab) {
     const m = TAB_META[tab];
@@ -650,11 +574,12 @@ function renderNav() {
     if (foot && data) {
         const assetCn = ASSET_CN[currentAsset];
         const n = TAB_GROUPS.filter(g => g.asset === assetCn).reduce((s, g) => s + g.tabs.length, 0);
-        // A股 现在没有全量涨跌幅榜可以数（唯一的榜是筛选后的策略榜），故写标的范围
-        // 而不是数量——写 tabCount("ashareMonthlyWeeklyDaily") 会变成"监控 N 只"却是命中数，误导。
+        // 三个股票系资产都没有全量涨跌幅榜可以数了（唯一的榜是筛选后的策略榜），故写
+        // **标的范围**而不是数量——写 tabCount(唯一的榜) 会变成"监控 N 只"却是命中数，
+        // 是误导。只有加密还有全量榜（yesterdayChange 免费全量），照旧数真实合约数。
         const uni = currentAsset === "ashare" ? "沪深 A 股全市场"
-            : currentAsset === "us" ? `${tabCount("usChange") || 0} 只美股`
-            : currentAsset === "etf" ? `${tabCount("etfChange") || 0} 只大类资产 ETF`
+            : currentAsset === "us" ? "美股全市场普通股与 ADR"
+            : currentAsset === "etf" ? "约 42 只精选大类资产 ETF"
             : `${tabCount("yesterdayChange") || 0} 个合约`;
         foot.innerHTML = `<b>${n}</b> 个榜单 · 监控 ${uni}`;
     }
@@ -878,7 +803,8 @@ function renderTable() {
         return;
     }
 
-    // 渲染上限：usChange 全市场 5000+ 行，一次性 innerHTML 在中低端机型是数百毫秒
+    // 渲染上限：加密 yesterdayChange 全量 500+ 行、历史上 usChange 曾 5000+ 行，
+    // 一次性 innerHTML 在中低端机型是数百毫秒
     // 卡顿；超过 1000 行只渲染前 1000（排序/搜索仍作用于全量数据，尾部靠搜索定位）
     const RENDER_CAP = 1000;
     const capped = items.length > RENDER_CAP;
@@ -994,8 +920,8 @@ function switchAsset(assetK) {
     // 兜底：lastTabByAsset 全量初始化后正常不可达，但兜底若被触发（未来改坏），
     // 二分写法会把「ETF」误跳去加密榜（2026-07-20 审计补的防御）
     const fallback = assetK === "ashare" ? "ashareMonthlyWeeklyDaily"
-        : assetK === "us" ? "usChange"
-        : assetK === "etf" ? "etfChange" : "yesterdayChange";
+        : assetK === "us" ? "usMonthlyWeeklyDaily"
+        : assetK === "etf" ? "etfMonthlyWeeklyDaily" : "yesterdayChange";
     switchTab(lastTabByAsset[assetK] || fallback);
 }
 
@@ -1245,56 +1171,16 @@ function cryptoPulseTiles() {
     ].filter(Boolean);
 }
 
-// A股 脉搏：**没有全量涨跌幅榜可用**（2026-07-24 起 A股 只剩一个筛选后的策略榜），
-// 所以给不了"今日领涨/红盘家数"那种全市场磁贴——只放命中数。lockedPulseTile 本就是
-// "拿不到具体行、但命中数是公开数据(paidMeta)"的那条路径，锁定态/解锁态都正确，
-// 直接复用它即是本资产的完整脉搏。**别为了凑满 4 格去 data[唯一的榜] 里取行**：
-// 那是筛选结果不是全市场，写成"监控 N 只"会误导。
-function asharePulseTiles() {
-    return lockedPulseTile("A股", ASHARE_STRATEGY_TABS);
-}
-
-// is-up/is-down 是语义类名，实际颜色由 [data-asset] 作用域的 CSS 变量决定，
-// 这里不用关心具体色值。
-function usPulseTiles() {
-    const uc = data.usChange || [];
-    if (!uc.length) return lockedPulseTile("美股", US_STRATEGY_TABS);
-    const top = uc.reduce((a, b) => (b.value > a.value ? b : a), uc[0]);
-    const up = uc.filter(x => x.value > 0).length;
-    const down = uc.filter(x => x.value < 0).length;
-    const hits = strategyHits("美股");
-    // 主文本用 ticker 而非公司全名：美股 name 中位 29 字符、75.8% 超过 20 字符（Nasdaq
-    // 全称如 "... Class A Ordinary Shares"），塞进 nowrap+ellipsis 的 .pulse__value 会把
-    // 排在名字后面的涨幅 suffix 整个裁掉（2026-07-21 审计实测 685px 内容宽 vs 232px 单元
-    // 格）。ticker 短且是美股用户认的主标识，全名降级进 .pulse__sub（自带 ellipsis）。
-    const topLabel = escapeHtml(top.symbol);
-    return [
-        pulseTile("监控标的", `${uc.length}<span class="pulse__suffix is-muted">只</span>`, "美股全市场普通股"),
-        pulseTile("今日领涨", `${topLabel}<span class="pulse__suffix ${top.value >= 0 ? "is-up" : "is-down"}">${top.value >= 0 ? "+" : ""}${top.value.toFixed(1)}%</span>`, escapeHtml(top.name || "当日涨幅第一")),
-        // 「上涨家数」不用 A股 版的「红盘家数」：红盘=A股红涨语境，美股作用域涨显绿色，
-        // 沿用会出现"红盘"标签配绿色数字的自相矛盾（2026-07-20 审计修正）
-        pulseTile("上涨家数", `<span class="is-up">${up}</span><span class="pulse__suffix is-muted">涨 · ${down} 跌</span>`, "全市场今日涨跌家数"),
-        hits != null ? pulseTile("策略命中", `<span class="is-gold">${hits}</span><span class="pulse__suffix is-muted">次 · ${US_STRATEGY_TABS} 榜</span>`, "美股策略筛选当前命中") : "",
-    ].filter(Boolean);
-}
-
-// ETF·大类资产：标的是精选清单（~42 只），"上涨家数"对固定小样本意义有限，
-// 换成「涨/跌分布」照常显示；name 是中文标注（"黄金"/"纳指100"），领涨直接显示它。
-function etfPulseTiles() {
-    const ec = data.etfChange || [];
-    if (!ec.length) return lockedPulseTile("ETF", ETF_STRATEGY_TABS);
-    const top = ec.reduce((a, b) => (b.value > a.value ? b : a), ec[0]);
-    const up = ec.filter(x => x.value > 0).length;
-    const down = ec.filter(x => x.value < 0).length;
-    const hits = strategyHits("ETF");
-    const topLabel = escapeHtml(top.name || top.symbol);
-    return [
-        pulseTile("监控标的", `${ec.length}<span class="pulse__suffix is-muted">只</span>`, "精选大类资产 ETF"),
-        pulseTile("今日领涨", `${topLabel}<span class="pulse__suffix ${top.value >= 0 ? "is-up" : "is-down"}">${top.value >= 0 ? "+" : ""}${top.value.toFixed(1)}%</span>`, "当日涨幅第一"),
-        pulseTile("涨跌分布", `<span class="is-up">${up}</span><span class="pulse__suffix is-muted">涨 · ${down} 跌</span>`, "大类资产今日涨跌分布"),
-        hits != null ? pulseTile("策略命中", `<span class="is-gold">${hits}</span><span class="pulse__suffix is-muted">次 · ${ETF_STRATEGY_TABS} 榜</span>`, "ETF策略筛选当前命中") : "",
-    ].filter(Boolean);
-}
+// 三个股票系资产（A股/美股/ETF）的脉搏：**它们都没有全量涨跌幅榜了**——2026-07-24
+// 起各自只剩一个筛选后的策略榜，给不了"监控 N 只 / 今日领涨 / 涨跌家数"那种全市场
+// 磁贴。lockedPulseTile 本就是"拿不到具体行、但命中数是公开数据(paidMeta)"的那条
+// 路径，锁定态/解锁态都正确，直接复用它即是这三个资产的完整脉搏。
+// ⚠️ **别为了凑满 4 格去 data[唯一的榜] 里取行**：那是筛选结果不是全市场，
+// 写成"监控 N 只"会把命中数说成标的总数，是实打实的误导。
+// 旧的三份实现（含美股 ticker vs 全名的宽度取舍、ETF「涨跌分布」的措辞理由）见 git。
+function asharePulseTiles() { return lockedPulseTile("A股", ASHARE_STRATEGY_TABS); }
+function usPulseTiles()     { return lockedPulseTile("美股", US_STRATEGY_TABS); }
+function etfPulseTiles()    { return lockedPulseTile("ETF", ETF_STRATEGY_TABS); }
 
 /** 首屏骨架行(静态灰条,无动画——GPU 硬约束) */
 function renderSkeleton() {

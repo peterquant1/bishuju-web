@@ -10,7 +10,7 @@
          改配色时这两处一起改，否则地址栏/状态栏颜色会跟页面背景对不上。 -->
     <script>try{if(localStorage.getItem("bishuju_theme")==="dark"){document.documentElement.dataset.theme="dark";document.getElementById("themeColorMeta").content="#141311";}}catch(e){}</script>
     <title>狗庄74 — 加密 + A股 + 美股 + ETF 指标筛选排行榜</title>
-    <meta name="description" content="46 个榜单覆盖加密货币 USDT 永续合约、A 股、美股与大类资产 ETF（黄金/原油/指数/国别）：多周期趋势与资金结构筛选，随收盘自动更新，一键导出自选清单。">
+    <meta name="description" content="18 个榜单覆盖加密货币 USDT 永续合约、A 股、美股与大类资产 ETF（黄金/原油/指数/国别）：多周期趋势与资金结构筛选，随收盘自动更新，一键导出自选清单。">
     <link rel="canonical" href="https://gouzhuang748.com/">
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <!-- PWA 基础:加主屏 = 全屏 app 体验。刻意不加 Service Worker——loadData 的
@@ -29,7 +29,7 @@
     <meta property="og:site_name" content="狗庄74">
     <meta property="og:locale" content="zh_CN">
     <meta property="og:title" content="狗庄74 — 加密 + A股 + 美股 + ETF 指标筛选排行榜">
-    <meta property="og:description" content="多周期趋势与资金结构筛选共 46 个榜单，覆盖加密永续合约、A 股、美股与大类资产 ETF，随收盘自动更新。">
+    <meta property="og:description" content="多周期趋势与资金结构筛选共 18 个榜单，覆盖加密永续合约、A 股、美股与大类资产 ETF，随收盘自动更新。">
     <meta property="og:image" content="https://gouzhuang748.com/og.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -37,14 +37,14 @@
     <meta property="og:url" content="https://gouzhuang748.com/">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="狗庄74 — 加密 + A股 + 美股 + ETF 指标筛选排行榜">
-    <meta name="twitter:description" content="多周期趋势与资金结构筛选共 46 个榜单，覆盖加密永续合约、A 股、美股与大类资产 ETF，随收盘自动更新。">
+    <meta name="twitter:description" content="多周期趋势与资金结构筛选共 18 个榜单，覆盖加密永续合约、A 股、美股与大类资产 ETF，随收盘自动更新。">
     <meta name="twitter:image" content="https://gouzhuang748.com/og.png">
     <meta name="twitter:image:alt" content="狗庄74 — 加密/A股/美股/ETF 指标筛选排行榜">
 
     <!-- 自托管 Geist 变量字体(Latin);预加载避免首屏 FOUT。CJK 走系统栈不预载 -->
     <link rel="preload" as="font" type="font/woff2" href="fonts/geist-latin.woff2" crossorigin>
     <link rel="preload" as="font" type="font/woff2" href="fonts/geist-mono-latin.woff2" crossorigin>
-    <link rel="stylesheet" href="style.css?v=42">
+    <link rel="stylesheet" href="style.css?v=43">
 </head>
 <body>
 <div class="app" id="app" data-asset="crypto">
@@ -183,7 +183,7 @@
         <h4>数据多久更新一次？</h4>
         <p>加密：每小时自动抓取一次（整点后约 2 分钟），覆盖全部 USDT 永续合约，日线以 UTC 00:00 收盘为准。A股：每个交易日收盘后（约北京时间 15:05 起，待数据源发布当日数据）更新一次，覆盖全部沪深 A 股（停牌股不入榜）。美股：每个交易日收盘后（待数据源发布当日数据）更新一次，覆盖全市场普通股与 ADR。ETF·大类资产：与美股同一条管道同时更新，覆盖黄金/白银/原油/主要股指/国别等约 42 只美股上市 ETF。</p>
         <h4>哪些免费、哪些收费？</h4>
-        <p><b>「行情」组永久免费</b>——涨跌幅、成交额榜、振幅榜、资金费率榜（加密），加密/美股/ETF 都开放，这些是任何行情站都有的通用公开数据（A股 只保留一个策略榜，没有行情组）。此外加密「两线扩张＋CVD走强」榜里排名第一的那一枚币也永久免费。</p>
+        <p><b>加密的「行情」组永久免费</b>——涨跌幅、成交额榜、振幅榜、资金费率榜，这些是任何行情站都有的通用公开数据。此外加密「两线扩张＋CVD走强」榜里排名第一的那一枚币也永久免费。A 股、美股、ETF 各只保留一个多周期共振策略榜，需要通行证。</p>
         <p><b>策略榜需要购买通行证解锁</b>——那些按多周期条件筛出候选标的的榜（两线/三线/四线扩张、SAR翻多、月线×日线共振等）是本站的核心价值。无需注册账号，付款用加密货币（OxaPay），到账后通行证自动发到邮箱。</p>
         <h4>每个榜到底在筛什么？</h4>
         <p>切到任一榜单，表格上方那行说明的就是<b>这个榜在找什么样的行情</b>——是趋势刚启动、结构已成型，还是上涨途中的回踩位置，以及它比同组其他榜严格在哪。导航上的命中数不解锁也能看到。</p>
@@ -257,6 +257,6 @@
     </ol>
 </dialog>
 
-<script src="script.js?v=172"></script>
+<script src="script.js?v=173"></script>
 </body>
 </html>

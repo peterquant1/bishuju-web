@@ -161,6 +161,11 @@ const TABS_CONFIG = {
     // 最新已收盘周线 (9/21 ∪ 9/26) 扩张之一即入榜，纯周线值、无跨周期交集（那是 weeklyStrategy）。
     // 五轴 = 加密基础四轴 + 结构张开（emaGap＝周线 9/21 间距，行带 ema9/ema21，build 层算 emaGap）。
     weeklyEmaExpansion: { sorts: [...cryptoRsiFirst("周成交额"), AXIS_EMAGAP], subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
+    // 周线策略「两线扩张＋阴线」weeklyEmaBearish（2026-07-24 站长复活保留组）：周线 9/21
+    // 严格扩张里再筛该周收阴线——强势趋势里的回调阴线（weeklyEmaExpansion 的子集视角，
+    // 找回踩不找启动）。同为纯周线值、按周线 RSI 排序，五轴与 weeklyEmaExpansion 一致
+    // （加密基础四轴 + 结构张开 emaGap＝周线 9/21 间距，此榜恒正）。
+    weeklyEmaBearish: { sorts: [...cryptoRsiFirst("周成交额"), AXIS_EMAGAP], subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
 
     // === 加密 日线策略（七轴：基础四轴 + 参与度/结构张开/距前高，2026-07-22 深夜扩充）===
     // 行本就带 ema9/ema21（emaGap build 层现算），volRatio/highDist 由 get_daily_indicators
@@ -336,6 +341,8 @@ const TAB_GROUPS = [
               desc: "周线大级别方向已确认向上，且日线端刚出现启动信号——顺大势、做小势的入场扫描视角。" },
             { key: "weeklyEmaExpansion", name: "周线两线扩张",
               desc: "周线级别趋势结构刚刚张开、上行动能初步确立——周线视角的早期启动信号。" },
+            { key: "weeklyEmaBearish", name: "两线扩张＋阴线",
+              desc: "周线两线扩张（多头结构）中收出的回调阴线——强势趋势里的短线回踩，找二次上车点。" },
         ],
     },
     {

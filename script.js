@@ -153,6 +153,9 @@ const TABS_CONFIG = {
     // （monthlySarBreakoutPrev「SAR翻多突破·上根」已于 2026-07-20 移除,后端字段保留,复活看 git）
     monthlySarBreakout: { sorts: cryptoVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.changePercent != null ? `月涨幅 ${formatPercent(v.changePercent)}` : null) },
     monthlyFourBull: { sorts: cryptoVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.changePercent != null ? `月涨幅 ${formatPercent(v.changePercent)}` : null) },
+    // 月线SAR × 周线SAR 双多头（2026-07-24 站长新增，月×周跨周期 SAR 共振）：行 payload 全部
+    // 月线数值（同 monthlySarBreakout/monthlyFourBull），四轴，默认按月成交额排序（月线 RSI 对新合约常缺）。
+    monthlyWeeklySar: { sorts: cryptoVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.changePercent != null ? `月涨幅 ${formatPercent(v.changePercent)}` : null) },
 
     // === 加密 周线策略 weeklyStrategy「周线趋势 × 日线启动」（2026-07-22 深夜站长定版，
     // 取代 weeklyEma921 母集；weeklyRsi 周线强度池 同日早些时候已移除）===
@@ -355,6 +358,8 @@ const TAB_GROUPS = [
               desc: "月线级别方向发生反转、且价格已确认突破的标的——级别最大、信号最少。" },
             { key: "monthlyFourBull", name: "四连阳",
               desc: "月线级别连续推进的标的；纯价格行为判断，不带结构条件。" },
+            { key: "monthlyWeeklySar", name: "月线SAR多头 × 周线SAR多头",
+              desc: "月线与周线的 SAR 同时翻多——两个大级别趋势同向共振的标的，每月 1 号新月开盘后刷新。" },
         ],
     },
     // A股（2026-07-16 补齐周期矩阵、2026-07-20 补齐月线策略组，与上面 crypto 四组一一

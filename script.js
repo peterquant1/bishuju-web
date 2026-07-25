@@ -61,6 +61,9 @@ function axesSub(item, sf, volLabel, extra) {
     if (sf !== "volume") seg.push(`${volLabel} ${fmtVolVal(item)}`);
     if (sf !== "cvdStrength") seg.push(`${axisLabelFor("cvdStrength", "CVD强弱")} ${fmtCvdVal(item.cvdStrength)}`);
     if ("weeklyRsi" in item && sf !== "weeklyRsi") seg.push(`${axisLabelFor("weeklyRsi", "周线RSI")} ${fmtRsiVal(item.weeklyRsi)}`);
+    // 周成交额（2026-07-25 晚指令⑪）：只有 weeklyExpansionDailyCvd 的行带，数据驱动判断。
+    // ⚠️ 走 weeklyVolumeFormatted 而不是 fmtVolVal——后者写死读 item.volumeFormatted（日线那个）。
+    if ("weeklyVolume" in item && sf !== "weeklyVolume") seg.push(`${axisLabelFor("weeklyVolume", "周成交额")} ${item.weeklyVolumeFormatted != null ? item.weeklyVolumeFormatted : "N/A"}`);
     // 周线EMA间距：只有加密 weeklyDaily 的行带（那榜有周线扩张筛选条件），数据驱动判断。
     if ("weeklyEmaGap" in item && sf !== "weeklyEmaGap") seg.push(`${axisLabelFor("weeklyEmaGap", "周线EMA间距")} ${fmtGapVal(item.weeklyEmaGap)}`);
     if ("monthlyRsi" in item && sf !== "monthlyRsi") seg.push(`${axisLabelFor("monthlyRsi", "月线RSI")} ${fmtRsiVal(item.monthlyRsi)}`);
@@ -181,6 +184,21 @@ const AXIS_W_DIMINUS = { key: "weeklyDiMinus", label: "周−DI", format: v => f
 const AXIS_W_DISPREAD = { key: "weeklyDiSpread", label: "周DI差", format: v => fmtCvdVal(v.weeklyDiSpread) };
 const weeklyDmiSorts = [AXIS_W_ADX, AXIS_W_DIPLUS, AXIS_W_DIMINUS, AXIS_W_DISPREAD];
 
+// === 周成交额 / 周线EMA间距（2026-07-25 晚指令⑪，`weeklyExpansionDailyCvd` 榜专用）===
+// 站长原话「也要有周成交额，周RSI等数据」。周RSI 直接复用既有的 AXIS_WRSI，周成交额是新轴。
+// ⚠️ **`weeklyVolume` 是"最新已收盘那一根周 K"的 USDT 成交额**（后端 get_weekly_rsi 的
+// closedVolume），既不是 7 天滚动累计、也不是日均——它跟同一行里的日成交额是两个不同口径
+// 的数，所以两根轴都必须写明周期。格式化走后端预先算好的 weeklyVolumeFormatted（B/M/K，
+// 与日成交额同一套 format_volume）。
+const AXIS_W_VOL = { key: "weeklyVolume", label: "周成交额",
+                     format: v => v.weeklyVolumeFormatted != null ? v.weeklyVolumeFormatted : "N/A" };
+// 周线EMA间距 =（周线EMA9 − 周线EMA21）/周线EMA21 ×100。**本榜的筛选条件就是周线两线扩张**，
+// 给这根轴对得上语义（同 weeklyDaily 的末轴规则："只放本榜真正引用到、且可排序的更大周期量"）。
+// ⚠️ 不保证为正：本榜是 (9/21 ∪ 9/26) 并集，只走 9/26 那条路径命中的标的，9/21 可能还没张开
+// ⇒ 间距可以是负的。升序那头正好排出"9/26 先张开、9/21 还没跟上"的最早期形态。
+// （本常量 2026-07-25 晚随「移除加密所有TAB」删过一次，现按同名同义复活。）
+const AXIS_W_EMAGAP = { key: "weeklyEmaGap", label: "周线EMA间距", format: v => fmtGapVal(v.weeklyEmaGap) };
+
 // 股票系（A股/美股/ETF）**十五轴**：日线五轴 + 日线 ADX/DI 四轴 + 周线RSI + 周线 ADX/DI
 // 四轴 + 月线RSI —— 严格按"日线 → 周线 → 月线"的周期递进排，同周期的挤在一起。
 // **首轴仍是 日线RSI**（= 默认排序，必须与后端 `value` 取的量一致，别把新轴插到最前）。
@@ -206,6 +224,17 @@ const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO
 // （后端没发），所以周线块这里只有 ADX/DI 四根，直接接在日线块之后。
 const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
                              ...dmiSorts, ...weeklyDmiSorts];
+// 加密第三个榜 `weeklyExpansionDailyCvd`（2026-07-25 晚指令⑪）专用的 **15 轴**：
+// 站长原话「支持现在各种日线的升降序。也要有周成交额，周RSI等数据。」
+//   前 8 根 = 上面 cryptoStrategySorts 的日线部分**原样照搬**（"现在各种日线的升降序"）；
+//   后 7 根 = 周线块（周成交额 + 周线RSI + 周线EMA间距 + 周线DMI 四根）。
+// ⚠️ **刻意不 spread cryptoStrategySorts**：那个常量现在把周线DMI 也含在内了，直接 spread
+// 会让周线块被拆成两截（DMI 在前、成交额/RSI 在后），破坏"同周期挤在一起"的轴序。
+// 宁可把日线八根写全，也不要一个顺序错乱的轴条。
+// ⚠️ 另两个加密榜的行**没有** weeklyVolume/weeklyRsi/weeklyEmaGap 字段（后端没发），
+// 所以它们继续用 cryptoStrategySorts，别图省事合并成一个常量 —— 会多出永远全 null 的幽灵轴。
+const cryptoWeeklyExpansionSorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER, ...dmiSorts,
+                                    AXIS_W_VOL, AXIS_WRSI, AXIS_W_EMAGAP, ...weeklyDmiSorts];
 // （已删的轴与工厂，复活时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
 //  stockTurnoverSorts/stockAmpSorts〔2026-07-24〕；加密 cryptoRsiFirst/cryptoVolFirst/
 //  cryptoChange/cryptoTurnoverSorts/cryptoAmpSorts/cryptoFundingSorts 与 AXIS_AMPLITUDE/
@@ -224,6 +253,9 @@ const TABS_CONFIG = {
     monthlyWeeklyDaily: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     // ② 全站条件最少的一个榜：**只有一条**——最新已收盘日 K 的 EMA9/21 扩张。
     dailyEmaExpansion: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    // ③ 周线两线扩张（9/21 ∪ 9/26）× 日线 CVD 递增（2026-07-25 晚指令⑪）。**唯一一个
+    // 行里同时装了日线值和周线值的加密榜**，故独用 15 轴的 cryptoWeeklyExpansionSorts。
+    weeklyExpansionDailyCvd: { sorts: cryptoWeeklyExpansionSorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === A股 / 美股 / ETF：各自唯一的单策略榜（2026-07-24 站长两步定版）===
     // 三者口径与轴集完全一致，共用 singleStrategySorts（见上方定义：日线五轴 +
@@ -291,6 +323,10 @@ const TAB_GROUPS = [
             // tf 覆盖成日线：本榜只看日线一个周期，挂着组默认的「月线」角标会误导。
             { key: "dailyEmaExpansion", name: "日线两线扩张", tf: "日线",
               desc: "最新已收盘日线的 EMA9 在 EMA21 上方、且两线间距比前一天更大——趋势刚开始加速的那一刻，全站条件最少、样本最宽的一个榜，用成交额/RSI/CVD/订单流四个维度自己排。范围是全部 USDT 永续合约。" },
+            // tf 覆盖成周线：本榜的筛选门槛在周线（日线端只有一个 CVD 条件），挂组默认的
+            // 「月线」角标会误导。行里日线值和周线值都有，是加密唯一这样的榜。
+            { key: "weeklyExpansionDailyCvd", name: "周线两线扩张 × 日线CVD递增", tf: "周线",
+              desc: "最新已收盘周线的 EMA9/21 或 EMA9/26 张开（两条路径任一即可，比只看 9/21 宽一档），同时日线资金正在流入——大级别结构已经打开、短期资金也跟上了的组合。除了全套日线维度，还能按周成交额、周线RSI、周线EMA间距、周线ADX/DI 排序。范围是全部 USDT 永续合约。" },
         ],
     },
     // === A股 / 美股 / ETF（2026-07-24 站长两步定版：三者各只保留 1 个榜，口径完全一致）===

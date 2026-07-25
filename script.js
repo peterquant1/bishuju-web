@@ -85,6 +85,11 @@ function axesSub(item, sf, volLabel, extra) {
     if ("diPlus" in item && sf !== "diPlus") seg.push(`${axisLabelFor("diPlus", "+DI")} ${fmtDmiVal(item.diPlus)}`);
     if ("diMinus" in item && sf !== "diMinus") seg.push(`${axisLabelFor("diMinus", "−DI")} ${fmtDmiVal(item.diMinus)}`);
     if ("diSpread" in item && sf !== "diSpread") seg.push(`${axisLabelFor("diSpread", "DI差")} ${fmtCvdVal(item.diSpread)}`);
+    // 周线版 ADX/DI（2026-07-25 晚指令⑩）：同样数据驱动、同样排在 SUB_AXES_MAX 截断线之后。
+    if ("weeklyAdx" in item && sf !== "weeklyAdx") seg.push(`${axisLabelFor("weeklyAdx", "周ADX")} ${fmtDmiVal(item.weeklyAdx)}`);
+    if ("weeklyDiPlus" in item && sf !== "weeklyDiPlus") seg.push(`${axisLabelFor("weeklyDiPlus", "周+DI")} ${fmtDmiVal(item.weeklyDiPlus)}`);
+    if ("weeklyDiMinus" in item && sf !== "weeklyDiMinus") seg.push(`${axisLabelFor("weeklyDiMinus", "周−DI")} ${fmtDmiVal(item.weeklyDiMinus)}`);
+    if ("weeklyDiSpread" in item && sf !== "weeklyDiSpread") seg.push(`${axisLabelFor("weeklyDiSpread", "周DI差")} ${fmtCvdVal(item.weeklyDiSpread)}`);
     // 振幅 只有免费行情榜（涨跌幅/成交额/振幅）的行有——策略榜行没这个 key，数据驱动跳过。
     if ("amplitude" in item && sf !== "amplitude") seg.push(`振幅 ${fmtAmpVal(item.amplitude)}`);
     const shown = seg.slice(0, SUB_AXES_MAX);
@@ -162,11 +167,25 @@ const AXIS_D_DISPREAD = { key: "diSpread", label: "日DI差", format: v => fmtCv
 // 避免"两份几乎一样的列表漂移"这个本项目的老坑。
 const dmiSorts = [AXIS_D_ADX, AXIS_D_DIPLUS, AXIS_D_DIMINUS, AXIS_D_DISPREAD];
 
-// 股票系（A股/美股/ETF）**十一轴**：日线五轴（行里的值都是日线）+ ADX/DI 四轴（同为日线，
-// 紧跟日线块，保持"日线 → 周线 → 月线"的周期递进）+ 周线RSI + 月线RSI 两个大级别强度锚点。
+// === 周线版 ADX / DMI（2026-07-25 晚站长指令⑩「加周线级别就行」）===
+// 与上面那组**同一套算法、同一个后端 calc_adx_dmi**（对齐 TV `ta.dmi(14,14)`），只是喂进去
+// 的是最新已收盘**周 K**。字段名一律带 `weekly` 前缀 —— **绝不能与日线那组共用 key**，
+// 同一行里两组值并存，key 撞车会互相覆盖。
+// 为什么值得单开一组：日线ADX 回答"最近这两三周方向坚不坚决"，周线ADX 回答"大级别趋势
+// 成没成形"，两者**经常背离**——日线刚张开但周线ADX 只有 12，就是震荡市里的一次反弹。
+// 实测反例：BTC 周线 ADX 31.2 但 −DI 27.4 > +DI 13.1（周线下跌趋势已确立）。
+// 需 ≥28 根已收盘周 K（加密实测 484/528 有值，次新标的 null 沉底）。
+const AXIS_W_ADX = { key: "weeklyAdx", label: "周ADX", format: v => fmtDmiVal(v.weeklyAdx) };
+const AXIS_W_DIPLUS = { key: "weeklyDiPlus", label: "周+DI", format: v => fmtDmiVal(v.weeklyDiPlus) };
+const AXIS_W_DIMINUS = { key: "weeklyDiMinus", label: "周−DI", format: v => fmtDmiVal(v.weeklyDiMinus) };
+const AXIS_W_DISPREAD = { key: "weeklyDiSpread", label: "周DI差", format: v => fmtCvdVal(v.weeklyDiSpread) };
+const weeklyDmiSorts = [AXIS_W_ADX, AXIS_W_DIPLUS, AXIS_W_DIMINUS, AXIS_W_DISPREAD];
+
+// 股票系（A股/美股/ETF）**十五轴**：日线五轴 + 日线 ADX/DI 四轴 + 周线RSI + 周线 ADX/DI
+// 四轴 + 月线RSI —— 严格按"日线 → 周线 → 月线"的周期递进排，同周期的挤在一起。
 // **首轴仍是 日线RSI**（= 默认排序，必须与后端 `value` 取的量一致，别把新轴插到最前）。
 const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO, AXIS_D_EMAGAP,
-                             ...dmiSorts, AXIS_WRSI, AXIS_MRSI];
+                             ...dmiSorts, AXIS_WRSI, ...weeklyDmiSorts, AXIS_MRSI];
 // 加密两个榜**共用**的轴集。前四根是**站长两次逐字点名的同一组**：「支持成交额，RSI，
 // CVD，订单流。四种升降序。」——顺序也照他写的（**首轴即默认排序**，必须与后端 `value`
 // 取的量一致，否则首屏值列显示的是另一个轴的数）。两个榜的行 payload 逐字同构，故共用
@@ -183,7 +202,10 @@ const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO
 // 2026-07-25 晚站长追加 ADX/DI 后由四轴扩到 **八轴**（常量名随之从 cryptoFourAxisSorts
 // 改成 cryptoStrategySorts —— 名字里写死数量，加一根轴就变成谎话）。前四根顺序仍是站长
 // 逐字点名的那组，**首轴（默认排序）不动**。
-const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER, ...dmiSorts];
+// 2026-07-25 晚指令⑩再加周线四根 ⇒ **十二轴**。加密两个榜的行没有 weeklyRsi 字段
+// （后端没发），所以周线块这里只有 ADX/DI 四根，直接接在日线块之后。
+const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
+                             ...dmiSorts, ...weeklyDmiSorts];
 // （已删的轴与工厂，复活时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
 //  stockTurnoverSorts/stockAmpSorts〔2026-07-24〕；加密 cryptoRsiFirst/cryptoVolFirst/
 //  cryptoChange/cryptoTurnoverSorts/cryptoAmpSorts/cryptoFundingSorts 与 AXIS_AMPLITUDE/

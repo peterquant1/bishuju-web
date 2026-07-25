@@ -103,11 +103,6 @@ const AXIS_WRSI = { key: "weeklyRsi", label: "周线RSI", format: v => fmtRsiVal
 // 看"谁启动最热"、周线看"大趋势多强"、月线看"最大级别多强"，三个都给才对得上语义。
 // 需 ≥16 根已收盘月 K，次新股 null 沉底。
 const AXIS_MRSI = { key: "monthlyRsi", label: "月线RSI", format: v => fmtRsiVal(v.monthlyRsi) };
-// 周线EMA间距（2026-07-25 加，只挂加密 weeklyDaily）：周线 (EMA9−EMA21)/EMA21×100。
-// 那个榜**有「周线 EMA9/21 扩张」这条筛选条件**，给一根轴就能直接排"周线结构张开到
-// 什么程度"——降序=周线最舒展、升序=刚张开的早期。行字段 `weeklyEmaGap` 由 build 层
-// 从 rsi_data 的 emaGap join（源头用未 round 的 EMA 算好，别在前端或 build 层反算）。
-const AXIS_W_EMAGAP = { key: "weeklyEmaGap", label: "周线EMA间距", format: v => fmtGapVal(v.weeklyEmaGap) };
 
 // === 股票系单策略榜专用轴：**每个轴都写明周期** ===
 // ⚠️ 这不是啰嗦：那张表的筛选条件横跨月/周/日三个周期，而**行里的值全是日线的**，
@@ -122,62 +117,29 @@ const AXIS_D_VOL = { key: "volume", label: "日成交额", format: v => fmtVolVa
 const AXIS_D_CVD = { key: "cvdStrength", label: "日CVD强弱", format: v => fmtCvdVal(v.cvdStrength) };
 const AXIS_D_VOLRATIO = { key: "volRatio", label: "日量比", format: v => fmtRatioVal(v.volRatio) };
 const AXIS_D_EMAGAP = { key: "emaGap", label: "日EMA间距", format: v => fmtGapVal(v.emaGap) };
-// 加密多两个轴（**数据源差异，不是设计不同**）：
-//   日订单流 = 真实 taker 归边比（币安 K 线自带 k[9]）——tushare/Massive 的日线都没有
-//             归边字段，股票系那三个榜物理上挂不了这一轴。
-//   距前高   = (收盘 − 近 499 根日 K 最高) / 最高 × 100，恒 ≤0（0=正在创新高）；降序=
-//             贴近前高的强势（上方无套牢盘），升序=深水区（空间大但阻力多）。
-//             只有 get_daily_indicators 算，compute_{ashare,us}_daily 未算。
-//             ⚠️ **刻意不加「日」前缀**：它比的是近两年的高点、不是"今天的高点"，
-//             写成「日距前高」反而误导；且它没有周/月线同名变体，本就不存在需要
-//             消歧的歧义（其余几个轴都有周/月同名值，所以才必须自报周期）。
-const AXIS_D_TAKER = { key: "takerStrength", label: "日订单流", format: v => fmtCvdVal(v.takerStrength) };
-const AXIS_D_HIGHDIST = { key: "highDist", label: "距前高", format: v => fmtGapVal(v.highDist) };
 // 股票系（A股/美股/ETF）七轴：日线五轴（行里的值都是日线）+ 周线RSI + 月线RSI 两个
-// 大级别强度锚点。无 日订单流 / 距前高，理由见上。
+// 大级别强度锚点。**2026-07-25 晚起这是全站唯一的轴集**（站长「移除加密所有TAB」，
+// 加密三个榜连同它们专属的轴一起下线）。
 const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO, AXIS_D_EMAGAP, AXIS_WRSI, AXIS_MRSI];
-// 加密九轴 = 上面那七轴 + 日订单流 + 距前高。2026-07-25「加密移除所有 TAB、只新增
-// 唯一一个」后，加密的榜与股票系**结构同形**（同为月×周×日共振、行里的值全是日线），
-// 轴集因此回到同一条线上，只按数据源差异多挂两轴——不再是 2026-07-20 到 07-24 之间
-// 那种「加密族 vs 股票族」两套独立工厂并存的局面。
-const cryptoSingleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_TAKER, AXIS_D_VOLRATIO, AXIS_D_EMAGAP, AXIS_D_HIGHDIST, AXIS_WRSI, AXIS_MRSI];
-// 加密 weeklyDaily（周×日 两级双确认，2026-07-25 站长新增）九轴：日线七轴 + 周线RSI
-// + **周线EMA间距**。⚠️ 与上面那组的差别是**末轴 月线RSI 换成 周线EMA间距**——
-// 本榜没有任何月线条件，挂个月线轴会暗示有月线门槛（误导）；而周线 EMA 扩张恰恰是
-// 它的筛选条件之一，给轴才对得上语义。别为了"两个加密榜看起来一致"把它们合成一个常量。
-const cryptoWeeklyDailySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_TAKER, AXIS_D_VOLRATIO, AXIS_D_EMAGAP, AXIS_D_HIGHDIST, AXIS_WRSI, AXIS_W_EMAGAP];
-// 加密 weeklySarDaily（周线SAR × 日线扩张＋CVD，2026-07-25 站长第三次追加）**八轴**：
-// 日线七轴 + 周线RSI，**没有 周线EMA间距**。⚠️ 这不是漏加——本榜就是 weeklyDaily 去掉
-// 「周线 EMA9/21 扩张」那一条（`weeklyDaily = weeklySarDaily ∩ 周线扩张`，严格子集）。
-// 两个榜在 UI 上差别本就细微，若轴集也一模一样，用户对比时就**没有任何视觉线索**能看出
-// 一个有周线 EMA 门槛、另一个没有。后端也刻意不给本榜的行发 weeklyEmaGap 字段（见
-// build_rankings），前后端一致。**别为了"三个加密榜看起来统一"补上这一轴。**
-// 末轴取舍规则（三个加密榜各不相同，都是刻意的）：末轴放"本榜真正引用到的、且可排序的
-// 更大周期量"——monthlyWeeklyDaily 有月线条件→月线RSI；weeklyDaily 有周线 EMA 扩张
-// 条件→周线EMA间距；本榜的周线条件只有 SAR（布尔值、排不了序）→不设末轴。
-const cryptoWeeklySarDailySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_TAKER, AXIS_D_VOLRATIO, AXIS_D_EMAGAP, AXIS_D_HIGHDIST, AXIS_WRSI];
-// （已删的轴工厂，复活多榜时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
+// （已删的轴与工厂，复活时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
 //  stockTurnoverSorts/stockAmpSorts〔2026-07-24〕；加密 cryptoRsiFirst/cryptoVolFirst/
 //  cryptoChange/cryptoTurnoverSorts/cryptoAmpSorts/cryptoFundingSorts 与 AXIS_AMPLITUDE/
-//  AXIS_FUNDING/axisVol/axisChg 等不带周期前缀的轴〔2026-07-25，随加密 15 个榜一并移除〕。）
+//  AXIS_FUNDING/axisVol/axisChg〔2026-07-25 随加密 15 个榜移除〕；
+//  cryptoSingleStrategySorts / cryptoWeeklyDailySorts / cryptoWeeklySarDailySorts 与
+//  AXIS_D_TAKER（日订单流，币安 K 线自带的真实 taker 归边比，tushare/Massive 都没有）/
+//  AXIS_D_HIGHDIST（距前高，只有 get_daily_indicators 算）/ AXIS_W_EMAGAP（周线EMA间距）
+//  〔2026-07-25 晚随「移除加密所有TAB」〕。复活加密榜时这三个轴要一起捞回来——三个
+//  加密榜的**末轴刻意各不相同**（有月线条件→月线RSI；有周线 EMA 条件→周线EMA间距；
+//  周线端只有布尔 SAR→不设末轴），别为了"看起来统一"合并成一个常量。）
 
 const TABS_CONFIG = {
-    // === 加密：唯一的单策略榜（2026-07-25 站长定版「加密这边移除所有TAB，
-    // 然后新增唯一一个TAB」）===
-    // 与三个股票系资产同形（月×周×日共振、行里的值全是日线），但**条件是 3 个不是 5 个**
-    // ——没有「周线 EMA9/21 扩张」也没有「日线 CVD走强」，另有股票系没有的**新币回退**
-    // （无月线 SAR 时只看周线 SAR）。所以显示名不同、也不能套 singleStrategyGroup 工厂。
-    // 九轴 = 股票系七轴 + 日订单流 + 距前高（数据源差异，见 cryptoSingleStrategySorts）。
-    monthlyWeeklyDaily: { sorts: cryptoSingleStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    // 加密第 2 个榜（2026-07-25 站长新增）：周线 SAR 多头 + 周线 EMA9/21 扩张 × 日线
-    // EMA9/21 扩张 + 日线 CVD 走强 —— 周×日 两级双确认，比上面那个少一层月线、多一层
-    // 周线结构确认。轴集**末轴不同**（周线EMA间距 而非 月线RSI），理由见
-    // cryptoWeeklyDailySorts 的注释。
-    weeklyDaily: { sorts: cryptoWeeklyDailySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    // 加密第 3 个榜（2026-07-25 站长第三次追加）：周线 SAR 多头 × 日线 EMA9/21 扩张 +
-    // CVD 走强 —— 即上面 weeklyDaily 去掉「周线 EMA 扩张」那一条，**是它的严格超集**。
-    // 八轴（无 周线EMA间距），理由见 cryptoWeeklySarDailySorts 的注释。
-    weeklySarDaily: { sorts: cryptoWeeklySarDailySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    // ⚠️ **2026-07-25 晚起全站只有三个榜**：站长「移除加密所有TAB」——加密同日刚定版的
+    // 三个榜（monthlyWeeklyDaily / weeklyDaily / weeklySarDaily）全部下线，加密资产
+    // 因此在前端整体退役（分段控件里不再有「加密」）。后端 build_rankings 仍每小时跑，
+    // 但只产出 updateTime + marketOverview（市场概览全局条不是 tab，刻意保留，见
+    // renderMarketOverview——它已从"仅加密视图"解禁成全资产可见）。
+    // 复活加密榜：这里加回条目 + TAB_GROUPS 加回分组 + index.html/抽屉加回分段按钮 +
+    // 后端把 key 从 RETIRED_KEY_PREFIXES 拿掉并唤醒 get_daily_indicators。
 
     // === A股 / 美股 / ETF：各自唯一的单策略榜（2026-07-24 站长两步定版）===
     // 三者口径与轴集完全一致，共用 singleStrategySorts（见上方定义：日线五轴 +
@@ -229,31 +191,11 @@ const TAB_GROUPS = [
     // ⚠️ **内部 key 一律不动**（`dailyEma921` 等）：改 key 会连累三条抓取管道 + 公开
     // JSON + 缓存 schema——key 与显示名是两回事，历史上因此定过"key 固定、只改显示名"
     // 的规矩（*MonthlyStrategy / weeklyStrategy 先例），继续有效。
-    {
-        // 加密：唯一的榜（2026-07-25 站长定版）。组名叫「策略」——只有一个组时再标
-        // 周期是废话（周期已由 tf 角标表达），与股票系 singleStrategyGroup 同款处理。
-        // ⚠️ **刻意不套 singleStrategyGroup 工厂**：那个工厂的 name/desc 写死的是股票系
-        // 的 5 个条件（多「周线 EMA9/21 扩张」和「日线 CVD走强」），而加密是 3 个条件
-        // + 新币回退。硬套会让页面上的规则说明与后端实际筛选不符——工厂的价值是"三个
-        // 口径相同的资产不可能漂移"，加密口径本就不同，套进去反而制造错误的一致性。
-        label: "加密策略", asset: "加密", tf: "月线",
-        tabs: [
-            // 2026-07-25 站长改逻辑：日线端由「EMA9/21 扩张」换成「SAR 多头」⇒ 三个周期
-            // 全是 SAR。**轴集刻意不动**（9 轴，末轴仍是 月线RSI——月线条件还在）：日线那
-            // 几个轴是**行的描述值**、不是条件镜像（日成交额/日量比/距前高 同理），所以
-            // 日EMA间距 照常留着，只是本榜不再要求扩张、该值可能为负（升序＝两线还没张开）。
-            { key: "monthlyWeeklyDaily", name: "月线SAR × 周线SAR × 日线SAR",
-              desc: "月线、周线、日线三个周期的 SAR 全部多头——最大级别方向、中级别趋势、短期节奏同时向上，纯趋势共振的一档，不看 EMA 也不看资金。上市不足 3 个月、还算不出月线 SAR 的新合约，只要周线和日线 SAR 多头即可入榜。范围是全部 USDT 永续合约，表格显示的是日线数值。" },
-            // tf 覆盖成周线：本榜最大级别是周线（没有月线条件），角标要跟着变，
-            // 否则会挂着组默认的「月线」角标误导用户以为有月线门槛。
-            { key: "weeklyDaily", name: "周线SAR＋扩张 × 日线扩张＋CVD", tf: "周线",
-              desc: "周线 SAR 多头且 EMA9/21 张开（中级别趋势已确立并且在加速）× 日线 EMA9/21 张开且资金同步流入——周线、日线各要两个确认，共四个条件。不看月线，比上面那个更早介入、样本更靠近当下。范围是全部 USDT 永续合约，表格显示的是日线数值。" },
-            // 本榜 = 上面那个去掉「周线 EMA 扩张」⇒ 严格超集，所以排在它后面（宽→严的
-            // 反向：先严后宽），desc 里明说了关系，免得两个名字相近的榜看不出差别。
-            { key: "weeklySarDaily", name: "周线SAR × 日线扩张＋CVD", tf: "周线",
-              desc: "周线 SAR 多头（中级别方向向上就够，不要求周线结构也在加速）× 日线 EMA9/21 张开且资金同步流入——三个条件。就是上面那个榜放宽一档，上面榜里的标的必定也在这里，这里多出来的是周线趋势对、但周线结构还没张开的那些。范围是全部 USDT 永续合约，表格显示的是日线数值。" },
-        ],
-    },
+    // ⚠️ **加密分组已于 2026-07-25 晚整体移除**（站长「移除加密所有TAB」）：它当天刚
+    // 定版的三个榜（月线SAR×周线SAR×日线SAR / 周线SAR＋扩张×日线扩张＋CVD /
+    // 周线SAR×日线扩张＋CVD）连同显示名、desc、专属轴一起下线，旧内容见 git 历史。
+    // 加密资产因此在前端整体退役——分段控件、lastTabByAsset、脉搏磁贴、railFoot 里都
+    // 不再有它。**唯一保留的加密内容是市场概览全局条**（不是 tab，见 renderMarketOverview）。
     // === A股 / 美股 / ETF（2026-07-24 站长两步定版：三者各只保留 1 个榜，口径完全一致）===
     // 见上方 singleStrategyGroup 工厂的注释。universe 参数是各资产的标的范围说明，
     // 是三者唯一的差异（前缀/成交额单位/TV 代码格式/涨跌配色都不在这里，分别由后端
@@ -273,17 +215,21 @@ for (const g of TAB_GROUPS) {
 }
 
 // === 付费墙配置（2026-07-21 接 OxaPay 重新启用）===
-// 免费橱窗留 TEASER_TAB（现为加密唯一的榜 monthlyWeeklyDaily）里 日线 RSI 最高的 1 行，
+// 免费橱窗留 TEASER_TAB（现为美股榜 usMonthlyWeeklyDaily）里 日线 RSI 最高的 1 行，
 // 其余全部榜锁定后 data[tab] 是 undefined（公开 JSON 根本不含这个 key）——不是"给个
-// 空数组"那种锁法。2026-07-25 起全站 4 个榜全部付费，这 1 行是唯一的榜单类免费内容。
+// 空数组"那种锁法。2026-07-25 起全站 3 个榜全部付费，这 1 行是唯一的榜单类免费内容。
 // 总开关：必须跟后端 fetch_data.py 的 PAYWALL_ENABLED 保持一致，留作紧急回滚
 // 开关（两处一起改回 false，不用逐处回退 diff）。
 const PAYWALL_ENABLED = true;
 const WORKER_API = "https://bishuju-api.fanshenpan.workers.dev";
 // ⚠️ 必须与后端 fetch_data.py 的 TEASER_TAB 一致。历经 dailyCvd → dailyEma921
-// （2026-07-22 日线策略收敛）→ monthlyWeeklyDaily（2026-07-25 加密收敛成单一榜）。
-// 全站 4 个榜全付费后，这 1 行橱窗 + marketOverview 是仅存的两个免费面。
-const TEASER_TAB = "monthlyWeeklyDaily";
+// （2026-07-22 日线策略收敛）→ monthlyWeeklyDaily（2026-07-25 加密收敛成单一榜）→
+// **usMonthlyWeeklyDaily**（同日站长「移除加密所有TAB」，加密一个榜都不剩，橱窗必须
+// 改挂一个还活着的榜）。挑美股是因为它命中最厚（实测 224；A股 8 / ETF 5 都可能某天
+// 归零，那天橱窗和默认落地页会一起空）。换榜要同时改：这里 + 后端同名常量 +
+// 下面的 currentTab 默认值 + currentAsset 默认值。
+// 全站 3 个榜全付费后，这 1 行橱窗 + marketOverview 是仅存的两个免费面。
+const TEASER_TAB = "usMonthlyWeeklyDaily";
 const LS_LICENSE = "bishuju_license";
 const PLAN_LABEL = { monthly: "月付", quarterly: "季付", yearly: "年付" };
 // ⚠️ 仅供页面标价显示——实际扣款金额以 Worker 的同名常量为准，两处必须一致，
@@ -310,7 +256,10 @@ const safeStore = {
 
 let data = null;
 let lastRenderKey = null; // loadData 上次重渲染时的 updateTime，用于跳过无变化的重建
-let currentTab = "monthlyWeeklyDaily";
+// 默认落地榜 = TEASER_TAB（美股）：未解锁的新访客一进来就能看到唯一那行免费内容 +
+// 「解锁查看剩余 N 个」的转化位。2026-07-25 晚从加密的 monthlyWeeklyDaily 改过来
+// （加密全部 TAB 已移除）。改这里要同步 currentAsset 的默认值。
+let currentTab = "usMonthlyWeeklyDaily";
 let sortAsc = false; // false=降序, true=升序
 let sortField = "value"; // 当前排序字段；默认 value，带 sorts 的 tab 可切 RSI/成交额
 let searchQuery = ""; // 表格搜索（代码/名称子串），切 tab 时清空
@@ -345,9 +294,9 @@ function tabCount(key) {
 }
 
 // 涨跌幅榜：无筛选、全量入榜、值是涨跌幅，走红绿配色（getColorClass）。
-// **2026-07-25 起为空集**：四个资产各只剩 1 个策略榜，全站已无涨跌幅榜（加密那三个
-// 是最后的成员）。空集下 getColorClass 恒返回中性色、isStrategyTab 恒为 true——都是
-// 正确行为，无需特判。复活涨跌幅榜时把 key 加回来。
+// **2026-07-25 起为空集**：全站已无涨跌幅榜（加密那三个是最后的成员）。空集下
+// getColorClass 恒返回中性色、isStrategyTab 恒为 true——都是正确行为，无需特判。
+// 复活涨跌幅榜时把 key 加回来。
 const CHANGE_PCT_TABS = new Set([]);
 
 // 免费引流层（2026-07-22 站长定：通用行情开放引流，策略筛选付费）。整榜免费的通用
@@ -359,7 +308,8 @@ const FREE_TABS = new Set([]);
 // ⚠️⚠️ **2026-07-25 起为空集：全站一个免费整榜都没有了，这不是漏写。** A股/美股/ETF
 // 于 2026-07-24 各收敛成 1 个纯付费策略榜（各自 7 个免费行情榜一并移除），加密于
 // 2026-07-25 移除全部 15 个榜（含最后 8 个免费行情榜：涨跌幅 日周月 + 成交额 日周月 +
-// 振幅 + 资金费率）。免费引流面现在只剩「橱窗 1 行（TEASER_TAB）+ 市场概览全局条」。
+// 振幅 + 资金费率），当晚站长再下「移除加密所有TAB」，加密新定版的 3 个榜也一并下线、
+// 资产整体退役。免费引流面现在只剩「橱窗 1 行（TEASER_TAB）+ 市场概览全局条」。
 // 后端 fetch_data.py 的同名 FREE_TABS 同样是空集，两边必须一致。
 // 策略榜 = 非免费榜（有筛选条件，"0 命中"是正常信号而非故障，值是 RSI/成交额等指标）。
 // 空状态文案、脉搏策略计数、导航命中徽标都据此——免费行情榜不参与这些语义。
@@ -468,21 +418,28 @@ function getSortedItems() {
 }
 
 // === master-detail 左栏导航（Claude Design 重设计落地）===
-// 左栏 rail：顶部 加密/美股/ETF 分段控件 + 当前资产的分组榜单（三个资产均 4 组：
-// 行情/日线/周线/月线——组数由 TAB_GROUPS 决定，别写死；crypto 曾有 12H策略组，
-// 2026-07-22 移除；A股 曾是第二个资产，2026-07-24 整体退役），「资产·周期·策略」
-// 同屏全见、一键直达；rail 激活态随资产变色（--asset-accent）。
-// 移动端 rail 隐藏，同一份导航渲染进抽屉（#drawerBody）。
+// 左栏 rail：顶部 A股/美股/ETF 分段控件 + 当前资产的分组榜单（组数由 TAB_GROUPS 决定，
+// 别写死；三个资产现各只有 1 组 1 榜），「资产·周期·策略」同屏全见、一键直达；
+// rail 激活态随资产变色（--asset-accent）。移动端 rail 隐藏，同一份导航渲染进抽屉。
+// **资产变迁**：crypto 曾有 12H策略组（2026-07-22 移除）；A股 曾整体退役过一次
+// （2026-07-24 白天，当晚复活为单 tab）；**加密于 2026-07-25 晚整体退役**（站长
+// 「移除加密所有TAB」）——它的市场概览全局条仍在，但已解禁成全资产可见，见
+// renderMarketOverview。
 const TF_SHORT = { "日线": "日", "周线": "周", "月线": "月" };
+// ⚠️ 两张映射表**刻意保留 crypto 条目**：ASSET_CN.crypto 仍被顶栏加密新鲜度胶囊
+// （它现在代表市场概览的刷新时间）与 data-asset 的 CSS 主题色用到；ASSET_KEY 的
+// "加密" 键则是复活时的现成入口。留着零成本，删了复活要重推一遍。
 const ASSET_KEY = { "加密": "crypto", "A股": "ashare", "美股": "us", "ETF": "etf" };  // TAB_GROUPS.asset → data-asset
 const ASSET_CN = { crypto: "加密", ashare: "A股", us: "美股", etf: "ETF" };           // data-asset → TAB_GROUPS.asset
-let currentAsset = "crypto";                                // 当前资产（由 tab 派生/资产切换驱动）
-// 各资产记住上次看的榜。A股 只有一个榜，"上次看的"恒等于它。
-const lastTabByAsset = { crypto: "monthlyWeeklyDaily", ashare: "ashareMonthlyWeeklyDaily", us: "usMonthlyWeeklyDaily", etf: "etfMonthlyWeeklyDaily" };
+// 默认资产 = 默认落地 tab 所属资产（美股，见 currentTab）。2026-07-25 晚从 crypto
+// 改过来——加密已无任何 tab，留着 "crypto" 会让首屏 data-asset 指向一个不存在的资产。
+let currentAsset = "us";                                // 当前资产（由 tab 派生/资产切换驱动）
+// 各资产记住上次看的榜。三者都只有一个榜，"上次看的"恒等于它（加密条目已随资产退役移除）。
+const lastTabByAsset = { ashare: "ashareMonthlyWeeklyDaily", us: "usMonthlyWeeklyDaily", etf: "etfMonthlyWeeklyDaily" };
 
 function assetOfTab(tab) {
     const m = TAB_META[tab];
-    return m ? ASSET_KEY[m.asset] : "crypto";
+    return m ? ASSET_KEY[m.asset] : "us";   // 兜底跟默认落地 tab 走
 }
 
 // rail 组标签统一显示"周期/行情"（资产已由分段控件表达,组名不再重复"美股"/"ETF"前缀）
@@ -529,14 +486,12 @@ function renderNav() {
     if (foot && data) {
         const assetCn = ASSET_CN[currentAsset];
         const n = TAB_GROUPS.filter(g => g.asset === assetCn).reduce((s, g) => s + g.tabs.length, 0);
-        // 四个资产都没有全量涨跌幅榜可以数了（唯一的榜是筛选后的策略榜），故一律写
+        // 三个资产都没有全量涨跌幅榜可以数了（唯一的榜是筛选后的策略榜），故一律写
         // **标的范围**而不是数量——写 tabCount(唯一的榜) 会变成"监控 N 只"却是命中数，
-        // 是误导。加密那条 2026-07-25 起也走这条路（此前数 yesterdayChange 的真实合约数，
-        // 那个免费全量榜已随「移除所有 TAB」下线）。
+        // 是误导。（加密那条随资产退役一并移除，2026-07-25 晚。）
         const uni = currentAsset === "ashare" ? "沪深 A 股全市场"
-            : currentAsset === "us" ? "美股全市场普通股与 ADR"
             : currentAsset === "etf" ? "约 42 只精选大类资产 ETF"
-            : "USDT 永续合约全市场";
+            : "美股全市场普通股与 ADR";
         foot.innerHTML = `<b>${n}</b> 个榜单 · 监控 ${uni}`;
     }
 }
@@ -874,10 +829,9 @@ function switchTab(tab) {
 function switchAsset(assetK) {
     if (assetK === currentAsset) return;
     // 兜底：lastTabByAsset 全量初始化后正常不可达，但兜底若被触发（未来改坏），
-    // 二分写法会把「ETF」误跳去加密榜（2026-07-20 审计补的防御）
+    // 二分写法会把「ETF」误跳去别的资产（2026-07-20 审计补的防御）
     const fallback = assetK === "ashare" ? "ashareMonthlyWeeklyDaily"
-        : assetK === "us" ? "usMonthlyWeeklyDaily"
-        : assetK === "etf" ? "etfMonthlyWeeklyDaily" : "monthlyWeeklyDaily";
+        : assetK === "etf" ? "etfMonthlyWeeklyDaily" : "usMonthlyWeeklyDaily";
     switchTab(lastTabByAsset[assetK] || fallback);
 }
 
@@ -934,6 +888,9 @@ function renderStaleBanner() {
         el.hidden = !(t && Date.now() - t > 30 * 3600 * 1000);
         return;
     }
+    // ⚠️ 加密（小时级 updateTime）分支自 2026-07-25 晚起**不可达**——加密已无任何 tab，
+    // 上面那个 if 对现存三个资产恒真。刻意保留：复活加密榜时它立刻重新生效，且
+    // updateTime 本身还活着（每小时刷新，check-freshness.yml 与市场概览都靠它）。
     const t = parseUpdateTime(data.updateTime);
     // 数据每小时更新；超过 2.5 小时没动就亮横幅
     el.hidden = !(t && Date.now() - t > 2.5 * 3600 * 1000);
@@ -993,13 +950,16 @@ function renderUpdatePill() {
 
     // 状态类 + 当前资产侧高亮。ETF 资产没有第四个胶囊——它与美股同管道同时间戳，
     // 高亮美股胶囊即是它的新鲜度指示（移动端只显非 dim 的那一个，必须有一个亮着）。
+    // ⚠️ 加密胶囊自 2026-07-25 晚起**恒 dim**（加密已无 tab，currentAsset 不可能是
+    // "crypto"）：它现在代表的是**市场概览全局条**的刷新时间，桌面端仍显示、移动端
+    // 按既有 CSS 隐藏（次要信息，可接受）。点击已改成显式空操作，见文件末尾。
     elC.className = `fresh ${clsC}${currentAsset === "crypto" ? "" : " is-dim"}`;
     elA.className = `fresh ${clsA}${currentAsset === "ashare" ? "" : " is-dim"}`;
     elU.className = `fresh ${clsU}${(currentAsset === "us" || currentAsset === "etf") ? "" : " is-dim"}`;
 }
 
 // 各资产的策略 tab 数，pulse "N 榜" 用；按资产从 TAB_GROUPS 算，不硬编码。
-const CRYPTO_STRATEGY_TABS = TAB_GROUPS.filter(g => g.asset === "加密").flatMap(g => g.tabs).filter(t => isStrategyTab(t.key)).length;
+// （CRYPTO_STRATEGY_TABS 随加密资产退役移除，2026-07-25 晚。）
 const ASHARE_STRATEGY_TABS = TAB_GROUPS.filter(g => g.asset === "A股").flatMap(g => g.tabs).filter(t => isStrategyTab(t.key)).length;
 const US_STRATEGY_TABS = TAB_GROUPS.filter(g => g.asset === "美股").flatMap(g => g.tabs).filter(t => isStrategyTab(t.key)).length;
 const ETF_STRATEGY_TABS = TAB_GROUPS.filter(g => g.asset === "ETF").flatMap(g => g.tabs).filter(t => isStrategyTab(t.key)).length;
@@ -1040,20 +1000,34 @@ function mktAnchor(name, a) {
     </div>`;
 }
 
-/** 市场概览全局条（免费引流,crypto 独有）：全市场 24h 内生指标 + 合约情绪,数据来自
- *  data.marketOverview（后端 get_market_overview 从币安全市场 24h 行情 + 资金费率自算）。
- *  仅加密视图显示（这是永续合约市场数据）,其余资产隐藏。参考 CMC/CoinGecko 顶部全局条,
- *  但指标为合约市场定制（涨跌宽度/资金费率持仓/合约总成交额）。 */
+/** 市场概览全局条（免费引流）：永续合约全市场 24h 内生指标 + 合约情绪,数据来自
+ *  data.marketOverview（后端 get_market_overview 自算,只用 24h 行情 + 资金费率两次调用）。
+ *  参考 CMC/CoinGecko 顶部全局条,但指标为合约市场定制（涨跌宽度/资金费率持仓/合约总成交额）。
+ *
+ *  ⚠️ **2026-07-25 晚从"仅加密视图显示"解禁成全资产可见**：站长指令是「移除加密所有
+ *  TAB」，而这条不是 tab 是个 dict（后端 ALWAYS_FREE_FIELDS），刻意保留——但加密资产
+ *  已随之整体退役、"加密视图"不复存在，继续 gate 在 currentAsset==="crypto" 上等于
+ *  连带删掉一个没被要求删的东西。解禁后它挂在 A股/美股/ETF 榜上方，因此**必须自报
+ *  是哪个市场的数据**，见下面第一块 tag（否则用户会以为那是当前资产的成交额/情绪）。
+ *  复活加密榜时不必改回去：全局条本来就叫"全局"条。 */
 function renderMarketOverview() {
     const el = document.getElementById("marketOverview");
     if (!el) return;
     const mo = data && data.marketOverview;
-    if (currentAsset !== "crypto" || !mo) { el.hidden = true; return; }
+    if (!mo) { el.hidden = true; return; }
 
     const b = mo.breadth || {};
     const s = mo.sentiment;
     const zone = s < 25 ? "fear2" : s < 45 ? "fear" : s < 55 ? "neutral" : s < 75 ? "greed" : "greed2";
     const items = [];
+
+    // 身份 + 刷新时刻：这条现在会出现在 A股/美股/ETF 榜上方，不写明"这是加密市场的数"
+    // 会被当成当前资产的指标。顺带给了 updateTime 一个可见落点（加密新鲜度胶囊现在恒
+    // dim、移动端隐藏，这里是它在小屏上唯一的替代）。复用既有 class，无新增 CSS。
+    if (data.updateTime) items.push(`<div class="mkt__item" title="USDT 永续合约全市场，每小时更新">
+        <span class="mkt__k">加密市场</span>
+        <span class="mkt__v"><b>${data.updateTime.slice(11, 16)}</b> UTC<span class="mkt__sub">每小时</span></span>
+    </div>`);
 
     items.push(`<div class="mkt__item mkt__item--senti" title="市场情绪指数（0-100）：基于全市场涨跌宽度与平均涨跌幅自算，非第三方指数">
         <span class="mkt__k">市场情绪</span>
@@ -1093,9 +1067,8 @@ function renderPulse() {
     const el = document.getElementById("pulse");
     if (!el || !data) return;
     const tiles = currentAsset === "ashare" ? asharePulseTiles()
-        : currentAsset === "us" ? usPulseTiles()
         : currentAsset === "etf" ? etfPulseTiles()
-        : cryptoPulseTiles();
+        : usPulseTiles();
     if (!tiles) { el.hidden = true; return; }
     el.innerHTML = tiles.join("");
     el.hidden = false;
@@ -1110,10 +1083,8 @@ function lockedPulseTile(asset, totalTabs) {
     return [pulseTile("策略命中" + " " + LOCK_SVG, `<span class="is-gold">${hits}</span><span class="pulse__suffix is-muted">次 · ${totalTabs} 榜</span>`, "解锁查看完整榜单与领涨标的")];
 }
 
-// 加密脉搏（2026-07-25 起与股票系同款）：加密也没有全量涨跌幅榜了，"监控 N 个 /
-// 昨日领涨 / 周线领涨"三块磁贴的数据源（yesterdayChange/weeklyChange）随「移除所有
-// TAB」一起下线，只能退到 lockedPulseTile。旧的四格实现见 git。
-function cryptoPulseTiles() { return lockedPulseTile("加密", CRYPTO_STRATEGY_TABS); }
+// （cryptoPulseTiles 随加密资产退役移除，2026-07-25 晚；旧的四格实现与它 07-25 白天
+//  退化成 lockedPulseTile 的中间版本都在 git 里。）
 
 // 三个股票系资产（A股/美股/ETF）的脉搏：**它们都没有全量涨跌幅榜了**——2026-07-24
 // 起各自只剩一个筛选后的策略榜，给不了"监控 N 只 / 今日领涨 / 涨跌家数"那种全市场
@@ -1649,9 +1620,8 @@ document.getElementById("drawerScrim").addEventListener("click", closeDrawer);
 // 抽屉体：注入资产分段控件 + 导航容器（renderNav 往 #drawerNav 里填内容）
 document.getElementById("drawerBody").innerHTML = `
     <div class="asset-seg">
-        <button class="asset-seg__opt is-active" data-k="crypto"><span class="asset-seg__dot"></span>加密</button>
         <button class="asset-seg__opt" data-k="ashare"><span class="asset-seg__dot"></span>A股</button>
-        <button class="asset-seg__opt" data-k="us"><span class="asset-seg__dot"></span>美股</button>
+        <button class="asset-seg__opt is-active" data-k="us"><span class="asset-seg__dot"></span>美股</button>
         <button class="asset-seg__opt" data-k="etf"><span class="asset-seg__dot"></span>ETF</button>
     </div>
     <nav class="board-nav" id="drawerNav" style="margin-top:14px"></nav>`;
@@ -1690,7 +1660,10 @@ document.getElementById("snapshotBannerClose").addEventListener("click", () => {
 // .is-dim(代表的就是当前 ETF 视图的新鲜度),但 switchAsset("us") 的同资产早退比较的是
 // "us" !== "etf" → 会把用户切离 ETF。手机端 .is-dim 胶囊隐藏后它还是屏幕上唯一可点的
 // 资产控件,必须显式空操作(2026-07-21 审计)。
-document.getElementById("freshCrypto").addEventListener("click", () => switchAsset("crypto"));
+// ⚠️ 加密胶囊自 2026-07-25 晚（「移除加密所有TAB」）起是**显式空操作**：加密已无任何
+// tab，switchAsset("crypto") 会走进 fallback 跳去一个不存在的榜。它现在只是市场概览
+// 全局条的刷新时刻指示（同 ETF 视图下点美股胶囊那条先例：不能把用户带到别处去）。
+document.getElementById("freshCrypto").addEventListener("click", () => { /* 加密已无榜单，空操作 */ });
 document.getElementById("freshAshare").addEventListener("click", () => switchAsset("ashare"));
 document.getElementById("freshUS").addEventListener("click", () => {
     if (currentAsset === "etf") return;

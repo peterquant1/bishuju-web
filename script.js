@@ -146,6 +146,16 @@ const cryptoSingleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_TA
 // 本榜没有任何月线条件，挂个月线轴会暗示有月线门槛（误导）；而周线 EMA 扩张恰恰是
 // 它的筛选条件之一，给轴才对得上语义。别为了"两个加密榜看起来一致"把它们合成一个常量。
 const cryptoWeeklyDailySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_TAKER, AXIS_D_VOLRATIO, AXIS_D_EMAGAP, AXIS_D_HIGHDIST, AXIS_WRSI, AXIS_W_EMAGAP];
+// 加密 weeklySarDaily（周线SAR × 日线扩张＋CVD，2026-07-25 站长第三次追加）**八轴**：
+// 日线七轴 + 周线RSI，**没有 周线EMA间距**。⚠️ 这不是漏加——本榜就是 weeklyDaily 去掉
+// 「周线 EMA9/21 扩张」那一条（`weeklyDaily = weeklySarDaily ∩ 周线扩张`，严格子集）。
+// 两个榜在 UI 上差别本就细微，若轴集也一模一样，用户对比时就**没有任何视觉线索**能看出
+// 一个有周线 EMA 门槛、另一个没有。后端也刻意不给本榜的行发 weeklyEmaGap 字段（见
+// build_rankings），前后端一致。**别为了"三个加密榜看起来统一"补上这一轴。**
+// 末轴取舍规则（三个加密榜各不相同，都是刻意的）：末轴放"本榜真正引用到的、且可排序的
+// 更大周期量"——monthlyWeeklyDaily 有月线条件→月线RSI；weeklyDaily 有周线 EMA 扩张
+// 条件→周线EMA间距；本榜的周线条件只有 SAR（布尔值、排不了序）→不设末轴。
+const cryptoWeeklySarDailySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_TAKER, AXIS_D_VOLRATIO, AXIS_D_EMAGAP, AXIS_D_HIGHDIST, AXIS_WRSI];
 // （已删的轴工厂，复活多榜时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
 //  stockTurnoverSorts/stockAmpSorts〔2026-07-24〕；加密 cryptoRsiFirst/cryptoVolFirst/
 //  cryptoChange/cryptoTurnoverSorts/cryptoAmpSorts/cryptoFundingSorts 与 AXIS_AMPLITUDE/
@@ -164,6 +174,10 @@ const TABS_CONFIG = {
     // 周线结构确认。轴集**末轴不同**（周线EMA间距 而非 月线RSI），理由见
     // cryptoWeeklyDailySorts 的注释。
     weeklyDaily: { sorts: cryptoWeeklyDailySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    // 加密第 3 个榜（2026-07-25 站长第三次追加）：周线 SAR 多头 × 日线 EMA9/21 扩张 +
+    // CVD 走强 —— 即上面 weeklyDaily 去掉「周线 EMA 扩张」那一条，**是它的严格超集**。
+    // 八轴（无 周线EMA间距），理由见 cryptoWeeklySarDailySorts 的注释。
+    weeklySarDaily: { sorts: cryptoWeeklySarDailySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === A股 / 美股 / ETF：各自唯一的单策略榜（2026-07-24 站长两步定版）===
     // 三者口径与轴集完全一致，共用 singleStrategySorts（见上方定义：日线五轴 +
@@ -230,6 +244,10 @@ const TAB_GROUPS = [
             // 否则会挂着组默认的「月线」角标误导用户以为有月线门槛。
             { key: "weeklyDaily", name: "周线SAR＋扩张 × 日线扩张＋CVD", tf: "周线",
               desc: "周线 SAR 多头且 EMA9/21 张开（中级别趋势已确立并且在加速）× 日线 EMA9/21 张开且资金同步流入——周线、日线各要两个确认，共四个条件。不看月线，比上面那个更早介入、样本更靠近当下。范围是全部 USDT 永续合约，表格显示的是日线数值。" },
+            // 本榜 = 上面那个去掉「周线 EMA 扩张」⇒ 严格超集，所以排在它后面（宽→严的
+            // 反向：先严后宽），desc 里明说了关系，免得两个名字相近的榜看不出差别。
+            { key: "weeklySarDaily", name: "周线SAR × 日线扩张＋CVD", tf: "周线",
+              desc: "周线 SAR 多头（中级别方向向上就够，不要求周线结构也在加速）× 日线 EMA9/21 张开且资金同步流入——三个条件。就是上面那个榜放宽一档，上面榜里的标的必定也在这里，这里多出来的是周线趋势对、但周线结构还没张开的那些。范围是全部 USDT 永续合约，表格显示的是日线数值。" },
         ],
     },
     // === A股 / 美股 / ETF（2026-07-24 站长两步定版：三者各只保留 1 个榜，口径完全一致）===

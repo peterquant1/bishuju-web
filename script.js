@@ -54,6 +54,8 @@ function axesSub(item, sf, volLabel, extra) {
     if (sf !== "volume") seg.push(`${volLabel} ${fmtVolVal(item)}`);
     if (sf !== "cvdStrength") seg.push(`${axisLabelFor("cvdStrength", "CVD强弱")} ${fmtCvdVal(item.cvdStrength)}`);
     if ("weeklyRsi" in item && sf !== "weeklyRsi") seg.push(`${axisLabelFor("weeklyRsi", "周线RSI")} ${fmtRsiVal(item.weeklyRsi)}`);
+    // 周线EMA间距：只有加密 weeklyDaily 的行带（那榜有周线扩张筛选条件），数据驱动判断。
+    if ("weeklyEmaGap" in item && sf !== "weeklyEmaGap") seg.push(`${axisLabelFor("weeklyEmaGap", "周线EMA间距")} ${fmtGapVal(item.weeklyEmaGap)}`);
     if ("monthlyRsi" in item && sf !== "monthlyRsi") seg.push(`${axisLabelFor("monthlyRsi", "月线RSI")} ${fmtRsiVal(item.monthlyRsi)}`);
     // 订单流（真实 taker 归边比）只有加密行有——tushare/Massive 无归边字段，股票系行上
     // 没这个 key，数据驱动判断即可，无需 per-tab 配置。与 CVD强弱 背离时（阴线+订单流
@@ -101,6 +103,11 @@ const AXIS_WRSI = { key: "weeklyRsi", label: "周线RSI", format: v => fmtRsiVal
 // 看"谁启动最热"、周线看"大趋势多强"、月线看"最大级别多强"，三个都给才对得上语义。
 // 需 ≥16 根已收盘月 K，次新股 null 沉底。
 const AXIS_MRSI = { key: "monthlyRsi", label: "月线RSI", format: v => fmtRsiVal(v.monthlyRsi) };
+// 周线EMA间距（2026-07-25 加，只挂加密 weeklyDaily）：周线 (EMA9−EMA21)/EMA21×100。
+// 那个榜**有「周线 EMA9/21 扩张」这条筛选条件**，给一根轴就能直接排"周线结构张开到
+// 什么程度"——降序=周线最舒展、升序=刚张开的早期。行字段 `weeklyEmaGap` 由 build 层
+// 从 rsi_data 的 emaGap join（源头用未 round 的 EMA 算好，别在前端或 build 层反算）。
+const AXIS_W_EMAGAP = { key: "weeklyEmaGap", label: "周线EMA间距", format: v => fmtGapVal(v.weeklyEmaGap) };
 
 // === 股票系单策略榜专用轴：**每个轴都写明周期** ===
 // ⚠️ 这不是啰嗦：那张表的筛选条件横跨月/周/日三个周期，而**行里的值全是日线的**，
@@ -134,6 +141,11 @@ const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO
 // 轴集因此回到同一条线上，只按数据源差异多挂两轴——不再是 2026-07-20 到 07-24 之间
 // 那种「加密族 vs 股票族」两套独立工厂并存的局面。
 const cryptoSingleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_TAKER, AXIS_D_VOLRATIO, AXIS_D_EMAGAP, AXIS_D_HIGHDIST, AXIS_WRSI, AXIS_MRSI];
+// 加密 weeklyDaily（周×日 两级双确认，2026-07-25 站长新增）九轴：日线七轴 + 周线RSI
+// + **周线EMA间距**。⚠️ 与上面那组的差别是**末轴 月线RSI 换成 周线EMA间距**——
+// 本榜没有任何月线条件，挂个月线轴会暗示有月线门槛（误导）；而周线 EMA 扩张恰恰是
+// 它的筛选条件之一，给轴才对得上语义。别为了"两个加密榜看起来一致"把它们合成一个常量。
+const cryptoWeeklyDailySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_TAKER, AXIS_D_VOLRATIO, AXIS_D_EMAGAP, AXIS_D_HIGHDIST, AXIS_WRSI, AXIS_W_EMAGAP];
 // （已删的轴工厂，复活多榜时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
 //  stockTurnoverSorts/stockAmpSorts〔2026-07-24〕；加密 cryptoRsiFirst/cryptoVolFirst/
 //  cryptoChange/cryptoTurnoverSorts/cryptoAmpSorts/cryptoFundingSorts 与 AXIS_AMPLITUDE/
@@ -147,6 +159,11 @@ const TABS_CONFIG = {
     // （无月线 SAR 时只看周线 SAR）。所以显示名不同、也不能套 singleStrategyGroup 工厂。
     // 九轴 = 股票系七轴 + 日订单流 + 距前高（数据源差异，见 cryptoSingleStrategySorts）。
     monthlyWeeklyDaily: { sorts: cryptoSingleStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    // 加密第 2 个榜（2026-07-25 站长新增）：周线 SAR 多头 + 周线 EMA9/21 扩张 × 日线
+    // EMA9/21 扩张 + 日线 CVD 走强 —— 周×日 两级双确认，比上面那个少一层月线、多一层
+    // 周线结构确认。轴集**末轴不同**（周线EMA间距 而非 月线RSI），理由见
+    // cryptoWeeklyDailySorts 的注释。
+    weeklyDaily: { sorts: cryptoWeeklyDailySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === A股 / 美股 / ETF：各自唯一的单策略榜（2026-07-24 站长两步定版）===
     // 三者口径与轴集完全一致，共用 singleStrategySorts（见上方定义：日线五轴 +
@@ -209,6 +226,10 @@ const TAB_GROUPS = [
         tabs: [
             { key: "monthlyWeeklyDaily", name: "月线SAR × 周线SAR × 日线两线扩张",
               desc: "月线 SAR 多头（最大级别方向已确立）× 周线 SAR 多头（中级别趋势同向）× 日线 EMA9/21 张开（短期刚启动）——三个周期同时点头才入榜。上市不足 3 个月、还算不出月线 SAR 的新合约，只要周线 SAR 多头即可入榜。范围是全部 USDT 永续合约，表格显示的是日线数值。" },
+            // tf 覆盖成周线：本榜最大级别是周线（没有月线条件），角标要跟着变，
+            // 否则会挂着组默认的「月线」角标误导用户以为有月线门槛。
+            { key: "weeklyDaily", name: "周线SAR＋扩张 × 日线扩张＋CVD", tf: "周线",
+              desc: "周线 SAR 多头且 EMA9/21 张开（中级别趋势已确立并且在加速）× 日线 EMA9/21 张开且资金同步流入——周线、日线各要两个确认，共四个条件。不看月线，比上面那个更早介入、样本更靠近当下。范围是全部 USDT 永续合约，表格显示的是日线数值。" },
         ],
     },
     // === A股 / 美股 / ETF（2026-07-24 站长两步定版：三者各只保留 1 个榜，口径完全一致）===

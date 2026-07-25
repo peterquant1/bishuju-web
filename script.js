@@ -55,12 +55,14 @@ function axesSub(item, sf, volLabel, extra) {
     if (sf !== "cvdStrength") seg.push(`${axisLabelFor("cvdStrength", "CVD强弱")} ${fmtCvdVal(item.cvdStrength)}`);
     if ("weeklyRsi" in item && sf !== "weeklyRsi") seg.push(`${axisLabelFor("weeklyRsi", "周线RSI")} ${fmtRsiVal(item.weeklyRsi)}`);
     if ("monthlyRsi" in item && sf !== "monthlyRsi") seg.push(`${axisLabelFor("monthlyRsi", "月线RSI")} ${fmtRsiVal(item.monthlyRsi)}`);
-    // 订单流（真实 taker 归边比）只有加密行有——A股 数据源无归边字段，行上没这个 key，
-    // 数据驱动判断即可，无需 per-tab 配置。与 CVD强弱 背离时（阴线+订单流正=借跌吸筹）
-    // 正是这轴的价值所在。
-    if ("takerStrength" in item && sf !== "takerStrength") seg.push(`订单流 ${fmtCvdVal(item.takerStrength)}`);
-    // 量比/EMA间距：A股/美股/ETF 行 + 加密日线策略行家族（dailyEma921/weeklyStrategy）有，
-    // 数据驱动判断。距前高 只有加密日线策略行家族有。
+    // 订单流（真实 taker 归边比）只有加密行有——tushare/Massive 无归边字段，股票系行上
+    // 没这个 key，数据驱动判断即可，无需 per-tab 配置。与 CVD强弱 背离时（阴线+订单流
+    // 正=借跌吸筹）正是这轴的价值所在。
+    // ⚠️ 2026-07-25 从硬编码「订单流」改成走 axisLabelFor：加密榜的轴现在叫「日订单流」，
+    // 硬编码会让副行与排序条对不上——正是 axisLabelFor 当初要消灭的那个坑（见其注释）。
+    if ("takerStrength" in item && sf !== "takerStrength") seg.push(`${axisLabelFor("takerStrength", "订单流")} ${fmtCvdVal(item.takerStrength)}`);
+    // 量比/EMA间距/距前高：四个资产唯一的那个单策略榜的行都带（距前高只有加密带——
+    // compute_{ashare,us}_daily 未算），数据驱动判断。
     if ("volRatio" in item && sf !== "volRatio") seg.push(`${axisLabelFor("volRatio", "量比")} ${fmtRatioVal(item.volRatio)}`);
     if ("emaGap" in item && sf !== "emaGap") seg.push(`${axisLabelFor("emaGap", "EMA间距")} ${fmtGapVal(item.emaGap)}`);
     if ("highDist" in item && sf !== "highDist") seg.push(`${axisLabelFor("highDist", "距前高")} ${fmtGapVal(item.highDist)}`);
@@ -70,6 +72,9 @@ function axesSub(item, sf, volLabel, extra) {
     if (extra) shown.push(extra);
     return shown.join(" | ");
 }
+// ⚠️ 以下两个 helper 当前**无调用方**（休眠，保留供复活）：momentumStr 服务已移除的
+// weeklyRsi 榜（2026-07-22），changeSub 服务已移除的涨跌幅榜（股票系 2026-07-24 /
+// 加密 2026-07-25）。都只依赖 axesSub，复活榜时直接可用。
 // 周线 RSI tab 的动能上下文（rsiPrev→rsiCurr 箭头），并入副行
 function momentumStr(v) {
     if (v.rsiPrev == null || v.rsiCurr == null) return "";
@@ -87,24 +92,10 @@ function changeSub(v, sf, volLabel, priceCtx) {
 // ⚠️ 2026-07-23：随 tab 显示名恢复直白命名（见 TAB_GROUPS 顶部注释），排序轴 label 同批
 // 恢复指标原名（2026-07-21 那轮「强度/资金强弱/买卖失衡/参与度/结构张开」的脱敏标签作废）。
 // **key 仍不动**（key 是行字段名，动了要连累后端 payload 和 getSortedItems）。
-const AXIS_RSI = { key: "rsi", label: "RSI", format: v => fmtRsiVal(v.rsi) };
-const AXIS_CVD = { key: "cvdStrength", label: "CVD强弱", format: v => fmtCvdVal(v.cvdStrength) };
-// **加密独有轴**：A股/美股 数据源没有主动买卖归边字段，物理上给不了，股票系 tab 不挂。
-const AXIS_TAKER = { key: "takerStrength", label: "订单流", format: v => fmtCvdVal(v.takerStrength) };
-const axisVol = label => ({ key: "volume", label, format: v => fmtVolVal(v) });
-const axisChg = label => ({ key: "value", label, format: v => formatPercent(v.value) });
-// 参与度/结构张开度（2026-07-20 深夜加，A股/美股/ETF 独有轴——「参与度」补成交活跃
-// 程度维度（「资金强弱」只量方向失衡），「结构张开」升序=结构刚成立的早期、降序=最
-// 舒展的阶段）。crypto 管道未挂：后端未产出这两个字段（挂上要动周/月线缓存 schema，
-// 站长没要求前不扩），crypto 行上没这两个 key。
-const AXIS_VOLRATIO = { key: "volRatio", label: "量比", format: v => fmtRatioVal(v.volRatio) };
-const AXIS_EMAGAP = { key: "emaGap", label: "EMA间距", format: v => fmtGapVal(v.emaGap) };
-// 距前高/周线强度（2026-07-22 深夜加，加密日线策略行家族独有——dailyEma921/weeklyStrategy）：
-// 距前高 = (收盘−近499日最高)/最高×100，恒 ≤0（0=正在创新高）——价格结构位置维度，
-// 降序=贴近前高的强势（上方无套牢盘），升序=深水区早期反转（空间大但阻力多）。
-// 周线强度 = 周线 RSI（仅 weeklyStrategy 行有，锚定大级别强弱；日线 RSI 看「谁启动最热」，
-// 周线 RSI 看「谁的大趋势最强」，两个维度都要给交易员）。
-const AXIS_HIGHDIST = { key: "highDist", label: "距前高", format: v => fmtGapVal(v.highDist) };
+// ⚠️ 2026-07-25：全站四个资产各只剩 1 个榜，**所有 live 轴都在下方「单策略榜专用轴」
+// 那一段**（带周期前缀的 AXIS_D_*）。这里只剩 AXIS_WRSI/AXIS_MRSI 两个仍在用；不带
+// 周期前缀的 AXIS_RSI/AXIS_CVD/AXIS_TAKER/AXIS_VOLRATIO/AXIS_EMAGAP/AXIS_HIGHDIST +
+// axisVol/axisChg 工厂随加密 15 个榜一并删除，复活多榜时从 git 捞。
 const AXIS_WRSI = { key: "weeklyRsi", label: "周线RSI", format: v => fmtRsiVal(v.weeklyRsi) };
 // 月线RSI（2026-07-24 加，挂三个股票系单策略榜）：那榜的行同时锚定三个周期，日线 RSI
 // 看"谁启动最热"、周线看"大趋势多强"、月线看"最大级别多强"，三个都给才对得上语义。
@@ -124,77 +115,38 @@ const AXIS_D_VOL = { key: "volume", label: "日成交额", format: v => fmtVolVa
 const AXIS_D_CVD = { key: "cvdStrength", label: "日CVD强弱", format: v => fmtCvdVal(v.cvdStrength) };
 const AXIS_D_VOLRATIO = { key: "volRatio", label: "日量比", format: v => fmtRatioVal(v.volRatio) };
 const AXIS_D_EMAGAP = { key: "emaGap", label: "日EMA间距", format: v => fmtGapVal(v.emaGap) };
-// 七轴：日线五轴（行里的值都是日线）+ 周线RSI + 月线RSI 两个大级别强度锚点。
-// 无「订单流」（tushare/Massive 日线都没有 taker 归边字段，数据源硬边界）；
-// 无「距前高」（compute_ashare_daily / compute_us_daily 未算该字段）。要加先加后端字段。
+// 加密多两个轴（**数据源差异，不是设计不同**）：
+//   日订单流 = 真实 taker 归边比（币安 K 线自带 k[9]）——tushare/Massive 的日线都没有
+//             归边字段，股票系那三个榜物理上挂不了这一轴。
+//   距前高   = (收盘 − 近 499 根日 K 最高) / 最高 × 100，恒 ≤0（0=正在创新高）；降序=
+//             贴近前高的强势（上方无套牢盘），升序=深水区（空间大但阻力多）。
+//             只有 get_daily_indicators 算，compute_{ashare,us}_daily 未算。
+//             ⚠️ **刻意不加「日」前缀**：它比的是近两年的高点、不是"今天的高点"，
+//             写成「日距前高」反而误导；且它没有周/月线同名变体，本就不存在需要
+//             消歧的歧义（其余几个轴都有周/月同名值，所以才必须自报周期）。
+const AXIS_D_TAKER = { key: "takerStrength", label: "日订单流", format: v => fmtCvdVal(v.takerStrength) };
+const AXIS_D_HIGHDIST = { key: "highDist", label: "距前高", format: v => fmtGapVal(v.highDist) };
+// 股票系（A股/美股/ETF）七轴：日线五轴（行里的值都是日线）+ 周线RSI + 月线RSI 两个
+// 大级别强度锚点。无 日订单流 / 距前高，理由见上。
 const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO, AXIS_D_EMAGAP, AXIS_WRSI, AXIS_MRSI];
-// （股票系旧轴工厂 sortsRsiFirst/sortsVolFirst/sortsChange 2026-07-24 删除：A股/美股/ETF
-//  各只剩 1 个榜、统一走下方 singleStrategySorts（**每个轴写明周期**）。复活多榜时从 git 捞。）
-// 加密变体：**独立定义、不再 spread 股票系 factory**（2026-07-20 起两族轴集分叉：股票系
-// 有 量比/EMA间距 无 订单流，加密反之——spread 会让加密 tab 多出两个恒 null 轴）
-const cryptoRsiFirst = volLabel => [AXIS_RSI, axisVol(volLabel), AXIS_CVD, AXIS_TAKER];
-const cryptoVolFirst = volLabel => [axisVol(volLabel), AXIS_RSI, AXIS_CVD, AXIS_TAKER];
-const cryptoChange = (chgLabel, volLabel) => [axisChg(chgLabel), AXIS_RSI, axisVol(volLabel), AXIS_CVD, AXIS_TAKER];
-
-// 免费行情榜专用轴（2026-07-22 引流层）。振幅=非负幅度、资金费率=永续独有带符号费率。
-const AXIS_AMPLITUDE = { key: "amplitude", label: "振幅", format: v => fmtAmpVal(v.amplitude) };
-const AXIS_FUNDING = { key: "fundingRate", label: "资金费率", format: v => v.fundingRate == null ? "—" : formatPercent(v.fundingRate) };
-// 成交额/振幅榜复用涨跌幅的富行（有 rsi/cvd/amplitude…），只换主轴顺序；资金费率榜行
-// 只有 费率+成交额 两字段，轴集单独定义。**这三个轴集现在只服务加密**——股票系
-// 2026-07-24 起没有免费行情榜了。
-const cryptoTurnoverSorts = [axisVol("成交额"), AXIS_AMPLITUDE, AXIS_RSI, AXIS_CVD, AXIS_TAKER];
-const cryptoAmpSorts = [AXIS_AMPLITUDE, axisVol("成交额"), AXIS_RSI, AXIS_CVD, AXIS_TAKER];
-const cryptoFundingSorts = [AXIS_FUNDING, axisVol("成交额")];
-// （stockTurnoverSorts/stockAmpSorts 2026-07-24 删除：股票系已无免费成交额/振幅榜。）
+// 加密九轴 = 上面那七轴 + 日订单流 + 距前高。2026-07-25「加密移除所有 TAB、只新增
+// 唯一一个」后，加密的榜与股票系**结构同形**（同为月×周×日共振、行里的值全是日线），
+// 轴集因此回到同一条线上，只按数据源差异多挂两轴——不再是 2026-07-20 到 07-24 之间
+// 那种「加密族 vs 股票族」两套独立工厂并存的局面。
+const cryptoSingleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_TAKER, AXIS_D_VOLRATIO, AXIS_D_EMAGAP, AXIS_D_HIGHDIST, AXIS_WRSI, AXIS_MRSI];
+// （已删的轴工厂，复活多榜时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
+//  stockTurnoverSorts/stockAmpSorts〔2026-07-24〕；加密 cryptoRsiFirst/cryptoVolFirst/
+//  cryptoChange/cryptoTurnoverSorts/cryptoAmpSorts/cryptoFundingSorts 与 AXIS_AMPLITUDE/
+//  AXIS_FUNDING/axisVol/axisChg 等不带周期前缀的轴〔2026-07-25，随加密 15 个榜一并移除〕。）
 
 const TABS_CONFIG = {
-    // === 加密 涨跌幅（五轴：涨幅 / RSI / 成交额 / CVD强弱 / 订单流）===
-    yesterdayChange: { sorts: cryptoChange("涨幅", "成交额"), subFormat: (v, sf) => changeSub(v, sf, "成交额", `${v.open} → ${v.close}`) },
-    weeklyChange: { sorts: cryptoChange("周涨幅", "周成交额"), subFormat: (v, sf) => changeSub(v, sf, "周成交额", `${v.open} → ${v.close}`) },
-    monthlyChange: { sorts: cryptoChange("月涨幅", "月成交额"), subFormat: (v, sf) => changeSub(v, sf, "月成交额", `${v.open} → ${v.close}`) },
-
-    // === 加密 免费行情榜（引流）：成交额（日/周/月）/ 振幅 / 资金费率 ===
-    // ⚠️ extra 补「涨幅」：这些榜的轴集里没有 axisChg（主轴是成交额/振幅），而行 payload
-    // 带 value=当日涨跌幅——不补 extra 它就既不在轴里也不在副行，整个榜看不到涨跌幅
-    // （2026-07-24 审计抓出；周/月成交额榜一直是补了的，只有日线这 8 个漏了）。
-    turnover: { sorts: cryptoTurnoverSorts, subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
-    // 周/月成交额榜复用周/月涨跌幅行（无 amplitude），排序轴不含振幅，走 cryptoVolFirst
-    weeklyTurnover: { sorts: cryptoVolFirst("周成交额"), subFormat: (v, sf) => axesSub(v, sf, "周成交额", v.value != null ? `周涨幅 ${formatPercent(v.value)}` : null) },
-    monthlyTurnover: { sorts: cryptoVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.value != null ? `月涨幅 ${formatPercent(v.value)}` : null) },
-    amplitude: { sorts: cryptoAmpSorts, subFormat: (v, sf) => axesSub(v, sf, "成交额", v.value != null ? `涨幅 ${formatPercent(v.value)}` : null) },
-    // 资金费率榜行字段稀疏（只有 费率+成交额），不走 axesSub（会硬显 强度/资金强弱 的 N/A）
-    fundingRate: { sorts: cryptoFundingSorts, subFormat: (v, sf) => sf === "fundingRate" ? `成交额 ${fmtVolVal(v)}` : (v.fundingRate == null ? "资金费率 —" : `资金费率 ${formatPercent(v.fundingRate)}`) },
-
-    // === 加密 月线策略（四轴：成交额 / RSI / CVD强弱 / 订单流，默认按成交额——月线 RSI 对新合约常缺）===
-    // （monthlySarBreakoutPrev「SAR翻多突破·上根」已于 2026-07-20 移除,后端字段保留,复活看 git）
-    monthlySarBreakout: { sorts: cryptoVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.changePercent != null ? `月涨幅 ${formatPercent(v.changePercent)}` : null) },
-    monthlyFourBull: { sorts: cryptoVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.changePercent != null ? `月涨幅 ${formatPercent(v.changePercent)}` : null) },
-    // 月线SAR × 周线SAR 双多头（2026-07-24 站长新增，月×周跨周期 SAR 共振）：行 payload 全部
-    // 月线数值（同 monthlySarBreakout/monthlyFourBull），四轴，默认按月成交额排序（月线 RSI 对新合约常缺）。
-    monthlyWeeklySar: { sorts: cryptoVolFirst("月成交额"), subFormat: (v, sf) => axesSub(v, sf, "月成交额", v.changePercent != null ? `月涨幅 ${formatPercent(v.changePercent)}` : null) },
-
-    // === 加密 周线策略 weeklyStrategy「周线趋势 × 日线启动」（2026-07-22 深夜站长定版，
-    // 取代 weeklyEma921 母集；weeklyRsi 周线强度池 同日早些时候已移除）===
-    // 逻辑：周线 SAR 多头（硬过滤）∩ 日线策略 dailyEma921 命中集。行 payload 全部日线
-    // 数值（入场扫描视角）+ weeklyRsi（周线强度轴）。
-    // 八轴 = 加密基础四轴 + 参与度/结构张开/距前高 + 周线强度（key 固定，调条件不改 key）。
-    weeklyStrategy: { sorts: [...cryptoRsiFirst("成交额"), AXIS_VOLRATIO, AXIS_EMAGAP, AXIS_HIGHDIST, AXIS_WRSI], subFormat: (v, sf) => axesSub(v, sf, "成交额") },
-    // 周线母集「周线启动」weeklyEmaExpansion（2026-07-23 站长新增，与 weeklyStrategy 同组）：
-    // 最新已收盘周线 (9/21 ∪ 9/26) 扩张之一即入榜，纯周线值、无跨周期交集（那是 weeklyStrategy）。
-    // 五轴 = 加密基础四轴 + 结构张开（emaGap＝周线 9/21 间距，行带 ema9/ema21，build 层算 emaGap）。
-    weeklyEmaExpansion: { sorts: [...cryptoRsiFirst("周成交额"), AXIS_EMAGAP], subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
-    // 周线策略「两线扩张＋阴线」weeklyEmaBearish（2026-07-24 站长复活保留组）：周线 9/21
-    // 严格扩张里再筛该周收阴线——强势趋势里的回调阴线（weeklyEmaExpansion 的子集视角，
-    // 找回踩不找启动）。同为纯周线值、按周线 RSI 排序，五轴与 weeklyEmaExpansion 一致
-    // （加密基础四轴 + 结构张开 emaGap＝周线 9/21 间距，此榜恒正）。
-    weeklyEmaBearish: { sorts: [...cryptoRsiFirst("周成交额"), AXIS_EMAGAP], subFormat: (v, sf) => axesSub(v, sf, "周成交额") },
-
-    // === 加密 日线策略（七轴：基础四轴 + 参与度/结构张开/距前高，2026-07-22 深夜扩充）===
-    // 行本就带 ema9/ema21（emaGap build 层现算），volRatio/highDist 由 get_daily_indicators
-    // 随行产出，全部零额外抓取；周/月榜不挂——那要动缓存 schema。故不改共享的
-    // cryptoRsiFirst（基础四轴工厂保持通用，行上没这些字段的榜用它不会多出恒 null 轴），
-    // 而是就地追加，只影响日线策略行家族（本榜 + 上方 weeklyStrategy）。
-    dailyEma921: { sorts: [...cryptoRsiFirst("成交额"), AXIS_VOLRATIO, AXIS_EMAGAP, AXIS_HIGHDIST], subFormat: (v, sf) => axesSub(v, sf, "成交额") },
+    // === 加密：唯一的单策略榜（2026-07-25 站长定版「加密这边移除所有TAB，
+    // 然后新增唯一一个TAB」）===
+    // 与三个股票系资产同形（月×周×日共振、行里的值全是日线），但**条件是 3 个不是 5 个**
+    // ——没有「周线 EMA9/21 扩张」也没有「日线 CVD走强」，另有股票系没有的**新币回退**
+    // （无月线 SAR 时只看周线 SAR）。所以显示名不同、也不能套 singleStrategyGroup 工厂。
+    // 九轴 = 股票系七轴 + 日订单流 + 距前高（数据源差异，见 cryptoSingleStrategySorts）。
+    monthlyWeeklyDaily: { sorts: cryptoSingleStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === A股 / 美股 / ETF：各自唯一的单策略榜（2026-07-24 站长两步定版）===
     // 三者口径与轴集完全一致，共用 singleStrategySorts（见上方定义：日线五轴 +
@@ -247,59 +199,16 @@ const TAB_GROUPS = [
     // JSON + 缓存 schema——key 与显示名是两回事，历史上因此定过"key 固定、只改显示名"
     // 的规矩（*MonthlyStrategy / weeklyStrategy 先例），继续有效。
     {
-        // 行情组＝免费引流层（2026-07-22）：涨跌幅 3（全量）+ 成交额/振幅（TOP200）+
-        // 资金费率（永续独有）。都是通用公开行情，不泄露任何策略逻辑，整榜免费。
-        label: "行情", asset: "加密",
+        // 加密：唯一的榜（2026-07-25 站长定版）。组名叫「策略」——只有一个组时再标
+        // 周期是废话（周期已由 tf 角标表达），与股票系 singleStrategyGroup 同款处理。
+        // ⚠️ **刻意不套 singleStrategyGroup 工厂**：那个工厂的 name/desc 写死的是股票系
+        // 的 5 个条件（多「周线 EMA9/21 扩张」和「日线 CVD走强」），而加密是 3 个条件
+        // + 新币回退。硬套会让页面上的规则说明与后端实际筛选不符——工厂的价值是"三个
+        // 口径相同的资产不可能漂移"，加密口径本就不同，套进去反而制造错误的一致性。
+        label: "加密策略", asset: "加密", tf: "月线",
         tabs: [
-            { key: "yesterdayChange", name: "昨天", tf: "日线", full: "涨跌幅",
-              desc: "最新一根已收盘日 K 的涨跌幅；全部 USDT 永续合约，无任何筛选" },
-            { key: "weeklyChange", name: "周线", tf: "周线", full: "涨跌幅",
-              desc: "最新一根已收盘周 K 的涨跌幅；全部 USDT 永续合约，无任何筛选" },
-            { key: "monthlyChange", name: "月线", tf: "月线", full: "涨跌幅",
-              desc: "最新一根已收盘月 K 的涨跌幅；全部 USDT 永续合约，无任何筛选" },
-            { key: "turnover", name: "成交额", tf: "日线", full: "成交额榜",
-              desc: "最新交易日成交额最大的标的（最活跃 TOP200）；全部 USDT 永续合约" },
-            { key: "weeklyTurnover", name: "周成交额", tf: "周线", full: "成交额榜",
-              desc: "最新已收盘周 K 成交额最大的标的（TOP200）；全部 USDT 永续合约" },
-            { key: "monthlyTurnover", name: "月成交额", tf: "月线", full: "成交额榜",
-              desc: "最新已收盘月 K 成交额最大的标的（TOP200）；全部 USDT 永续合约" },
-            { key: "amplitude", name: "振幅", tf: "日线", full: "振幅榜",
-              desc: "最新交易日振幅（日内高低波动幅度）最大的标的（TOP200）" },
-            { key: "fundingRate", name: "资金费率", tf: "日线", full: "资金费率榜",
-              desc: "当前资金费率排序：正值多头付费、负值空头付费，反映永续市场多空情绪" },
-        ],
-    },
-    {
-        // 2026-07-22 站长把日线策略收敛成单一母集：短期结构刚转强、上行趋势初步成立；
-        // 同日又要求资金必须同步跟上（CVD走强）才入榜。曾短暂加过"周线大级别趋势也要
-        // 同向"的跨周期门槛，当天晚些时候站长要求撤销（见 fetch_data.py daily_ema921
-        // 注释）——desc 里"多周期共振"那句是那层门槛的措辞，跟着一起去掉，别再写回去。
-        label: "日线策略", asset: "加密", tf: "日线",
-        tabs: [
-            { key: "dailyEma921", name: "两线扩张＋CVD走强",
-              desc: "短期结构刚刚转强、资金同步流入——早期趋势启动信号。" },
-        ],
-    },
-    {
-        label: "周线策略", asset: "加密", tf: "周线",
-        tabs: [
-            { key: "weeklyStrategy", name: "周线SAR多头 × 日线两线扩张",
-              desc: "周线大级别方向已确认向上，且日线端刚出现启动信号——顺大势、做小势的入场扫描视角。" },
-            { key: "weeklyEmaExpansion", name: "周线两线扩张",
-              desc: "周线级别趋势结构刚刚张开、上行动能初步确立——周线视角的早期启动信号。" },
-            { key: "weeklyEmaBearish", name: "两线扩张＋阴线",
-              desc: "周线两线扩张（多头结构）中收出的回调阴线——强势趋势里的短线回踩，找二次上车点。" },
-        ],
-    },
-    {
-        label: "月线策略", asset: "加密", tf: "月线",
-        tabs: [
-            { key: "monthlySarBreakout", name: "SAR翻多＋突破",
-              desc: "月线级别方向发生反转、且价格已确认突破的标的——级别最大、信号最少。" },
-            { key: "monthlyFourBull", name: "四连阳",
-              desc: "月线级别连续推进的标的；纯价格行为判断，不带结构条件。" },
-            { key: "monthlyWeeklySar", name: "月线SAR多头 × 周线SAR多头",
-              desc: "月线与周线的 SAR 同时翻多——两个大级别趋势同向共振的标的，每月 1 号新月开盘后刷新。" },
+            { key: "monthlyWeeklyDaily", name: "月线SAR × 周线SAR × 日线两线扩张",
+              desc: "月线 SAR 多头（最大级别方向已确立）× 周线 SAR 多头（中级别趋势同向）× 日线 EMA9/21 张开（短期刚启动）——三个周期同时点头才入榜。上市不足 3 个月、还算不出月线 SAR 的新合约，只要周线 SAR 多头即可入榜。范围是全部 USDT 永续合约，表格显示的是日线数值。" },
         ],
     },
     // === A股 / 美股 / ETF（2026-07-24 站长两步定版：三者各只保留 1 个榜，口径完全一致）===
@@ -321,15 +230,17 @@ for (const g of TAB_GROUPS) {
 }
 
 // === 付费墙配置（2026-07-21 接 OxaPay 重新启用）===
-// 免费橱窗留 TEASER_TAB（日线策略母集「趋势启动」）里 RSI 最高的 1 行，其余全部榜
-// 锁定后 data[tab] 是 undefined（公开 JSON 根本不含这个 key）——不是"给个空数组"那种锁法。
+// 免费橱窗留 TEASER_TAB（现为加密唯一的榜 monthlyWeeklyDaily）里 日线 RSI 最高的 1 行，
+// 其余全部榜锁定后 data[tab] 是 undefined（公开 JSON 根本不含这个 key）——不是"给个
+// 空数组"那种锁法。2026-07-25 起全站 4 个榜全部付费，这 1 行是唯一的榜单类免费内容。
 // 总开关：必须跟后端 fetch_data.py 的 PAYWALL_ENABLED 保持一致，留作紧急回滚
 // 开关（两处一起改回 false，不用逐处回退 diff）。
 const PAYWALL_ENABLED = true;
 const WORKER_API = "https://bishuju-api.fanshenpan.workers.dev";
-// ⚠️ 必须与后端 fetch_data.py 的 TEASER_TAB 一致。2026-07-22 从 dailyCvd 改指母集
-// dailyEma921（日线策略收敛成单一母集后 dailyCvd 已移除）。
-const TEASER_TAB = "dailyEma921";
+// ⚠️ 必须与后端 fetch_data.py 的 TEASER_TAB 一致。历经 dailyCvd → dailyEma921
+// （2026-07-22 日线策略收敛）→ monthlyWeeklyDaily（2026-07-25 加密收敛成单一榜）。
+// 全站 4 个榜全付费后，这 1 行橱窗 + marketOverview 是仅存的两个免费面。
+const TEASER_TAB = "monthlyWeeklyDaily";
 const LS_LICENSE = "bishuju_license";
 const PLAN_LABEL = { monthly: "月付", quarterly: "季付", yearly: "年付" };
 // ⚠️ 仅供页面标价显示——实际扣款金额以 Worker 的同名常量为准，两处必须一致，
@@ -356,7 +267,7 @@ const safeStore = {
 
 let data = null;
 let lastRenderKey = null; // loadData 上次重渲染时的 updateTime，用于跳过无变化的重建
-let currentTab = "yesterdayChange";
+let currentTab = "monthlyWeeklyDaily";
 let sortAsc = false; // false=降序, true=升序
 let sortField = "value"; // 当前排序字段；默认 value，带 sorts 的 tab 可切 RSI/成交额
 let searchQuery = ""; // 表格搜索（代码/名称子串），切 tab 时清空
@@ -391,21 +302,22 @@ function tabCount(key) {
 }
 
 // 涨跌幅榜：无筛选、全量入榜、值是涨跌幅，走红绿配色（getColorClass）。
-// 2026-07-24 起只剩加密三个：股票系已无涨跌幅榜（各只保留 1 个策略榜）。
-const CHANGE_PCT_TABS = new Set(["yesterdayChange", "weeklyChange", "monthlyChange"]);
+// **2026-07-25 起为空集**：四个资产各只剩 1 个策略榜，全站已无涨跌幅榜（加密那三个
+// 是最后的成员）。空集下 getColorClass 恒返回中性色、isStrategyTab 恒为 true——都是
+// 正确行为，无需特判。复活涨跌幅榜时把 key 加回来。
+const CHANGE_PCT_TABS = new Set([]);
 
 // 免费引流层（2026-07-22 站长定：通用行情开放引流，策略筛选付费）。整榜免费的通用
 // 行情榜：涨跌幅 + 成交额 + 振幅 + 资金费率。**必须跟后端 fetch_data.py 的同名
 // FREE_TABS 一致**——后端据此把这些榜整榜写进公开文件，前端据此判断"不锁"；漏一处
 // 会让已免费的榜被前端当付费锁上、或后端没写进公开文件导致空榜。CHANGE_PCT_TABS
 // ⊂ FREE_TABS（涨跌幅走红绿，成交额/振幅/资金费率走中性色——是量级/带符号数不是涨跌方向）。
-const FREE_TABS = new Set([
-    ...CHANGE_PCT_TABS,
-    "turnover", "weeklyTurnover", "monthlyTurnover", "amplitude", "fundingRate",
-]);
-// ⚠️ **只有加密有免费榜**（共 8 个）：A股/美股/ETF 各只保留 1 个纯付费策略榜，
-// 原本各 7 个免费行情榜已随 2026-07-24 的两次收敛移除。**这里没有 us/etf/ashare
-// 条目不是漏写**，后端 fetch_data.py 的 FREE_TABS 也是同样的 8 条，两边必须一致。
+const FREE_TABS = new Set([]);
+// ⚠️⚠️ **2026-07-25 起为空集：全站一个免费整榜都没有了，这不是漏写。** A股/美股/ETF
+// 于 2026-07-24 各收敛成 1 个纯付费策略榜（各自 7 个免费行情榜一并移除），加密于
+// 2026-07-25 移除全部 15 个榜（含最后 8 个免费行情榜：涨跌幅 日周月 + 成交额 日周月 +
+// 振幅 + 资金费率）。免费引流面现在只剩「橱窗 1 行（TEASER_TAB）+ 市场概览全局条」。
+// 后端 fetch_data.py 的同名 FREE_TABS 同样是空集，两边必须一致。
 // 策略榜 = 非免费榜（有筛选条件，"0 命中"是正常信号而非故障，值是 RSI/成交额等指标）。
 // 空状态文案、脉搏策略计数、导航命中徽标都据此——免费行情榜不参与这些语义。
 const isStrategyTab = tab => !FREE_TABS.has(tab);
@@ -523,7 +435,7 @@ const ASSET_KEY = { "加密": "crypto", "A股": "ashare", "美股": "us", "ETF":
 const ASSET_CN = { crypto: "加密", ashare: "A股", us: "美股", etf: "ETF" };           // data-asset → TAB_GROUPS.asset
 let currentAsset = "crypto";                                // 当前资产（由 tab 派生/资产切换驱动）
 // 各资产记住上次看的榜。A股 只有一个榜，"上次看的"恒等于它。
-const lastTabByAsset = { crypto: "yesterdayChange", ashare: "ashareMonthlyWeeklyDaily", us: "usMonthlyWeeklyDaily", etf: "etfMonthlyWeeklyDaily" };
+const lastTabByAsset = { crypto: "monthlyWeeklyDaily", ashare: "ashareMonthlyWeeklyDaily", us: "usMonthlyWeeklyDaily", etf: "etfMonthlyWeeklyDaily" };
 
 function assetOfTab(tab) {
     const m = TAB_META[tab];
@@ -574,13 +486,14 @@ function renderNav() {
     if (foot && data) {
         const assetCn = ASSET_CN[currentAsset];
         const n = TAB_GROUPS.filter(g => g.asset === assetCn).reduce((s, g) => s + g.tabs.length, 0);
-        // 三个股票系资产都没有全量涨跌幅榜可以数了（唯一的榜是筛选后的策略榜），故写
+        // 四个资产都没有全量涨跌幅榜可以数了（唯一的榜是筛选后的策略榜），故一律写
         // **标的范围**而不是数量——写 tabCount(唯一的榜) 会变成"监控 N 只"却是命中数，
-        // 是误导。只有加密还有全量榜（yesterdayChange 免费全量），照旧数真实合约数。
+        // 是误导。加密那条 2026-07-25 起也走这条路（此前数 yesterdayChange 的真实合约数，
+        // 那个免费全量榜已随「移除所有 TAB」下线）。
         const uni = currentAsset === "ashare" ? "沪深 A 股全市场"
             : currentAsset === "us" ? "美股全市场普通股与 ADR"
             : currentAsset === "etf" ? "约 42 只精选大类资产 ETF"
-            : `${tabCount("yesterdayChange") || 0} 个合约`;
+            : "USDT 永续合约全市场";
         foot.innerHTML = `<b>${n}</b> 个榜单 · 监控 ${uni}`;
     }
 }
@@ -921,7 +834,7 @@ function switchAsset(assetK) {
     // 二分写法会把「ETF」误跳去加密榜（2026-07-20 审计补的防御）
     const fallback = assetK === "ashare" ? "ashareMonthlyWeeklyDaily"
         : assetK === "us" ? "usMonthlyWeeklyDaily"
-        : assetK === "etf" ? "etfMonthlyWeeklyDaily" : "yesterdayChange";
+        : assetK === "etf" ? "etfMonthlyWeeklyDaily" : "monthlyWeeklyDaily";
     switchTab(lastTabByAsset[assetK] || fallback);
 }
 
@@ -1154,22 +1067,10 @@ function lockedPulseTile(asset, totalTabs) {
     return [pulseTile("策略命中" + " " + LOCK_SVG, `<span class="is-gold">${hits}</span><span class="pulse__suffix is-muted">次 · ${totalTabs} 榜</span>`, "解锁查看完整榜单与领涨标的")];
 }
 
-function cryptoPulseTiles() {
-    const yc = data.yesterdayChange || [];
-    if (!yc.length) return lockedPulseTile("加密", CRYPTO_STRATEGY_TABS);
-    const topD = yc.reduce((a, b) => (b.value > a.value ? b : a), yc[0]);
-    const wc = data.weeklyChange || [];
-    const topW = wc.length ? wc.reduce((a, b) => (b.value > a.value ? b : a), wc[0]) : null;
-    const hits = strategyHits("加密");
-    return [
-        // ⚠️ 副标题不写数据源名（2026-07-22 站长要求前端一切数据来源署名脱敏）——这里
-        // 曾漏改成「币安 USDT 永续全量」，是加密视图首屏常驻可见的一处，2026-07-24 审计抓出。
-        pulseTile("监控合约", `${yc.length}<span class="pulse__suffix is-muted">个</span>`, "USDT 永续合约全量"),
-        pulseTile("昨日领涨", `${stripUSDT(topD.symbol)}<span class="pulse__suffix ${topD.value >= 0 ? "is-up" : "is-down"}">${topD.value >= 0 ? "+" : ""}${topD.value.toFixed(1)}%</span>`, "日 K 收盘涨跌幅第一"),
-        topW ? pulseTile("周线领涨", `${stripUSDT(topW.symbol)}<span class="pulse__suffix ${topW.value >= 0 ? "is-up" : "is-down"}">${topW.value >= 0 ? "+" : ""}${topW.value.toFixed(1)}%</span>`, "最新已收盘周 K") : "",
-        hits != null ? pulseTile("策略命中", `<span class="is-gold">${hits}</span><span class="pulse__suffix is-muted">次 · ${CRYPTO_STRATEGY_TABS} 榜</span>`, "加密策略筛选当前命中") : "",
-    ].filter(Boolean);
-}
+// 加密脉搏（2026-07-25 起与股票系同款）：加密也没有全量涨跌幅榜了，"监控 N 个 /
+// 昨日领涨 / 周线领涨"三块磁贴的数据源（yesterdayChange/weeklyChange）随「移除所有
+// TAB」一起下线，只能退到 lockedPulseTile。旧的四格实现见 git。
+function cryptoPulseTiles() { return lockedPulseTile("加密", CRYPTO_STRATEGY_TABS); }
 
 // 三个股票系资产（A股/美股/ETF）的脉搏：**它们都没有全量涨跌幅榜了**——2026-07-24
 // 起各自只剩一个筛选后的策略榜，给不了"监控 N 只 / 今日领涨 / 涨跌家数"那种全市场

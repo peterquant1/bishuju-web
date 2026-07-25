@@ -124,15 +124,17 @@ const AXIS_D_TAKER = { key: "takerStrength", label: "日订单流", format: v =>
 // 股票系（A股/美股/ETF）七轴：日线五轴（行里的值都是日线）+ 周线RSI + 月线RSI 两个
 // 大级别强度锚点。
 const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO, AXIS_D_EMAGAP, AXIS_WRSI, AXIS_MRSI];
-// 加密 dailyEmaExpansion **四轴，站长逐字点名**：「支持成交额，RSI，CVD，订单流。四种
-// 升降序。」——顺序也照他写的（**首轴即默认排序**，必须与后端 `value` 字段取的量一致，
-// 否则首屏值列显示的是另一个轴的数）。
-// ⚠️ **别顺手补 日量比 / 日EMA间距 / 距前高**：后端刻意没给这个榜的行发那三个字段
+// 加密两个榜**共用**的四轴，**站长两次逐字点名同一组**：「支持成交额，RSI，CVD，订单流。
+// 四种升降序。」——顺序也照他写的（**首轴即默认排序**，必须与后端 `value` 取的量一致，
+// 否则首屏值列显示的是另一个轴的数）。两个榜的行 payload 逐字同构，故共用一个常量。
+// ⚠️ **别顺手补 日量比 / 日EMA间距 / 距前高**：后端刻意没给这两个榜的行发那三个字段
 // （见 build_rankings），补了轴就是永远全 null 的幽灵轴。要加轴得后端先补字段。
-// ⚠️ 轴标签沿用带「日」前缀的那套：本榜虽是纯日线（tf 角标已写「日线」，理论上不写
-// 前缀也不歧义），但复用现成常量比再造一套「只差标签」的近亲常量安全——本项目多次
-// 栽在"两个几乎一样的常量选错一个、不报错只能肉眼发现"上。
-const cryptoDailyExpansionSorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER];
+// ⚠️ 轴标签带「日」前缀对 `monthlyWeeklyDaily` 是**必要的**：它的筛选条件横跨月/周/日
+// 三个周期而**行里的值全是日线的**，不写周期会被当成月线成交额（2026-07-24 站长就为
+// 股票系那张同形的表问过同一个问题）。`dailyEmaExpansion` 是纯日线、本可省前缀，但
+// 共用一个常量比再造一套「只差标签」的近亲常量安全——本项目多次栽在"两个几乎一样的
+// 常量选错一个、不报错只能肉眼发现"上。
+const cryptoFourAxisSorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER];
 // （已删的轴与工厂，复活时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
 //  stockTurnoverSorts/stockAmpSorts〔2026-07-24〕；加密 cryptoRsiFirst/cryptoVolFirst/
 //  cryptoChange/cryptoTurnoverSorts/cryptoAmpSorts/cryptoFundingSorts 与 AXIS_AMPLITUDE/
@@ -144,10 +146,13 @@ const cryptoDailyExpansionSorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TA
 //  布尔 SAR→不设末轴），别为了"看起来统一"合并成一个常量。）
 
 const TABS_CONFIG = {
-    // === 加密：唯一的榜（2026-07-25 晚站长先「移除加密所有TAB」清空、随后新增本榜）===
-    // **全站条件最少的一个榜：只有一条**——最新已收盘日 K 的 EMA9/21 扩张。四轴，站长
-    // 逐字点名（成交额/RSI/CVD/订单流），默认成交额降序，见 cryptoDailyExpansionSorts。
-    dailyEmaExpansion: { sorts: cryptoDailyExpansionSorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    // === 加密：两个榜（2026-07-25 晚站长先「移除加密所有TAB」清空、随后逐个新增）===
+    // 轴集**完全相同**（成交额/RSI/CVD/订单流，站长两次点名同一组，默认成交额降序），
+    // 行 payload 也逐字同构——**差别只在筛选条件**，见 cryptoFourAxisSorts。
+    // ① 月×周×日 三个 SAR 全多头的三级共振（3 个条件，**不含新币回退**，见后端注释）。
+    monthlyWeeklyDaily: { sorts: cryptoFourAxisSorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    // ② 全站条件最少的一个榜：**只有一条**——最新已收盘日 K 的 EMA9/21 扩张。
+    dailyEmaExpansion: { sorts: cryptoFourAxisSorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === A股 / 美股 / ETF：各自唯一的单策略榜（2026-07-24 站长两步定版）===
     // 三者口径与轴集完全一致，共用 singleStrategySorts（见上方定义：日线五轴 +
@@ -200,15 +205,19 @@ const TAB_GROUPS = [
     // JSON + 缓存 schema——key 与显示名是两回事，历史上因此定过"key 固定、只改显示名"
     // 的规矩（*MonthlyStrategy / weeklyStrategy 先例），继续有效。
     {
-        // 加密：唯一的榜（2026-07-25 晚站长先「移除加密所有TAB」把当天定版的三个榜全部
-        // 清空、随后新增本榜；那三个榜的显示名/desc/专属轴见 git 历史）。组名叫「策略」
-        // ——只有一个组时再标周期是废话（周期已由 tf 角标表达），同股票系工厂的处理。
+        // 加密：两个榜（2026-07-25 晚站长先「移除加密所有TAB」把当天定版的三个榜全部清空、
+        // 随后逐个新增；被清掉那三个的显示名/desc/专属轴见 git 历史）。
         // ⚠️ **刻意不套 singleStrategyGroup 工厂**：那个工厂的 name/desc 写死的是股票系
-        // 的 5 个条件（月线SAR + 周线SAR + 周线扩张 + 日线扩张 + CVD），而本榜**只有
-        // 一个条件**。硬套会让页面上的规则说明与后端实际筛选严重不符。
-        label: "加密策略", asset: "加密", tf: "日线",
+        // 的 5 个条件（月线SAR + 周线SAR + 周线扩张 + 日线扩张 + CVD），与这两个榜都不
+        // 一样。硬套会让页面上的规则说明与后端实际筛选严重不符。
+        // 组 tf 取第一个 tab 的周期（月线），日线那个 tab 自己覆盖。**排序是先严后宽**
+        // ——三级共振在上、单条件扫描在下，与被清掉那版加密组的排法一致。
+        label: "加密策略", asset: "加密", tf: "月线",
         tabs: [
-            { key: "dailyEmaExpansion", name: "日线两线扩张",
+            { key: "monthlyWeeklyDaily", name: "月线SAR × 周线SAR × 日线SAR",
+              desc: "月线、周线、日线三个周期的 SAR 全部多头——最大级别方向、中级别趋势、短期节奏同时向上，纯趋势共振的一档，不看 EMA 也不看资金。上市不足 3 个月、还算不出月线 SAR 的新合约不入榜。范围是全部 USDT 永续合约，表格显示的是日线数值。" },
+            // tf 覆盖成日线：本榜只看日线一个周期，挂着组默认的「月线」角标会误导。
+            { key: "dailyEmaExpansion", name: "日线两线扩张", tf: "日线",
               desc: "最新已收盘日线的 EMA9 在 EMA21 上方、且两线间距比前一天更大——趋势刚开始加速的那一刻，全站条件最少、样本最宽的一个榜，用成交额/RSI/CVD/订单流四个维度自己排。范围是全部 USDT 永续合约。" },
         ],
     },
@@ -449,8 +458,9 @@ const ASSET_CN = { crypto: "加密", ashare: "A股", us: "美股", etf: "ETF" };
 // 这里、以及前后端两处 TEASER_TAB —— 只改落地页不改橱窗，新访客会落在一个全锁的
 // 空榜上，转化位直接消失。
 let currentAsset = "us";                                // 当前资产（由 tab 派生/资产切换驱动）
-// 各资产记住上次看的榜。四者都只有一个榜，"上次看的"恒等于它。
-const lastTabByAsset = { crypto: "dailyEmaExpansion", ashare: "ashareMonthlyWeeklyDaily", us: "usMonthlyWeeklyDaily", etf: "etfMonthlyWeeklyDaily" };
+// 各资产记住上次看的榜；这里是"还没看过时"的初值 = 该资产 TAB_GROUPS 里的第一个榜。
+// 三个股票系资产各只有一个榜，"上次看的"恒等于它；加密有两个，初值取三级共振那个。
+const lastTabByAsset = { crypto: "monthlyWeeklyDaily", ashare: "ashareMonthlyWeeklyDaily", us: "usMonthlyWeeklyDaily", etf: "etfMonthlyWeeklyDaily" };
 
 function assetOfTab(tab) {
     const m = TAB_META[tab];
@@ -858,7 +868,7 @@ function switchAsset(assetK) {
     // 二分写法会把「ETF」误跳去别的资产（2026-07-20 审计补的防御）
     const fallback = assetK === "ashare" ? "ashareMonthlyWeeklyDaily"
         : assetK === "etf" ? "etfMonthlyWeeklyDaily"
-        : assetK === "crypto" ? "dailyEmaExpansion" : "usMonthlyWeeklyDaily";
+        : assetK === "crypto" ? "monthlyWeeklyDaily" : "usMonthlyWeeklyDaily";
     switchTab(lastTabByAsset[assetK] || fallback);
 }
 

@@ -25,6 +25,13 @@ function fmtRatioVal(x) { return x == null ? "—" : x.toFixed(2); }
 function fmtGapVal(x) { return x == null ? "—" : (x >= 0 ? "+" : "") + x.toFixed(2) + "%"; }
 // 振幅（免费"振幅榜"）：永远非负的百分比幅度，中性显示不带符号。null 显示「—」沉底。
 function fmtAmpVal(x) { return x == null ? "—" : x.toFixed(2) + "%"; }
+// ADX / +DI / −DI（2026-07-25 站长要求引入的方向性运动系统）：三者都是 0-100 的无符号
+// 指数，**不是百分比也不是倍数**，故不带 % / ×，只保留两位小数（同 TV 显示口径）。
+// null（不足 28 根已收盘 K 的次新标的）显示「—」、排序沉底。
+// ⚠️ DI差（= +DI − −DI）是**带符号**的，走既有的 fmtCvdVal（那个函数本身就是"带符号数字
+// 两位小数"的通用格式化，与 CVD强弱 共用不是巧合；刻意不另造一个同形近亲函数——本项目
+// 多次栽在"两个几乎一样的东西选错一个、不报错只能肉眼发现"上）。
+function fmtDmiVal(x) { return x == null ? "—" : x.toFixed(2); }
 
 // 副行：显示当前排序轴**之外**的其余轴摘要（值列已展示当前轴，副行是快览、不承诺穷尽）。
 // volLabel 区分 成交额/周成交额/月成交额；extra 是可选的价格/回顾上下文（涨跌幅/信号根等）。
@@ -68,6 +75,16 @@ function axesSub(item, sf, volLabel, extra) {
     if ("volRatio" in item && sf !== "volRatio") seg.push(`${axisLabelFor("volRatio", "量比")} ${fmtRatioVal(item.volRatio)}`);
     if ("emaGap" in item && sf !== "emaGap") seg.push(`${axisLabelFor("emaGap", "EMA间距")} ${fmtGapVal(item.emaGap)}`);
     if ("highDist" in item && sf !== "highDist") seg.push(`${axisLabelFor("highDist", "距前高")} ${fmtGapVal(item.highDist)}`);
+    // ADX/DI 四轴（2026-07-25 站长新增，四个资产的行都带）：数据驱动判断，同上。
+    // ⚠️ 它们**排在这里 = 排在 SUB_AXES_MAX(4) 的截断线之后**，故当前默认不出现在副行里，
+    // 只在被选为排序轴时进值列展示（被裁掉的轴不丢功能，见 SUB_AXES_MAX 注释）。这是
+    // 刻意的：站长这次要的是"升降序里引入 ADX/DI"，不是重排副行——把 ADX 插到
+    // cvdStrength 之后确实能让它常驻副行，但代价是挤掉加密的「日订单流」/ 股票系的
+    // 「周线RSI」（副行只有 4 段额度）。要换成那种排法，把下面 adx 那行剪到 line 55 之后即可。
+    if ("adx" in item && sf !== "adx") seg.push(`${axisLabelFor("adx", "ADX")} ${fmtDmiVal(item.adx)}`);
+    if ("diPlus" in item && sf !== "diPlus") seg.push(`${axisLabelFor("diPlus", "+DI")} ${fmtDmiVal(item.diPlus)}`);
+    if ("diMinus" in item && sf !== "diMinus") seg.push(`${axisLabelFor("diMinus", "−DI")} ${fmtDmiVal(item.diMinus)}`);
+    if ("diSpread" in item && sf !== "diSpread") seg.push(`${axisLabelFor("diSpread", "DI差")} ${fmtCvdVal(item.diSpread)}`);
     // 振幅 只有免费行情榜（涨跌幅/成交额/振幅）的行有——策略榜行没这个 key，数据驱动跳过。
     if ("amplitude" in item && sf !== "amplitude") seg.push(`振幅 ${fmtAmpVal(item.amplitude)}`);
     const shown = seg.slice(0, SUB_AXES_MAX);
@@ -121,20 +138,52 @@ const AXIS_D_EMAGAP = { key: "emaGap", label: "日EMA间距", format: v => fmtGa
 // tushare / Massive 的日线都没有归边字段，股票系那三个榜物理上挂不了这一轴。
 // 与 CVD强弱（按 K 线形态推断的代理）背离时是 Wyckoff effort-vs-result 信号。
 const AXIS_D_TAKER = { key: "takerStrength", label: "日订单流", format: v => fmtCvdVal(v.takerStrength) };
-// 股票系（A股/美股/ETF）七轴：日线五轴（行里的值都是日线）+ 周线RSI + 月线RSI 两个
-// 大级别强度锚点。
-const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO, AXIS_D_EMAGAP, AXIS_WRSI, AXIS_MRSI];
-// 加密两个榜**共用**的四轴，**站长两次逐字点名同一组**：「支持成交额，RSI，CVD，订单流。
-// 四种升降序。」——顺序也照他写的（**首轴即默认排序**，必须与后端 `value` 取的量一致，
-// 否则首屏值列显示的是另一个轴的数）。两个榜的行 payload 逐字同构，故共用一个常量。
+
+// === 方向性运动系统 ADX / DMI（2026-07-25 站长：「在升降序里面引入 ADX 以及 DI 逻辑」）===
+// 四个资产**同批加同一组四根轴**（后端 calc_adx_dmi 一份实现、四条管道共用，对齐
+// TradingView `ta.dmi(14, 14)`）。**纯排序轴、不参与任何筛选** —— 各榜命中集合与加之前
+// 完全一致，这次改动只是多了几种看同一批标的的方式。
+// ⚠️ 四根轴各自回答不同问题，**别只留一根**：
+//   · 日ADX  —— 趋势"有多强"，**不含方向**（DX 只取 |+DI−−DI| 的绝对值）。ADX 45 的
+//     暴跌和 ADX 45 的主升浪同分，所以它必须配 DI 一起看。经验档：<20 震荡 /
+//     20-25 萌芽 / >25 趋势确立 / >40 强趋势（也可能是过热末段）。**降序=最有趋势的，
+//     升序=最横盘的**（升序那头对"等突破"的埋伏思路才是有用的一端，不是废数据）。
+//   · 日+DI / 日−DI —— 多方 / 空方各自的方向压力（0-100）。两根都给才能看出
+//     "ADX 高"是多头在推还是空头在砸。
+//   · 日DI差 = +DI − −DI —— 带符号的**净方向强度**，单根即可排多空，是四根里最直接
+//     可排序的一根（正=多方占优，负=空方占优）。
+// 标签同样带「日」前缀：本站四个榜的行里装的全是日线值（榜的筛选条件却横跨月/周/日），
+// 这是 2026-07-24 站长问过一次的歧义，新轴一并遵守。
+const AXIS_D_ADX = { key: "adx", label: "日ADX", format: v => fmtDmiVal(v.adx) };
+const AXIS_D_DIPLUS = { key: "diPlus", label: "日+DI", format: v => fmtDmiVal(v.diPlus) };
+const AXIS_D_DIMINUS = { key: "diMinus", label: "日−DI", format: v => fmtDmiVal(v.diMinus) };
+const AXIS_D_DISPREAD = { key: "diSpread", label: "日DI差", format: v => fmtCvdVal(v.diSpread) };
+// 四根轴的固定顺序（先强度、再多空两侧、最后净差），两个资产族共用同一个数组常量——
+// 避免"两份几乎一样的列表漂移"这个本项目的老坑。
+const dmiSorts = [AXIS_D_ADX, AXIS_D_DIPLUS, AXIS_D_DIMINUS, AXIS_D_DISPREAD];
+
+// 股票系（A股/美股/ETF）**十一轴**：日线五轴（行里的值都是日线）+ ADX/DI 四轴（同为日线，
+// 紧跟日线块，保持"日线 → 周线 → 月线"的周期递进）+ 周线RSI + 月线RSI 两个大级别强度锚点。
+// **首轴仍是 日线RSI**（= 默认排序，必须与后端 `value` 取的量一致，别把新轴插到最前）。
+const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO, AXIS_D_EMAGAP,
+                             ...dmiSorts, AXIS_WRSI, AXIS_MRSI];
+// 加密两个榜**共用**的轴集。前四根是**站长两次逐字点名的同一组**：「支持成交额，RSI，
+// CVD，订单流。四种升降序。」——顺序也照他写的（**首轴即默认排序**，必须与后端 `value`
+// 取的量一致，否则首屏值列显示的是另一个轴的数）。两个榜的行 payload 逐字同构，故共用
+// 一个常量。
 // ⚠️ **别顺手补 日量比 / 日EMA间距 / 距前高**：后端刻意没给这两个榜的行发那三个字段
-// （见 build_rankings），补了轴就是永远全 null 的幽灵轴。要加轴得后端先补字段。
+// （见 build_rankings），补了轴就是永远全 null 的幽灵轴。要加轴得后端先补字段——
+// 2026-07-25 加 ADX/DI 那四根就是**先补的后端字段**（build_rankings 的两个行 payload
+// 各加 4 个 key），不是只在这里加轴。
 // ⚠️ 轴标签带「日」前缀对 `monthlyWeeklyDaily` 是**必要的**：它的筛选条件横跨月/周/日
 // 三个周期而**行里的值全是日线的**，不写周期会被当成月线成交额（2026-07-24 站长就为
 // 股票系那张同形的表问过同一个问题）。`dailyEmaExpansion` 是纯日线、本可省前缀，但
 // 共用一个常量比再造一套「只差标签」的近亲常量安全——本项目多次栽在"两个几乎一样的
 // 常量选错一个、不报错只能肉眼发现"上。
-const cryptoFourAxisSorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER];
+// 2026-07-25 晚站长追加 ADX/DI 后由四轴扩到 **八轴**（常量名随之从 cryptoFourAxisSorts
+// 改成 cryptoStrategySorts —— 名字里写死数量，加一根轴就变成谎话）。前四根顺序仍是站长
+// 逐字点名的那组，**首轴（默认排序）不动**。
+const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER, ...dmiSorts];
 // （已删的轴与工厂，复活时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
 //  stockTurnoverSorts/stockAmpSorts〔2026-07-24〕；加密 cryptoRsiFirst/cryptoVolFirst/
 //  cryptoChange/cryptoTurnoverSorts/cryptoAmpSorts/cryptoFundingSorts 与 AXIS_AMPLITUDE/
@@ -147,16 +196,17 @@ const cryptoFourAxisSorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER];
 
 const TABS_CONFIG = {
     // === 加密：两个榜（2026-07-25 晚站长先「移除加密所有TAB」清空、随后逐个新增）===
-    // 轴集**完全相同**（成交额/RSI/CVD/订单流，站长两次点名同一组，默认成交额降序），
-    // 行 payload 也逐字同构——**差别只在筛选条件**，见 cryptoFourAxisSorts。
+    // 轴集**完全相同**（成交额/RSI/CVD/订单流 + ADX/+DI/−DI/DI差，默认成交额降序），
+    // 行 payload 也逐字同构——**差别只在筛选条件**，见 cryptoStrategySorts。
     // ① 月×周×日 三个 SAR 全多头的三级共振（3 个条件，**不含新币回退**，见后端注释）。
-    monthlyWeeklyDaily: { sorts: cryptoFourAxisSorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    monthlyWeeklyDaily: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     // ② 全站条件最少的一个榜：**只有一条**——最新已收盘日 K 的 EMA9/21 扩张。
-    dailyEmaExpansion: { sorts: cryptoFourAxisSorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    dailyEmaExpansion: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === A股 / 美股 / ETF：各自唯一的单策略榜（2026-07-24 站长两步定版）===
     // 三者口径与轴集完全一致，共用 singleStrategySorts（见上方定义：日线五轴 +
-    // 周线RSI + 月线RSI，**每个轴都写明周期**）。副行的成交额标签同样写「日成交额」。
+    // ADX/DI 四轴 + 周线RSI + 月线RSI，**每个轴都写明周期**）。副行的成交额标签同样
+    // 写「日成交额」。
     // ⚠️ TABS_CONFIG 是平查找表、与 TAB_GROUPS 分离，所以这三条要手写；
     // singleStrategyGroup 工厂只管导航，不管这里。三条必须保持一致，改一条要改三条。
     ashareMonthlyWeeklyDaily: { sorts: singleStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },

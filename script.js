@@ -689,6 +689,16 @@ function renderTable() {
             // escapeHtml：searchQuery 是唯一进 innerHTML 的用户输入，必须转义（自 XSS）
             title = `没有匹配「${escapeHtml(searchQuery)}」的标的`;
             desc = "试试换个代码或名称关键词";
+        } else if (currentTab === TEASER_TAB && !license.valid && (tabCount(currentTab) || 0) > 0) {
+            // 橱窗榜命中数 >0 却一行都没有 = **免费橱窗那 1 行还没写进公开文件**，不是
+            // "今日无人命中"。2026-07-25 晚 TEASER_TAB 从加密榜改指美股榜后这变成了真实
+            // 场景：橱窗改由美股管道（每交易日 21:20 UTC）写入，而公开文件每小时被加密
+            // 任务重写一次——两条管道错位时中间会有一段空窗（改动当天就撞上了）。
+            // 若走下面的 strict 分支，页面会说"今日没有标的命中"而导航徽标同时显示 224，
+            // 自相矛盾且是假话。这里如实说，并直接给转化位。
+            ico = "🔒";
+            title = `已找到 ${tabCount(currentTab)} 个标的`;
+            desc = "免费预览的那一行正在更新，稍后自动出现<br>购买通行证可立即查看完整名单";
         } else if (strict) {
             ico = "🎯";
             title = dailyAsset ? "今日没有标的命中该策略" : "本小时没有合约命中该策略";

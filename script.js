@@ -81,7 +81,8 @@ function axesSub(item, sf, volLabel, extra) {
     if ("volRatio" in item && sf !== "volRatio") seg.push(`${axisLabelFor("volRatio", "量比")} ${fmtRatioVal(item.volRatio)}`);
     if ("emaGap" in item && sf !== "emaGap") seg.push(`${axisLabelFor("emaGap", "EMA间距")} ${fmtGapVal(item.emaGap)}`);
     if ("highDist" in item && sf !== "highDist") seg.push(`${axisLabelFor("highDist", "距前高")} ${fmtGapVal(item.highDist)}`);
-    // ADX/DI 四轴（2026-07-25 站长新增，四个资产的行都带）：数据驱动判断，同上。
+    // ADX/+DI 两轴（2026-07-25 新增四根、2026-07-26 指令⑥ 砍成两根）：数据驱动判断，同上。
+    // ⚠️ −DI / DI差 两段已随轴一起删（后端行 payload 也不再发这两个字段）。
     // ⚠️ 它们**排在这里 = 排在 SUB_AXES_MAX(4) 的截断线之后**，故当前默认不出现在副行里，
     // 只在被选为排序轴时进值列展示（被裁掉的轴不丢功能，见 SUB_AXES_MAX 注释）。这是
     // 刻意的：站长这次要的是"升降序里引入 ADX/DI"，不是重排副行——把 ADX 插到
@@ -89,17 +90,13 @@ function axesSub(item, sf, volLabel, extra) {
     // 「周线RSI」（副行只有 4 段额度）。要换成那种排法，把下面 adx 那行剪到 line 55 之后即可。
     if ("adx" in item && sf !== "adx") seg.push(`${axisLabelFor("adx", "ADX")} ${fmtDmiVal(item.adx)}`);
     if ("diPlus" in item && sf !== "diPlus") seg.push(`${axisLabelFor("diPlus", "+DI")} ${fmtDmiVal(item.diPlus)}`);
-    if ("diMinus" in item && sf !== "diMinus") seg.push(`${axisLabelFor("diMinus", "−DI")} ${fmtDmiVal(item.diMinus)}`);
-    if ("diSpread" in item && sf !== "diSpread") seg.push(`${axisLabelFor("diSpread", "DI差")} ${fmtCvdVal(item.diSpread)}`);
     // 日MACD强弱（2026-07-26 指令⑤）：同样数据驱动、同样排在 SUB_AXES_MAX 截断线之后。
     // ⚠️ key 是**不带前缀的** `macdStrength`（日线值一律不加前缀，同 adx/diSpread 的既有
     // 做法），与下面周线那根的 `weeklyMacdStrength` 是两个不同字段，同一行里并存。
     if ("macdStrength" in item && sf !== "macdStrength") seg.push(`${axisLabelFor("macdStrength", "MACD强弱")} ${fmtGapVal(item.macdStrength)}`);
-    // 周线版 ADX/DI（2026-07-25 晚指令⑩）：同样数据驱动、同样排在 SUB_AXES_MAX 截断线之后。
+    // 周线版 ADX/+DI（指令⑩ 加、指令⑥ 砍成两根）：同样数据驱动、同样排在截断线之后。
     if ("weeklyAdx" in item && sf !== "weeklyAdx") seg.push(`${axisLabelFor("weeklyAdx", "周ADX")} ${fmtDmiVal(item.weeklyAdx)}`);
     if ("weeklyDiPlus" in item && sf !== "weeklyDiPlus") seg.push(`${axisLabelFor("weeklyDiPlus", "周+DI")} ${fmtDmiVal(item.weeklyDiPlus)}`);
-    if ("weeklyDiMinus" in item && sf !== "weeklyDiMinus") seg.push(`${axisLabelFor("weeklyDiMinus", "周−DI")} ${fmtDmiVal(item.weeklyDiMinus)}`);
-    if ("weeklyDiSpread" in item && sf !== "weeklyDiSpread") seg.push(`${axisLabelFor("weeklyDiSpread", "周DI差")} ${fmtCvdVal(item.weeklyDiSpread)}`);
     // 周MACD强弱（2026-07-26 指令④）：同样数据驱动、同样排在 SUB_AXES_MAX 截断线之后
     // ⇒ 默认不出现在副行，只在被选为排序轴时进值列。要让它常驻副行就把这行往上剪，
     // 代价是挤掉前面某一段（副行只有 4 段额度）。
@@ -162,24 +159,29 @@ const AXIS_D_TAKER = { key: "takerStrength", label: "日订单流", format: v =>
 // 四个资产**同批加同一组四根轴**（后端 calc_adx_dmi 一份实现、四条管道共用，对齐
 // TradingView `ta.dmi(14, 14)`）。**纯排序轴、不参与任何筛选** —— 各榜命中集合与加之前
 // 完全一致，这次改动只是多了几种看同一批标的的方式。
-// ⚠️ 四根轴各自回答不同问题，**别只留一根**：
+// ⚠️⚠️ **2026-07-26 站长指令⑥：四根砍成两根，只留 日ADX + 日+DI**（周线端同样只留
+// 周ADX + 周+DI）。**这条推翻了本段原来那句"四根各自回答不同问题、别只留一根"的告诫**
+// ——那是我 2026-07-25 写的建议，站长看过之后明确要求砍。以站长的决定为准，别照着旧
+// 告诫（或旧 commit 里的注释）把它们加回来。
+// ⚠️ 砍掉的代价要知道（不是 bug，是知情取舍）：`日−DI` 与 `日DI差` 没了之后，**排序条上
+// 无法直接排出"空方占优"那一侧** —— DI差 是原来四根里唯一带符号、单根即可排多空的。
+// 现在只能用 日ADX 升序（最横盘）+ 日+DI 升序（多方压力最弱）间接看。
+// **复活极便宜**：前端把两个 AXIS_* 常量加回来（定义见本次删除 commit 的父提交）、后端把
+// build 层四个行 payload 里的 `diMinus`/`diSpread` 两行加回来即可 —— **compute 层一直
+// 照常在算这两个值**（`daily_lookup` 与各 payload dict 里都还在，属保留字段）。
+//
+// 保留的两根各自回答什么：
 //   · 日ADX  —— 趋势"有多强"，**不含方向**（DX 只取 |+DI−−DI| 的绝对值）。ADX 45 的
-//     暴跌和 ADX 45 的主升浪同分，所以它必须配 DI 一起看。经验档：<20 震荡 /
-//     20-25 萌芽 / >25 趋势确立 / >40 强趋势（也可能是过热末段）。**降序=最有趋势的，
-//     升序=最横盘的**（升序那头对"等突破"的埋伏思路才是有用的一端，不是废数据）。
-//   · 日+DI / 日−DI —— 多方 / 空方各自的方向压力（0-100）。两根都给才能看出
-//     "ADX 高"是多头在推还是空头在砸。
-//   · 日DI差 = +DI − −DI —— 带符号的**净方向强度**，单根即可排多空，是四根里最直接
-//     可排序的一根（正=多方占优，负=空方占优）。
+//     暴跌和 ADX 45 的主升浪同分。经验档：<20 震荡 / 20-25 萌芽 / >25 趋势确立 /
+//     >40 强趋势（也可能是过热末段）。**降序=最有趋势的，升序=最横盘的**（升序那头对
+//     "等突破"的埋伏思路才是有用的一端，不是废数据）。
+//   · 日+DI —— 多方的方向压力（0-100）。配 ADX 一起读：ADX 高且 +DI 高＝多头在推。
 // 标签同样带「日」前缀：本站四个榜的行里装的全是日线值（榜的筛选条件却横跨月/周/日），
 // 这是 2026-07-24 站长问过一次的歧义，新轴一并遵守。
 const AXIS_D_ADX = { key: "adx", label: "日ADX", format: v => fmtDmiVal(v.adx) };
 const AXIS_D_DIPLUS = { key: "diPlus", label: "日+DI", format: v => fmtDmiVal(v.diPlus) };
-const AXIS_D_DIMINUS = { key: "diMinus", label: "日−DI", format: v => fmtDmiVal(v.diMinus) };
-const AXIS_D_DISPREAD = { key: "diSpread", label: "日DI差", format: v => fmtCvdVal(v.diSpread) };
-// 四根轴的固定顺序（先强度、再多空两侧、最后净差），两个资产族共用同一个数组常量——
-// 避免"两份几乎一样的列表漂移"这个本项目的老坑。
-const dmiSorts = [AXIS_D_ADX, AXIS_D_DIPLUS, AXIS_D_DIMINUS, AXIS_D_DISPREAD];
+// 两个资产族共用同一个数组常量——避免"两份几乎一样的列表漂移"这个本项目的老坑。
+const dmiSorts = [AXIS_D_ADX, AXIS_D_DIPLUS];
 
 // === 日MACD强弱（2026-07-26 站长指令⑤，四个资产同批加）===
 // 值 = **(PPO线 + 3×PPO柱)/4** = (4·MACD − 3·Signal)/(4·EMA26) × 100，单位是"占慢线的
@@ -207,11 +209,11 @@ const AXIS_D_MACD = { key: "macdStrength", label: "日MACD强弱",
 // 成没成形"，两者**经常背离**——日线刚张开但周线ADX 只有 12，就是震荡市里的一次反弹。
 // 实测反例：BTC 周线 ADX 31.2 但 −DI 27.4 > +DI 13.1（周线下跌趋势已确立）。
 // 需 ≥28 根已收盘周 K（加密实测 484/528 有值，次新标的 null 沉底）。
+// ⚠️ 2026-07-26 指令⑥：与日线端同批砍，**只留 周ADX + 周+DI**（周−DI / 周DI差 已移除，
+// 复活办法与代价见上面日线那组的注释块）。
 const AXIS_W_ADX = { key: "weeklyAdx", label: "周ADX", format: v => fmtDmiVal(v.weeklyAdx) };
 const AXIS_W_DIPLUS = { key: "weeklyDiPlus", label: "周+DI", format: v => fmtDmiVal(v.weeklyDiPlus) };
-const AXIS_W_DIMINUS = { key: "weeklyDiMinus", label: "周−DI", format: v => fmtDmiVal(v.weeklyDiMinus) };
-const AXIS_W_DISPREAD = { key: "weeklyDiSpread", label: "周DI差", format: v => fmtCvdVal(v.weeklyDiSpread) };
-const weeklyDmiSorts = [AXIS_W_ADX, AXIS_W_DIPLUS, AXIS_W_DIMINUS, AXIS_W_DISPREAD];
+const weeklyDmiSorts = [AXIS_W_ADX, AXIS_W_DIPLUS];
 
 // === 周MACD强弱（2026-07-26 站长指令④，四个资产同批加）===
 // 值 = **(PPO线 + 5×PPO柱)/6** = (6·MACD − 5·Signal)/(6·EMA26) × 100，单位是"占慢线的

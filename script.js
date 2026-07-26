@@ -91,6 +91,10 @@ function axesSub(item, sf, volLabel, extra) {
     if ("diPlus" in item && sf !== "diPlus") seg.push(`${axisLabelFor("diPlus", "+DI")} ${fmtDmiVal(item.diPlus)}`);
     if ("diMinus" in item && sf !== "diMinus") seg.push(`${axisLabelFor("diMinus", "−DI")} ${fmtDmiVal(item.diMinus)}`);
     if ("diSpread" in item && sf !== "diSpread") seg.push(`${axisLabelFor("diSpread", "DI差")} ${fmtCvdVal(item.diSpread)}`);
+    // 日MACD强弱（2026-07-26 指令⑤）：同样数据驱动、同样排在 SUB_AXES_MAX 截断线之后。
+    // ⚠️ key 是**不带前缀的** `macdStrength`（日线值一律不加前缀，同 adx/diSpread 的既有
+    // 做法），与下面周线那根的 `weeklyMacdStrength` 是两个不同字段，同一行里并存。
+    if ("macdStrength" in item && sf !== "macdStrength") seg.push(`${axisLabelFor("macdStrength", "MACD强弱")} ${fmtGapVal(item.macdStrength)}`);
     // 周线版 ADX/DI（2026-07-25 晚指令⑩）：同样数据驱动、同样排在 SUB_AXES_MAX 截断线之后。
     if ("weeklyAdx" in item && sf !== "weeklyAdx") seg.push(`${axisLabelFor("weeklyAdx", "周ADX")} ${fmtDmiVal(item.weeklyAdx)}`);
     if ("weeklyDiPlus" in item && sf !== "weeklyDiPlus") seg.push(`${axisLabelFor("weeklyDiPlus", "周+DI")} ${fmtDmiVal(item.weeklyDiPlus)}`);
@@ -177,6 +181,24 @@ const AXIS_D_DISPREAD = { key: "diSpread", label: "日DI差", format: v => fmtCv
 // 避免"两份几乎一样的列表漂移"这个本项目的老坑。
 const dmiSorts = [AXIS_D_ADX, AXIS_D_DIPLUS, AXIS_D_DIMINUS, AXIS_D_DISPREAD];
 
+// === 日MACD强弱（2026-07-26 站长指令⑤，四个资产同批加）===
+// 值 = **(PPO线 + 3×PPO柱)/4** = (4·MACD − 3·Signal)/(4·EMA26) × 100，单位是"占慢线的
+// 百分比"。PPO线 = MACD/EMA26（趋势位置：MACD 在零轴上方多少）、PPO柱 =(MACD−Signal)/EMA26
+// （动能加速：MACD 相对自己的信号线跑出多少）。
+// ⚠️⚠️ **它不是原始 MACD**：原始 MACD 带价格单位，日线上与价格的相关性实测 **r=+0.979**，
+// 直接排序 TOP5 就是全市场价格最高的五个（BTC/ETH/YFI/ZEC/XMR），而它们归一化后只有
+// +0.65%~+2.57%。与全站 CVD 轴一律用归一化 `cvdStrength` 是同一条纪律。
+// ⚠️⚠️ **权重是 3，与下面周MACD强弱的 5 不同，这不是笔误**：日线 bar 更吵，权重到 4× 时
+// 降序 TOP 就开始被"暴跌途中反弹"占据（加密 SIREN 柱 +19.95% 而线 −44.77%；美股 4× 时
+// TOP8 有 3/8、5× 时 6/8 是仙股反弹）。完整取值规则与三个市场的实测数据见后端
+// `calc_macd_strength` 上方的常量注释块 —— **改这根轴前先读那里**。
+// ⚠️ 与「日EMA间距」轴相关性偏高（加密 +0.801 / 美股 +0.728，都高于周线那根的 +0.505）
+// ——这是为保住 TOP 干净付的价，已知并接受。但与**周MACD强弱**几乎正交（r=−0.080），
+// 两根并排读才是设计意图：日线 + 而周线 − ＝「周线崩塌中的日线反弹」。
+// 需 ≥35 根已收盘日 K（26+9），不足 null 沉底（加密实测 523/528 有值）。
+const AXIS_D_MACD = { key: "macdStrength", label: "日MACD强弱",
+                      format: v => fmtGapVal(v.macdStrength) };
+
 // === 周线版 ADX / DMI（2026-07-25 晚站长指令⑩「加周线级别就行」）===
 // 与上面那组**同一套算法、同一个后端 calc_adx_dmi**（对齐 TV `ta.dmi(14,14)`），只是喂进去
 // 的是最新已收盘**周 K**。字段名一律带 `weekly` 前缀 —— **绝不能与日线那组共用 key**，
@@ -192,11 +214,13 @@ const AXIS_W_DISPREAD = { key: "weeklyDiSpread", label: "周DI差", format: v =>
 const weeklyDmiSorts = [AXIS_W_ADX, AXIS_W_DIPLUS, AXIS_W_DIMINUS, AXIS_W_DISPREAD];
 
 // === 周MACD强弱（2026-07-26 站长指令④，四个资产同批加）===
-// 值 = **PPO线 + PPO柱** = (2·MACD − Signal)/EMA26 × 100，单位是"占慢线的百分比"。
+// 值 = **(PPO线 + 5×PPO柱)/6** = (6·MACD − 5·Signal)/(6·EMA26) × 100，单位是"占慢线的
+// 百分比"。（⚠️ 2026-07-26 修：这里原先写的是 `PPO线 + PPO柱 = (2·MACD − Signal)/EMA26`
+// ——那是**被冗余度实测否掉的等权第一稿**，从未上线，注释漏改了。以本行为准。）
 // ⚠️⚠️ **它不是原始 MACD**：原始 MACD 带价格单位，跨标的排序≈排价格（实测按原始值排
 // TOP1 是 BTCDOM，只因它价格 5547，归一化后其实只有 +3.70%）。这与全站 CVD 轴一律用
-// 归一化 `cvdStrength` 是同一条纪律。完整设计理由、四象限语义、等权的实测依据，见后端
-// `calc_macd_strength` 的 docstring —— **改这根轴前先读那里**。
+// 归一化 `cvdStrength` 是同一条纪律。完整设计理由、四象限语义、5 这个权重的实测依据，
+// 见后端 `calc_macd_strength` 的 docstring 与其上方常量块 —— **改这根轴前先读那里**。
 // 读法：>0 表示 MACD 在零轴上方（周线趋势向上），数值越大＝位置越高且动能还在加速；
 // <0 反之。**升序那头不是废数据**：最负的一端是"下跌且还在加速"，回避/做空名单直接可用。
 // 需 ≥35 根已收盘周 K（26+9），不足 null 沉底（加密实测 469/528 有值）。
@@ -223,8 +247,10 @@ const AXIS_W_EMAGAP = { key: "weeklyEmaGap", label: "周线EMA间距", format: v
 // 股票系（A股/美股/ETF）**十五轴**：日线五轴 + 日线 ADX/DI 四轴 + 周线RSI + 周线 ADX/DI
 // 四轴 + 月线RSI —— 严格按"日线 → 周线 → 月线"的周期递进排，同周期的挤在一起。
 // **首轴仍是 日线RSI**（= 默认排序，必须与后端 `value` 取的量一致，别把新轴插到最前）。
+// 2026-07-26 指令⑤ 再加 日MACD强弱（接在日线块末尾、周线块之前）⇒ **十七轴**。
 const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO, AXIS_D_EMAGAP,
-                             ...dmiSorts, AXIS_WRSI, ...weeklyDmiSorts, AXIS_W_MACD, AXIS_MRSI];
+                             ...dmiSorts, AXIS_D_MACD,
+                             AXIS_WRSI, ...weeklyDmiSorts, AXIS_W_MACD, AXIS_MRSI];
 // 加密两个榜**共用**的轴集。前四根是**站长两次逐字点名的同一组**：「支持成交额，RSI，
 // CVD，订单流。四种升降序。」——顺序也照他写的（**首轴即默认排序**，必须与后端 `value`
 // 取的量一致，否则首屏值列显示的是另一个轴的数）。两个榜的行 payload 逐字同构，故共用
@@ -243,8 +269,11 @@ const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO
 // 逐字点名的那组，**首轴（默认排序）不动**。
 // 2026-07-25 晚指令⑩再加周线四根 ⇒ **十二轴**。加密两个榜的行没有 weeklyRsi 字段
 // （后端没发），所以周线块这里只有 ADX/DI 四根，直接接在日线块之后。
+// 2026-07-26 指令④加周MACD强弱 ⇒ 十三轴；同日指令⑤加日MACD强弱 ⇒ **十四轴**
+// （日线那根接在日线块末尾、周线块之前，维持"同周期挤在一起 + 日→周递进"）。
 const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
-                             ...dmiSorts, ...weeklyDmiSorts, AXIS_W_MACD];
+                             ...dmiSorts, AXIS_D_MACD,
+                             ...weeklyDmiSorts, AXIS_W_MACD];
 // 加密第三个榜 `weeklyExpansionDailyCvd`（2026-07-25 晚指令⑪）专用的 **15 轴**：
 // 站长原话「支持现在各种日线的升降序。也要有周成交额，周RSI等数据。」
 //   前 8 根 = 上面 cryptoStrategySorts 的日线部分**原样照搬**（"现在各种日线的升降序"）；
@@ -255,6 +284,7 @@ const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
 // ⚠️ 另两个加密榜的行**没有** weeklyVolume/weeklyRsi/weeklyEmaGap 字段（后端没发），
 // 所以它们继续用 cryptoStrategySorts，别图省事合并成一个常量 —— 会多出永远全 null 的幽灵轴。
 const cryptoWeeklyExpansionSorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER, ...dmiSorts,
+                                    AXIS_D_MACD,
                                     AXIS_W_VOL, AXIS_WRSI, AXIS_W_EMAGAP, ...weeklyDmiSorts, AXIS_W_MACD];
 // （已删的轴与工厂，复活时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
 //  stockTurnoverSorts/stockAmpSorts〔2026-07-24〕；加密 cryptoRsiFirst/cryptoVolFirst/

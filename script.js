@@ -61,10 +61,12 @@ function axesSub(item, sf, volLabel, extra) {
     if (sf !== "volume") seg.push(`${volLabel} ${fmtVolVal(item)}`);
     if (sf !== "cvdStrength") seg.push(`${axisLabelFor("cvdStrength", "CVD强弱")} ${fmtCvdVal(item.cvdStrength)}`);
     if ("weeklyRsi" in item && sf !== "weeklyRsi") seg.push(`${axisLabelFor("weeklyRsi", "周线RSI")} ${fmtRsiVal(item.weeklyRsi)}`);
-    // 周成交额（2026-07-25 晚指令⑪）：只有 weeklyExpansionDailyCvd 的行带，数据驱动判断。
+    // 周成交额（2026-07-25 晚指令⑪）：只有两个周线加密榜（weeklyExpansionDailyCvd /
+    // weeklyEmaBearish，共用后端 _wk_expansion_row）的行带，数据驱动判断。
     // ⚠️ 走 weeklyVolumeFormatted 而不是 fmtVolVal——后者写死读 item.volumeFormatted（日线那个）。
     if ("weeklyVolume" in item && sf !== "weeklyVolume") seg.push(`${axisLabelFor("weeklyVolume", "周成交额")} ${item.weeklyVolumeFormatted != null ? item.weeklyVolumeFormatted : "N/A"}`);
-    // 周线EMA间距：只有加密 weeklyDaily 的行带（那榜有周线扩张筛选条件），数据驱动判断。
+    // 周线EMA间距：同上两个周线榜的行带（都有周线扩张筛选条件），数据驱动判断。
+    // ⚠️ weeklyEmaBearish 是严格 9/21 ⇒ 恒正；weeklyExpansionDailyCvd 是 9/21∪9/26 ⇒ 可为负。
     if ("weeklyEmaGap" in item && sf !== "weeklyEmaGap") seg.push(`${axisLabelFor("weeklyEmaGap", "周线EMA间距")} ${fmtGapVal(item.weeklyEmaGap)}`);
     if ("monthlyRsi" in item && sf !== "monthlyRsi") seg.push(`${axisLabelFor("monthlyRsi", "月线RSI")} ${fmtRsiVal(item.monthlyRsi)}`);
     // 订单流（真实 taker 归边比）只有加密行有——tushare/Massive 无归边字段，股票系行上
@@ -246,16 +248,22 @@ const cryptoWeeklyExpansionSorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_T
 //  布尔 SAR→不设末轴），别为了"看起来统一"合并成一个常量。）
 
 const TABS_CONFIG = {
-    // === 加密：两个榜（2026-07-25 晚站长先「移除加密所有TAB」清空、随后逐个新增）===
-    // 轴集**完全相同**（成交额/RSI/CVD/订单流 + ADX/+DI/−DI/DI差，默认成交额降序），
-    // 行 payload 也逐字同构——**差别只在筛选条件**，见 cryptoStrategySorts。
+    // === 加密：四个榜（2026-07-25 晚站长先「移除加密所有TAB」清空、随后逐条指令加回）===
+    // **轴集分两族**：①② 用 12 轴的 cryptoStrategySorts（全日线值）；③④ 用 15 轴的
+    // cryptoWeeklyExpansionSorts（行里同时装日线值和周线值）。族内行 payload 逐字同构，
+    // **差别只在筛选条件**。四个榜首轴统一 = 日成交额降序。
     // ① 月×周×日 三个 SAR 全多头的三级共振（3 个条件，**不含新币回退**，见后端注释）。
     monthlyWeeklyDaily: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    // ② 全站条件最少的一个榜：**只有一条**——最新已收盘日 K 的 EMA9/21 扩张。
+    // ② 日线两线扩张 + 日线 CVD 递增（2 个条件，全站最宽的扫描面）。
     dailyEmaExpansion: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    // ③ 周线两线扩张（9/21 ∪ 9/26）× 日线 CVD 递增（2026-07-25 晚指令⑪）。**唯一一个
-    // 行里同时装了日线值和周线值的加密榜**，故独用 15 轴的 cryptoWeeklyExpansionSorts。
+    // ③ 周线两线扩张（9/21 ∪ 9/26）× 周线 CVD 递增（指令⑪ 建榜、指令⑬ 把日线CVD换成周线CVD）。
     weeklyExpansionDailyCvd: { sorts: cryptoWeeklyExpansionSorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    // ④ 周线 9/21 扩张 × 周线阴K（2026-07-26 指令①）——**唯一"找回调"的榜**，另三个都在
+    // 找启动/趋势延续。行 payload 与 ③ 逐字同构（共用后端 `_wk_expansion_row`）⇒ 共用同
+    // 一套 15 轴，这是刻意的：本榜条件全在周线，周线块恰好覆盖它引用到的量。
+    // ⚠️ 与 ③ 的周线端**差一个字**：③ 是 (9/21 ∪ 9/26) 并集、④ 是**严格 9/21** ⇒
+    // ④ 的 weeklyEmaGap **恒为正**，③ 的可以为负。两榜在导航里紧挨着，别把判据张冠李戴。
+    weeklyEmaBearish: { sorts: cryptoWeeklyExpansionSorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === A股 / 美股 / ETF：各自唯一的单策略榜（2026-07-24 站长两步定版）===
     // 三者口径与轴集完全一致，共用 singleStrategySorts（见上方定义：日线五轴 +
@@ -309,13 +317,14 @@ const TAB_GROUPS = [
     // JSON + 缓存 schema——key 与显示名是两回事，历史上因此定过"key 固定、只改显示名"
     // 的规矩（*MonthlyStrategy / weeklyStrategy 先例），继续有效。
     {
-        // 加密：两个榜（2026-07-25 晚站长先「移除加密所有TAB」把当天定版的三个榜全部清空、
-        // 随后逐个新增；被清掉那三个的显示名/desc/专属轴见 git 历史）。
+        // 加密：四个榜（2026-07-25 晚站长先「移除加密所有TAB」把当天定版的三个榜全部清空、
+        // 随后逐条指令加回；被清掉那三个的显示名/desc/专属轴见 git 历史）。
         // ⚠️ **刻意不套 singleStrategyGroup 工厂**：那个工厂的 name/desc 写死的是股票系
-        // 的 5 个条件（月线SAR + 周线SAR + 周线扩张 + 日线扩张 + CVD），与这两个榜都不
+        // 的 5 个条件（月线SAR + 周线SAR + 周线扩张 + 日线扩张 + CVD），与这四个榜都不
         // 一样。硬套会让页面上的规则说明与后端实际筛选严重不符。
-        // 组 tf 取第一个 tab 的周期（月线），日线那个 tab 自己覆盖。**排序是先严后宽**
-        // ——三级共振在上、单条件扫描在下，与被清掉那版加密组的排法一致。
+        // 组 tf 取第一个 tab 的周期（月线），其余三个 tab 各自覆盖。**排法：先按周期从大到
+        // 小（月×周×日 → 日线 → 周线两个），同周期的放一起**——两个周线榜相邻是刻意的，
+        // 它们判据只差一处（并集 vs 严格 9/21、CVD递增 vs 阴K），挨着才看得出对照关系。
         label: "加密策略", asset: "加密", tf: "月线",
         tabs: [
             { key: "monthlyWeeklyDaily", name: "月线SAR × 周线SAR × 日线SAR",
@@ -333,6 +342,12 @@ const TAB_GROUPS = [
             // 规矩不改（改 key 要连累 KV / paidMeta / 前端 / 用户 localStorage 四处）。别被它误导。
             { key: "weeklyExpansionDailyCvd", name: "周线两线扩张 × 周线CVD递增", tf: "周线",
               desc: "最新已收盘周线的 EMA9/21 或 EMA9/26 张开（两条路径任一即可，比只看 9/21 宽一档），同时那一周的资金净流入还在增加——两个门槛都在周线，看的是大级别结构与大级别资金是否同步，不受某一天短线波动的干扰。表格里的日线数值只作参考、不参与筛选。日线八轴 + 周成交额/周线RSI/周线EMA间距/周线ADX/DI 都能排序。范围是全部 USDT 永续合约。" },
+            // tf 周线：两个条件都在周线。⚠️ 2026-07-26 指令①「周线是EMA9/21扩张且是阴K」。
+            // **name 刻意写「9/21」而不是上一个榜那样写「两线」**：上一个榜的「两线扩张」指
+            // (9/21 ∪ 9/26) 并集，本榜是严格 9/21，两榜在导航里紧挨着，名字若都写「两线扩张」
+            // 用户没有任何线索能分辨宽窄。**key 复用 2026-07-24 那个同判据旧榜的 weeklyEmaBearish。**
+            { key: "weeklyEmaBearish", name: "周线9/21扩张 × 周线阴K", tf: "周线",
+              desc: "最新已收盘周线的 EMA9 在 EMA21 上方、两线间距还在扩大（结构仍强），但那一周收的是阴线——强势周线趋势里的回调周，找的是回踩、二次上车的位置。这是唯一一个「找回调」的榜，另三个都在找启动或趋势延续。注意扩张这条要求严格 EMA9/21（不像上一个榜还认 9/26），所以周线EMA间距一定为正。表格里的日线数值不参与筛选，但按日线RSI/日ADX 排序能在回调周里再分「日线还硬」和「日线已经软了」。范围是全部 USDT 永续合约。" },
         ],
     },
     // === A股 / 美股 / ETF（2026-07-24 站长两步定版：三者各只保留 1 个榜，口径完全一致）===

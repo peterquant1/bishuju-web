@@ -96,6 +96,10 @@ function axesSub(item, sf, volLabel, extra) {
     if ("weeklyDiPlus" in item && sf !== "weeklyDiPlus") seg.push(`${axisLabelFor("weeklyDiPlus", "周+DI")} ${fmtDmiVal(item.weeklyDiPlus)}`);
     if ("weeklyDiMinus" in item && sf !== "weeklyDiMinus") seg.push(`${axisLabelFor("weeklyDiMinus", "周−DI")} ${fmtDmiVal(item.weeklyDiMinus)}`);
     if ("weeklyDiSpread" in item && sf !== "weeklyDiSpread") seg.push(`${axisLabelFor("weeklyDiSpread", "周DI差")} ${fmtCvdVal(item.weeklyDiSpread)}`);
+    // 周MACD强弱（2026-07-26 指令④）：同样数据驱动、同样排在 SUB_AXES_MAX 截断线之后
+    // ⇒ 默认不出现在副行，只在被选为排序轴时进值列。要让它常驻副行就把这行往上剪，
+    // 代价是挤掉前面某一段（副行只有 4 段额度）。
+    if ("weeklyMacdStrength" in item && sf !== "weeklyMacdStrength") seg.push(`${axisLabelFor("weeklyMacdStrength", "周MACD强弱")} ${fmtGapVal(item.weeklyMacdStrength)}`);
     // 振幅 只有免费行情榜（涨跌幅/成交额/振幅）的行有——策略榜行没这个 key，数据驱动跳过。
     if ("amplitude" in item && sf !== "amplitude") seg.push(`振幅 ${fmtAmpVal(item.amplitude)}`);
     const shown = seg.slice(0, SUB_AXES_MAX);
@@ -187,6 +191,20 @@ const AXIS_W_DIMINUS = { key: "weeklyDiMinus", label: "周−DI", format: v => f
 const AXIS_W_DISPREAD = { key: "weeklyDiSpread", label: "周DI差", format: v => fmtCvdVal(v.weeklyDiSpread) };
 const weeklyDmiSorts = [AXIS_W_ADX, AXIS_W_DIPLUS, AXIS_W_DIMINUS, AXIS_W_DISPREAD];
 
+// === 周MACD强弱（2026-07-26 站长指令④，四个资产同批加）===
+// 值 = **PPO线 + PPO柱** = (2·MACD − Signal)/EMA26 × 100，单位是"占慢线的百分比"。
+// ⚠️⚠️ **它不是原始 MACD**：原始 MACD 带价格单位，跨标的排序≈排价格（实测按原始值排
+// TOP1 是 BTCDOM，只因它价格 5547，归一化后其实只有 +3.70%）。这与全站 CVD 轴一律用
+// 归一化 `cvdStrength` 是同一条纪律。完整设计理由、四象限语义、等权的实测依据，见后端
+// `calc_macd_strength` 的 docstring —— **改这根轴前先读那里**。
+// 读法：>0 表示 MACD 在零轴上方（周线趋势向上），数值越大＝位置越高且动能还在加速；
+// <0 反之。**升序那头不是废数据**：最负的一端是"下跌且还在加速"，回避/做空名单直接可用。
+// 需 ≥35 根已收盘周 K（26+9），不足 null 沉底（加密实测 469/528 有值）。
+// 用 fmtGapVal（带符号两位小数 + %）：它确实是个百分比量，与 EMA间距 同类，
+// 刻意不复用 fmtDmiVal（那个不带 % —— ADX/DI 是 0-100 的无量纲读数，不是百分比）。
+const AXIS_W_MACD = { key: "weeklyMacdStrength", label: "周MACD强弱",
+                      format: v => fmtGapVal(v.weeklyMacdStrength) };
+
 // === 周成交额 / 周线EMA间距（2026-07-25 晚指令⑪，`weeklyExpansionDailyCvd` 榜专用）===
 // 站长原话「也要有周成交额，周RSI等数据」。周RSI 直接复用既有的 AXIS_WRSI，周成交额是新轴。
 // ⚠️ **`weeklyVolume` 是"最新已收盘那一根周 K"的 USDT 成交额**（后端 get_weekly_rsi 的
@@ -206,7 +224,7 @@ const AXIS_W_EMAGAP = { key: "weeklyEmaGap", label: "周线EMA间距", format: v
 // 四轴 + 月线RSI —— 严格按"日线 → 周线 → 月线"的周期递进排，同周期的挤在一起。
 // **首轴仍是 日线RSI**（= 默认排序，必须与后端 `value` 取的量一致，别把新轴插到最前）。
 const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO, AXIS_D_EMAGAP,
-                             ...dmiSorts, AXIS_WRSI, ...weeklyDmiSorts, AXIS_MRSI];
+                             ...dmiSorts, AXIS_WRSI, ...weeklyDmiSorts, AXIS_W_MACD, AXIS_MRSI];
 // 加密两个榜**共用**的轴集。前四根是**站长两次逐字点名的同一组**：「支持成交额，RSI，
 // CVD，订单流。四种升降序。」——顺序也照他写的（**首轴即默认排序**，必须与后端 `value`
 // 取的量一致，否则首屏值列显示的是另一个轴的数）。两个榜的行 payload 逐字同构，故共用
@@ -226,7 +244,7 @@ const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO
 // 2026-07-25 晚指令⑩再加周线四根 ⇒ **十二轴**。加密两个榜的行没有 weeklyRsi 字段
 // （后端没发），所以周线块这里只有 ADX/DI 四根，直接接在日线块之后。
 const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
-                             ...dmiSorts, ...weeklyDmiSorts];
+                             ...dmiSorts, ...weeklyDmiSorts, AXIS_W_MACD];
 // 加密第三个榜 `weeklyExpansionDailyCvd`（2026-07-25 晚指令⑪）专用的 **15 轴**：
 // 站长原话「支持现在各种日线的升降序。也要有周成交额，周RSI等数据。」
 //   前 8 根 = 上面 cryptoStrategySorts 的日线部分**原样照搬**（"现在各种日线的升降序"）；
@@ -237,7 +255,7 @@ const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
 // ⚠️ 另两个加密榜的行**没有** weeklyVolume/weeklyRsi/weeklyEmaGap 字段（后端没发），
 // 所以它们继续用 cryptoStrategySorts，别图省事合并成一个常量 —— 会多出永远全 null 的幽灵轴。
 const cryptoWeeklyExpansionSorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER, ...dmiSorts,
-                                    AXIS_W_VOL, AXIS_WRSI, AXIS_W_EMAGAP, ...weeklyDmiSorts];
+                                    AXIS_W_VOL, AXIS_WRSI, AXIS_W_EMAGAP, ...weeklyDmiSorts, AXIS_W_MACD];
 // （已删的轴与工厂，复活时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
 //  stockTurnoverSorts/stockAmpSorts〔2026-07-24〕；加密 cryptoRsiFirst/cryptoVolFirst/
 //  cryptoChange/cryptoTurnoverSorts/cryptoAmpSorts/cryptoFundingSorts 与 AXIS_AMPLITUDE/

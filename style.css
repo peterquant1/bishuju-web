@@ -301,9 +301,21 @@ a:hover{color:var(--gold-hi)}
 .search__input::placeholder{color:var(--muted-2)}
 
 /* ---------------- 排序条(多轴选择 chips;表头值列只显当前轴)---------------- */
-.sort-strip{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-.sort-strip__label{flex:none;font-size:10px;font-weight:600;letter-spacing:.05em;color:var(--muted-2);user-select:none;text-transform:uppercase}
-.sort-strip__chips{display:flex;gap:6px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;padding:2px}
+/* ⚠️⚠️ 2026-07-26 站长报的真 bug + 修法，改这三行前先读完：
+   原来是 `flex-wrap:nowrap` + `overflow-x:auto` + `scrollbar-width:none`（滚动条隐藏）。
+   桌面端实测（1280 视口、17 根轴）：容器 clientWidth 877 而 scrollWidth 1333 ——
+   **第 10 根之后的轴全在右边界外，没有任何视觉提示，滚轮也横滑不动** ⇒ 用户找不到
+   排在末尾的「日MACD强弱 / 周MACD强弱 / 月线RSI」，且"显示不全、点不到"。
+   修法：**桌面端改成换行（flex-wrap:wrap）**，所有轴一次全部可见可点；移动端保持
+   横向滑动（触屏滑动是自然手势，且窄屏换行会占掉半屏高度，见 640px 媒体查询）。
+   ⚠️ **刻意不用渐变遮罩/mask 做"右边还有内容"的提示** —— 本项目在用户实机上被
+   backdrop-filter / 无限动画 / position:sticky 三次 GPU 合成器 bug 坑过（见 CLAUDE.md
+   「黑屏 GPU 合成器 bug」一节），排序条这种常驻元素不引入任何新的合成层。
+   ⚠️ align-items 由 center 改 flex-start：换行后「排序」标签要贴第一行，不能垂直居中
+   到两行的中间。标签用 padding-top 与第一排 chip 做光学对齐。 */
+.sort-strip{display:flex;align-items:flex-start;gap:8px;margin-bottom:12px}
+.sort-strip__label{flex:none;padding-top:9px;font-size:10px;font-weight:600;letter-spacing:.05em;color:var(--muted-2);user-select:none;text-transform:uppercase}
+.sort-strip__chips{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0;padding:2px}
 .sort-strip__chips::-webkit-scrollbar{display:none}
 .sort-chip{flex:none;display:inline-flex;align-items:center;gap:4px;padding:6px 13px;font-size:12px;font-weight:600;font-family:var(--font-sans);color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);border-radius:var(--r-pill);cursor:pointer;white-space:nowrap;transition:color .14s,border-color .14s,background .14s}
 .sort-chip:hover{color:var(--text);border-color:var(--muted)}
@@ -500,6 +512,11 @@ a:hover{color:var(--gold-hi)}
     .text-input{font-size:16px}
     .tbody{max-height:420px;max-height:min(64dvh,600px)}
     .sort-chip{padding:7px 13px}
+    /* 窄屏保持横向滑动：13 根轴在手机上换行会占掉半屏高度，而触屏横滑是自然手势。
+       桌面端是换行（见上方 .sort-strip__chips 注释块）。 */
+    .sort-strip{align-items:center}
+    .sort-strip__label{padding-top:0}
+    .sort-strip__chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
     .c-check{width:36px}
     .c-check .chk{width:16px;height:16px}
     .c-rank{width:42px;padding-left:4px}

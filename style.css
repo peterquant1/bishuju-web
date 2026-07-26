@@ -549,6 +549,16 @@ a:hover{color:var(--gold-hi)}
     .c-rank{width:48px}
     .c-val{width:150px;padding:0 12px 0 6px;overflow:hidden;text-overflow:ellipsis}
     .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    /* ⚠️ rail 收到 210px 后,资产分段控件每项只剩 39px,而「加密」两个汉字在 13.5px 下
+       要 ~27px、扣掉圆点 6px + 间隙 7px 只剩 26px ⇒ **四个标签全部折成两行**,控件鼓成
+       56px 高的团块(2026-07-26 真机实测 641/700/768/800/830/860 八档全中,竖屏平板与
+       分屏小窗正是这一档)。缩圆点/间距 + 降半档字号,把可用文字宽度抬到 32px。
+       `white-space:nowrap` 是兜底:日后有人加长标签(如「美股ETF」)时宁可挤也不再折行。
+       ⚠️ 高度刻意用 padding:10px 补回 36px,与 ≥861px 档的 37px 基本齐平——只压字号不补
+       padding 会掉到 32px,比相邻档矮一截、点击目标也变小。 */
+    .asset-seg{gap:2px;padding:3px}
+    .asset-seg__opt{gap:4px;font-size:12.5px;white-space:nowrap;padding:10px 0}
+    .asset-seg__dot{width:5px;height:5px}
 }
 
 /* ≤360px 超窄屏:再压固定列宽 */

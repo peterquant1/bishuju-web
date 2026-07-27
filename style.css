@@ -266,14 +266,20 @@ a:hover{color:var(--gold-hi)}
 .asset-seg__opt[data-k="ashare"].is-active{background:var(--asset-ashare);color:#fff;box-shadow:var(--shadow-1)}
 .asset-seg__opt[data-k="us"].is-active{background:var(--asset-us);color:#fff;box-shadow:var(--shadow-1)}
 .asset-seg__opt[data-k="etf"].is-active{background:var(--asset-etf);color:#fff;box-shadow:var(--shadow-1)}
-.asset-seg__opt.is-active .asset-seg__dot{background:rgba(255,255,255,.55)}
+/* 激活态圆点:亮色 .55→.72、暗色 .4→.58(v6)。原值下圆点压在资产实块上糊成一团 ——
+   亮色最差是加密(琥珀底最深)2.95:1,**暗色四个资产全在 2.39–2.60**(那条 rgba(0,0,0,.4)
+   的近黑点压在变亮的资产色上)。2026-07-27 审美 PASS 的**非文本对比**扫描查出来的,
+   文本那轮扫不到它 —— ⚠️ 教训:改完这类"色块上的小装饰"要单独跑一次 1.4.11 口径的扫描,
+   别以为文本 AA 全绿就完事。圆点本身是装饰性的(标签文字 + 实块填充已把状态说清楚,
+   1.4.11 对纯装饰不强制),但新值让 8 组全部 ≥3:1 且不牺牲任何东西。*/
+.asset-seg__opt.is-active .asset-seg__dot{background:rgba(255,255,255,.72)}
 .asset-seg__opt:not(.is-active):hover{color:var(--text);background:var(--nav-hover)}
 /* 暗色底盘:资产色变亮,active 文字改近黑 */
 [data-theme="dark"] .asset-seg__opt[data-k="crypto"].is-active{color:#1a1000}
 [data-theme="dark"] .asset-seg__opt[data-k="ashare"].is-active{color:#03121f}
 [data-theme="dark"] .asset-seg__opt[data-k="us"].is-active{color:#160b2e}
 [data-theme="dark"] .asset-seg__opt[data-k="etf"].is-active{color:#04211c}
-[data-theme="dark"] .asset-seg__opt.is-active .asset-seg__dot{background:rgba(0,0,0,.4)}
+[data-theme="dark"] .asset-seg__opt.is-active .asset-seg__dot{background:rgba(0,0,0,.58)}
 .board-nav{display:flex;flex-direction:column;gap:14px}
 .nav-group{display:flex;flex-direction:column;gap:3px}
 .nav-group+.nav-group{border-top:1px dashed var(--group-dash);padding-top:12px}

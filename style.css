@@ -55,7 +55,7 @@
     --gold-rgb:198,97,63;
     /* 实心按钮 = 墨黑 + 象牙字(17.8:1)。⚠️ 暗色主题下整个反过来(象牙底 + 墨字),
        故按钮文字色必须走 --btn-ink,**别写死 #fff**(写死会让暗色下白字压象牙底) */
-    --btn-fill:#141413; --btn-fill-rgb:20,20,19; --btn-ink:#faf9f5;
+    --btn-fill:#141413; --btn-ink:#faf9f5;
     /* 价格语义(crypto/美股/ETF 默认涨绿跌红;A股 在 [data-asset] 翻转)*/
     --up:#0b7a50; --down:#c4213a;
     /* 独立「警示」暖琥珀(别挂 --gold,否则数据快过期的语义会变成品牌赤陶)*/
@@ -123,7 +123,7 @@
     --line:rgba(250,249,245,.11); --line-2:rgba(250,249,245,.22);
     --gold:#e08a66; --gold-hi:#eda184; --gold-ink:#e08a66; --gold-rgb:224,138,102;
     /* ⚠️ 按钮在暗色下整个反过来:象牙底 + 墨字(其站反色区块里的 CTA 就是这样) */
-    --btn-fill:#f0eee6; --btn-fill-rgb:240,238,230; --btn-ink:#141413;
+    --btn-fill:#f0eee6; --btn-ink:#141413;
     --up:#22c286; --down:#f2495e;
     --warn:#e0a437;
     --text:#f5f3ed; --muted:#a8a49a; --muted-2:#96938a;

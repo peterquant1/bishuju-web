@@ -1,58 +1,84 @@
 /* ============================================================
-   狗庄74 — 视觉系统 v5「素白编辑 Editorial」
-   2026-07-23：从 v4「白净 SaaS + 蓝」转向「暖纸编辑 + 墨 + 单一宝石绿」。
-   基调参照 Mercury/Ramp 一类的编辑式金融品牌：暖纸画布、近黑墨字、一个
-   克制的深祖母绿强调、慷慨留白 + 考究字阶承担层级（不是靠更多卡片/更多颜色）。
-   —— 亮色成为默认底盘（编辑式的主角），暗色是同构的「暖炭」对位版（非旧 GitHub 蓝黑）。
-   —— 字体升级：自托管 Geist（正文/Latin）+ Geist Mono（全部数字），CJK 走系统栈；
-      这是「不再是 Segoe UI 默认脸」的最大一笔提升，见下方 @font-face。
-   结构:@font-face → tokens(:root=亮 + [data-theme=dark]=暗 + [data-asset]=价格语义)
-        → 布局(topbar/rail/pulse/board/table 分离式/dock/drawer)
-        → 弹窗/付费墙/页脚(语义 token 化)
+   狗庄74 — 视觉系统 v6「纸墨 Paper & Ink」（Anthropic 风格重构）
+   2026-07-27：从 v5「暖纸编辑 + 祖母绿」转向 anthropic.com 的纸墨体系。
+   色板不是"照着感觉调"的，是**在 anthropic.com 上实测 computed style 取的**：
+     页面底 #FAF9F5(象牙) / 次级面 #F0EEE6(骨白) / 三级面 #E3DACC(马尼拉)
+     墨 #141413 / 强调 book cloth #C6613F / hairline rgba(20,20,19,.10)
+     圆角 8px 主导(卡片 16px) / 阴影 0 2px 2px .01 + 0 4px 4px .02 + 0 16px 24px .04
+     排印 letter-spacing:normal、text-transform:none —— **全站零大写零字距**
+   四条移植决定(与其站的差异都是刻意的,别"改回去")：
+     ① 页/卡关系取其 骨白页 + 象牙卡：象牙是最具辨识度的一色,让它占满卡片
+        (卡片覆盖了本站绝大部分视口),页底退一档到骨白。
+     ② 主按钮 = **墨黑实心 + 象牙字**(其站 CTA 就是墨黑,rgb(20,20,19) 是它页面上
+        出现最多的非页底填充色),rust 只做强调/链接/选中,不做大面积填充。
+     ③ 暗色 = 其站「反色区块」的同一套(墨底 + 象牙字),不是另造一套灰阶。
+     ④ 衬线只给**长文**(FAQ/免责/说明/提示),UI 一律无衬线 —— 这正是其站的分工
+        (正文 Anthropic Serif / 标题与 UI Anthropic Sans)。中文没有可用的等价衬线,
+        故用 unicode-range 把衬线**限定在 Latin**,CJK 落回无衬线,见 EditorialSerif。
    ⚠️ 三条 GPU 硬约束(真实黑屏事故,勿回退，本轮未触碰):
      1) 禁 backdrop-filter + 固定背景  2) 禁 position:sticky
      3) 禁无限循环动画(一次性微交互 only;骨架屏是静态灰条)
-   ⚠️ 保留全部现有类选择器——script.js 依赖它们(medal--N/val--up/is-active/
-      mkt-z--*/fresh--ok 等)，本轮只改「值」不改「名」。
+   ⚠️ 保留全部现有类选择器——script.js 依赖它们(medal--N、val--up、is-active、
+      mkt-z--※、fresh--ok 等)，本轮只改「值」不改「名」。
+   ⚠️⚠️ 上一行原本写作「mkt-z--*∕fresh--ok」，那个星号紧跟斜杠 = **提前闭合了本注释**，
+      于是 CSS 的错误恢复把「注释残余 + 下面第一条规则」整块当成一条坏规则吞掉 ——
+      **`@font-face` 里的 Geist 自 v5(2026-07-23) 起就一直没生效**，Latin 正文一直在用
+      系统兜底(Windows 上就是 Segoe UI)，而 index.html 还照常 preload 那 29KB 字体、
+      下载完没人用。2026-07-27 v6 重构时靠「CSSOM 里 @font-face 只有 3 条、文件里有 4 条」
+      查出来。**注释里再也不要出现 `*` 紧挨 `/`**（写类名用顿号或 ※ 分隔）。
+      自查一句：文件里 `*∕` 的出现次数必须等于注释条数，多一个就是又踩了。
    ============================================================ */
 
 /* ---------------- 自托管字体(Latin 变量字体,单文件覆盖 400–700;CJK 走系统栈) ---------------- */
 @font-face{font-family:"Geist";src:url("fonts/geist-latin.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+2000-206F,U+2070-209F,U+20A0-20BF,U+2100-214F,U+2190-21FF,U+2212}
 @font-face{font-family:"Geist Mono";src:url("fonts/geist-mono-latin.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+2000-206F,U+2070-209F,U+20A0-20BF,U+2100-214F,U+2190-21FF,U+2212}
+/* v6 新增:长文用的 Latin 衬线。**不下载字体**,只 local() 系统 Georgia(Win/macOS 都自带);
+   ⚠️ unicode-range 只声明 Latin ⇒ 中文不会落到 Georgia(它也没有中文),而是继续沿字族
+   链落到 PingFang/雅黑 —— 得到「Latin 衬线 + CJK 无衬线」的混排,这是中文编辑排版里
+   成立的搭配。**别去掉 unicode-range**:去掉后中文会退到 SimSun/宋体,小字号下发虚难读。
+   两条 @font-face 分 400/700 是为了拿真 Georgia Bold,只写一条会触发合成伪粗。 */
+@font-face{font-family:"EditorialSerif";src:local("Georgia"),local("Times New Roman");font-weight:400;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+2000-206F,U+2070-209F,U+20A0-20BF,U+2100-214F,U+2190-21FF,U+2212}
+@font-face{font-family:"EditorialSerif";src:local("Georgia Bold"),local("Georgia-Bold"),local("Georgia"),local("Times New Roman Bold");font-weight:700;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+2000-206F,U+2070-209F,U+20A0-20BF,U+2100-214F,U+2190-21FF,U+2212}
 
 /* ---------------- tokens（:root = 亮色/默认；[data-theme=dark] 覆盖为暗）---------------- */
 :root{
-    /* 暖纸画布(app 底 < 页面 < 卡片,靠明度差做图/底关系,不靠重阴影)*/
-    --bg0:#efe9dc; --bg1:#f7f4ec;
-    --panel:#fffdf7; --panel-2:#f8f4ea; --panel-3:#f1ece0;
-    /* 暖色 hairline */
-    --line:#e7e0d1; --line-2:#d8cfba;
-    /* 品牌强调轴 = 深祖母绿(token 名沿用 --gold,语义现为祖母绿;JS/CSS 多处引用故不改名)*/
-    --gold:#0f7a52; --gold-hi:#0b6444;
-    --gold-ink:#0a6547;   /* 当「文字」用的深一档,保证小字 ≥4.5:1 */
-    --gold-rgb:15,122,82;
-    /* 实心按钮填充(祖母绿块配白字,两主题共用同一值,白字对比 4.77:1 达 AA)*/
-    --btn-fill:#0f7a52; --btn-fill-rgb:15,122,82;
+    /* 纸：app 底 < 页面(骨白) < 卡片(象牙)。靠明度差 + hairline 做图/底关系,不靠阴影。
+       #FAF9F5 / #F0EEE6 / #E3DACC 三个值逐字取自 anthropic.com。*/
+    --bg0:#e3dacc; --bg1:#f0eee6;
+    --panel:#faf9f5; --panel-2:#f3f1e8; --panel-3:#e6e3d7;
+    /* hairline 用墨的 alpha(其站就是 rgba(20,20,19,.1)),两个面上都成立、换底不用重调 */
+    --line:rgba(20,20,19,.10); --line-2:rgba(20,20,19,.20);
+    /* 品牌强调轴 = book cloth 赤陶(token 名沿用 --gold,语义历经 金→蓝→祖母绿→赤陶;
+       JS/CSS 多处引用故始终不改名)*/
+    --gold:#c6613f; --gold-hi:#b0512c;
+    --gold-ink:#a94a26;   /* 当「文字」用的深一档:#c6613f 在象牙上只有 3.87:1 不达 AA */
+    --gold-rgb:198,97,63;
+    /* 实心按钮 = 墨黑 + 象牙字(17.8:1)。⚠️ 暗色主题下整个反过来(象牙底 + 墨字),
+       故按钮文字色必须走 --btn-ink,**别写死 #fff**(写死会让暗色下白字压象牙底) */
+    --btn-fill:#141413; --btn-fill-rgb:20,20,19; --btn-ink:#faf9f5;
     /* 价格语义(crypto/美股/ETF 默认涨绿跌红;A股 在 [data-asset] 翻转)*/
     --up:#0b7a50; --down:#c4213a;
-    /* 独立「警示」暖琥珀(别挂 --gold,否则数据快过期的语义会变成品牌绿)*/
-    --warn:#b5750f;
-    /* 墨色文字阶梯(暖近黑 → 暖灰;muted-2 审计后调深至 AA:eyebrow/占位/名次在 panel/
-       panel-2 均 ≥4.5:1,同时仍比 muted 略浅一档保住二级弱化层次,不足处靠字号/字重区分)*/
-    --text:#232019; --muted:#6c665a; --muted-2:#757060;
-    /* 四资产识别色(功能性,非装饰;亮色下均已按 WCAG 调深)：加密琥珀/A股蓝/美股紫/ETF 深青
-       —— 与品牌祖母绿、涨跌绿红均可区分(青 vs 绿靠色相分开)*/
+    /* 独立「警示」暖琥珀(别挂 --gold,否则数据快过期的语义会变成品牌赤陶)*/
+    --warn:#96690c;
+    /* 墨色文字阶梯。纸的明度高 ⇒ 这套阶梯余量比 v5 宽得多(v5 最低 4.503 贴着 AA 线,
+       v6 最低 4.6+),但**改 --bg1/--panel 仍必须重测**(muted-2 在两个面上都要 ≥4.5)。*/
+    --text:#141413; --muted:#5c5a54; --muted-2:#6d6b64;
+    /* 四资产识别色(功能性,非装饰;亮色下均已按 WCAG 调深)：加密琥珀/A股蓝/美股紫/ETF 深青 */
     --asset-crypto:#9a4f04; --asset-crypto-ink:#8b4704; --asset-crypto-rgb:154,79,4;
-    /* ashare/etf 审计后调深保证「作标签文字」在自身淡色底上 ≥4.5:1 */
     --asset-ashare:#1d5cbf; --asset-us:#7c3aed; --asset-etf:#0a7061;
     /* ⚠️ -ink = 作「文字」用的墨色，比同名填充色更深，四资产各一份（2026-07-24 审美 PASS 加）。
-       起因：上面那行只按「单层淡底」调过，但 .tf-chip 实际嵌在**同色系选中态**里
-       （.nav-item.is-active 自带 rgba(asset,.10~.12)），底色叠两层后深一档，实测四资产
-       全部跌破 AA —— crypto 4.01 / ashare 4.48 / us 3.97 / etf 4.42（.sort-chip.is-active
-       单层也带崩 crypto 4.49 / us 4.30 / etf 4.48）。改用 ink 后最差 4.66。
+       起因：.tf-chip 实际嵌在**同色系选中态**里（.nav-item.is-active 自带 rgba(asset,.10~.12)），
+       底色叠两层后深一档，实测四资产全部跌破 AA。
        **只给文字用**：填充语义（分段控件 is-active 背景、圆点、强度条、--asset-accent
        装饰条）一律仍用不带 -ink 的原色，别混。*/
     --asset-ashare-ink:#1a53ac; --asset-us-ink:#6a2ed0; --asset-etf-ink:#086055;
+    /* ⚠️ v6 新增 -rgb 三兄弟(crypto 早就有)。此前 ashare/us/etf 的淡底一律写死
+       rgba(33,102,204,…)/rgba(13,138,122,…) 这类**旧色号**,有两个后果:
+       ① 与 --asset-* 的实际值漂移(#2166cc vs #1d5cbf);
+       ② **暗色主题下不跟随变亮** —— 深蓝 10% 压在 #1c1b19 上几乎看不见,而 crypto 因为
+          走 var(--asset-crypto-rgb) 正常显示。即"选中态高亮只有加密看得见"。
+       现在四个资产统一走 rgb token,两个毛病一起消失。别再写死色号。*/
+    --asset-ashare-rgb:29,92,191; --asset-us-rgb:124,58,237; --asset-etf-rgb:10,112,97;
     /* directional(在 [data-asset] 下翻转)*/
     --price-up:var(--up); --price-down:var(--down); --asset-accent:var(--asset-crypto);
     /* 强度条渐变 */
@@ -60,71 +86,91 @@
     --bar-down:linear-gradient(90deg,rgba(196,33,58,.14),rgba(196,33,58,.7));
     --bar-crypto:linear-gradient(90deg,rgba(154,79,4,.14),rgba(154,79,4,.62));
     --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:var(--bar-crypto);
-    /* 语义表面(暖纸)*/
-    --th-bg:#f3eee3; --row-line:rgba(35,32,25,.07);
-    --hover-wash:rgba(35,32,25,.028); --active-wash:rgba(15,122,82,.09); --nav-hover:rgba(35,32,25,.04);
-    --header-bg:#f7f4ec; --dock-bg:#fffdf7;
-    --group-dash:rgba(35,32,25,.1);
-    --modal-bg:#fffdf7;
+    /* 语义表面 */
+    --th-bg:#f1efe7; --row-line:rgba(20,20,19,.075);
+    --hover-wash:rgba(20,20,19,.03); --active-wash:rgba(198,97,63,.10); --nav-hover:rgba(20,20,19,.045);
+    --header-bg:#faf9f5;
+    /* 导出坞 = 全站唯一的「反色墨块」(其站用墨黑块给页面打标点)。两个主题都是暗的,
+       故坞内的文字/描边一律走 --dock-* 而不是主题 token,见 .dock 那节。*/
+    --dock-bg:#161512; --dock-ink:#faf9f5; --dock-accent:#e8977a; --dock-line:rgba(250,249,245,.16);
+    --group-dash:rgba(20,20,19,.09);
+    --modal-bg:#faf9f5;
     /* 卡片纯平面 + hairline,无高光叠层——但 background:var(--panel-hi),var(--panel) 是多层
        背景简写,非末层必须是合法 <image>；纯色/transparent 关键字在此位非法会让整条
        background 被丢弃(真实踩过:board-head/pulse/mkt/rail 背景全消失)。用「全透明渐变」占位。*/
     --panel-hi:linear-gradient(transparent,transparent);
-    --chip-wash:rgba(35,32,25,.03);
+    --chip-wash:rgba(20,20,19,.035);
     /* 字体 / 圆角 / 动效 */
     --font-sans:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans SC",Roboto,sans-serif;
+    --font-serif:"EditorialSerif","Geist",-apple-system,"PingFang SC","Microsoft YaHei","Noto Serif SC",Georgia,serif;
     --mono:"Geist Mono",ui-monospace,"Cascadia Code","SF Mono",Consolas,"JetBrains Mono",monospace;
-    /* 编辑式:圆角略大更柔;真正该是药丸的(资产分段/胶囊/徽标)用 r-pill */
-    --r-lg:16px; --r-md:12px; --r-sm:8px; --r-btn:9px; --r-pill:999px;
-    /* 阴影极克制(编辑式靠 hairline + 留白,不靠光晕);暖色投影 */
-    --shadow-1:0 1px 2px rgba(60,50,30,.06);
-    --shadow-pop:0 14px 34px rgba(60,50,30,.14),0 0 0 1px rgba(35,32,25,.06);
-    --shadow-modal:0 22px 54px rgba(40,32,18,.2);
+    /* 其站实测 8px 主导、卡片 16px;药丸(资产分段/胶囊/徽标)用 r-pill */
+    --r-lg:16px; --r-md:12px; --r-sm:8px; --r-btn:8px; --r-pill:999px;
+    /* 阴影 = 其站那条三层极轻叠加(0 2px 2px .01 / 0 4px 4px .02 / 0 16px 24px .04)按本站
+       层级缩放。卡片基本不用阴影,只靠 hairline —— 这是纸墨体系的核心手法之一。*/
+    --shadow-1:0 1px 2px rgba(20,20,19,.03);
+    --shadow-pop:0 2px 2px rgba(20,20,19,.02),0 4px 4px rgba(20,20,19,.03),0 16px 24px rgba(20,20,19,.07);
+    --shadow-modal:0 4px 6px rgba(20,20,19,.04),0 12px 20px rgba(20,20,19,.08),0 28px 48px rgba(20,20,19,.16);
+    --shadow-btn:0 2px 4px rgba(20,20,19,.10),0 8px 16px rgba(20,20,19,.12);
     --dur:.14s; --dur-smooth:.18s;
-    --selection:rgba(15,122,82,.16);
+    --selection:rgba(198,97,63,.2);
 }
 
-/* ---- 暗色变体(暖炭,非 GitHub 蓝黑;文字阶梯保持 AA)---- */
+/* ---- 暗色变体 = 其站「反色区块」的同一套:墨底 #141413 + 象牙字 #FAF9F5 ---- */
 [data-theme="dark"]{
-    --bg0:#100f0c; --bg1:#141311;
-    --panel:#1b1915; --panel-2:#221f19; --panel-3:#2a261e;
-    --line:#2a2720; --line-2:#39352b;
-    --gold:#33c088; --gold-hi:#4dd29d; --gold-ink:#42ca90; --gold-rgb:51,192,136;
-    /* --btn-fill 两主题共用 :root 的 #0f7a52(白字达标),此处不覆盖 */
+    --bg0:#0d0d0c; --bg1:#141413;
+    --panel:#1c1b19; --panel-2:#232220; --panel-3:#2b2a27;
+    --line:rgba(250,249,245,.11); --line-2:rgba(250,249,245,.22);
+    --gold:#e08a66; --gold-hi:#eda184; --gold-ink:#e08a66; --gold-rgb:224,138,102;
+    /* ⚠️ 按钮在暗色下整个反过来:象牙底 + 墨字(其站反色区块里的 CTA 就是这样) */
+    --btn-fill:#f0eee6; --btn-fill-rgb:240,238,230; --btn-ink:#141413;
     --up:#22c286; --down:#f2495e;
     --warn:#e0a437;
-    --text:#ece7dc; --muted:#9c9587; --muted-2:#979082;
+    --text:#f5f3ed; --muted:#a8a49a; --muted-2:#96938a;
     --asset-crypto:#f2a93c; --asset-crypto-ink:#f2a93c; --asset-crypto-rgb:242,169,60;
     --asset-ashare:#6ab0ff; --asset-us:#a78bfa; --asset-etf:#2dd4bf;
-    /* 暗色两层叠色实测最差 4.92（全过），无需调深；ink 与填充同值，仅为让 var() 两个主题都解析 */
-    --asset-ashare-ink:#6ab0ff; --asset-us-ink:#a78bfa; --asset-etf-ink:#2dd4bf;
+    /* ⚠️ v6 起 ashare/us **暗色的 ink 必须比填充色更亮**（与亮色下"ink 更深"正好相反）。
+       起因是本轮修掉了「淡底写死亮色色号」那个 bug：修之前暗色下 .tf-chip 的底是
+       rgba(124,58,237,.14) 这种**深紫**、几乎等于没有底，字自然够对比；修之后底跟着变亮
+       (rgba(167,139,250,.16))，而 .tf-chip 又恰好嵌在同样变亮的 .nav-item.is-active
+       (rgba(us,.12)) 里 —— **两层亮紫叠加**把有效底抬到 rgb(64,56,84)，#a78bfa 掉到
+       4.03:1 不达 AA（本轮实测唯一一处 fail）。把 ink 提亮到 #b7a0ff 后回到 5.0+。
+       crypto/etf 的暗色 ink 与填充同值即可达标（实测 4.8+），无需拆开。*/
+    --asset-ashare-ink:#8cc3ff; --asset-us-ink:#b7a0ff; --asset-etf-ink:#2dd4bf;
+    --asset-ashare-rgb:106,176,255; --asset-us-rgb:167,139,250; --asset-etf-rgb:45,212,191;
     --bar-up:linear-gradient(90deg,rgba(34,194,134,.12),rgba(34,194,134,.78));
     --bar-down:linear-gradient(90deg,rgba(242,73,94,.12),rgba(242,73,94,.78));
     --bar-crypto:linear-gradient(90deg,rgba(242,169,60,.10),rgba(242,169,60,.72));
-    --th-bg:#191712; --row-line:rgba(236,231,220,.06);
-    --hover-wash:rgba(236,231,220,.035); --active-wash:rgba(51,192,136,.12); --nav-hover:rgba(236,231,220,.045);
-    --header-bg:#141311; --dock-bg:#1b1915;
-    --group-dash:rgba(236,231,220,.06);
-    --modal-bg:#1b1915;
+    --th-bg:#201f1c; --row-line:rgba(250,249,245,.07);
+    --hover-wash:rgba(250,249,245,.04); --active-wash:rgba(224,138,102,.13); --nav-hover:rgba(250,249,245,.05);
+    --header-bg:#141413;
+    --dock-bg:#242320; --dock-ink:#faf9f5; --dock-accent:#e8977a; --dock-line:rgba(250,249,245,.18);
+    --group-dash:rgba(250,249,245,.08);
+    --modal-bg:#1c1b19;
     --panel-hi:linear-gradient(transparent,transparent);
-    --chip-wash:rgba(236,231,220,.04);
+    --chip-wash:rgba(250,249,245,.045);
     --shadow-1:0 1px 2px rgba(0,0,0,.3);
-    --shadow-pop:0 14px 34px rgba(0,0,0,.5),0 0 0 1px rgba(236,231,220,.06);
-    --shadow-modal:0 22px 54px rgba(0,0,0,.55);
-    --selection:rgba(51,192,136,.26);
+    --shadow-pop:0 2px 4px rgba(0,0,0,.3),0 8px 16px rgba(0,0,0,.36),0 20px 32px rgba(0,0,0,.4);
+    --shadow-modal:0 8px 16px rgba(0,0,0,.4),0 28px 56px rgba(0,0,0,.55);
+    --shadow-btn:0 2px 6px rgba(0,0,0,.4),0 10px 20px rgba(0,0,0,.34);
+    --selection:rgba(224,138,102,.28);
 }
 
 /* ---- 资产价格语义作用域(挂在 .app 上;A股 涨红跌绿)---- */
 [data-asset="crypto"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:var(--bar-crypto); --asset-accent:var(--asset-crypto); }
-[data-asset="ashare"]{ --price-up:var(--down); --price-down:var(--up); --bar-pos:var(--bar-down); --bar-neg:var(--bar-up); --bar-neutral:linear-gradient(90deg,rgba(33,102,204,.12),rgba(33,102,204,.7)); --asset-accent:var(--asset-ashare); }
-[data-asset="us"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:linear-gradient(90deg,rgba(124,58,237,.12),rgba(124,58,237,.7)); --asset-accent:var(--asset-us); }
-[data-asset="etf"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:linear-gradient(90deg,rgba(13,138,122,.12),rgba(13,138,122,.7)); --asset-accent:var(--asset-etf); }
+[data-asset="ashare"]{ --price-up:var(--down); --price-down:var(--up); --bar-pos:var(--bar-down); --bar-neg:var(--bar-up); --bar-neutral:linear-gradient(90deg,rgba(var(--asset-ashare-rgb),.12),rgba(var(--asset-ashare-rgb),.7)); --asset-accent:var(--asset-ashare); }
+[data-asset="us"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:linear-gradient(90deg,rgba(var(--asset-us-rgb),.12),rgba(var(--asset-us-rgb),.7)); --asset-accent:var(--asset-us); }
+[data-asset="etf"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:linear-gradient(90deg,rgba(var(--asset-etf-rgb),.12),rgba(var(--asset-etf-rgb),.7)); --asset-accent:var(--asset-etf); }
 
 /* ---------------- reset + page ---------------- */
 *{margin:0;padding:0;box-sizing:border-box}
 [hidden]{display:none!important}
 html{scrollbar-color:var(--line-2) var(--bg1);-webkit-text-size-adjust:100%}
 body{font-family:var(--font-sans);color:var(--text);background:var(--bg1);min-height:100vh;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;font-feature-settings:"cv01","ss01"}
+/* v6 长文用 Latin 衬线(CJK 自动落回无衬线,见顶部 EditorialSerif)。其站的分工:
+   衬线=正文/说明,无衬线=标题与 UI 控件。**别把它扩到表格/导航/chip 上**——数据密度高的
+   地方衬线会拖慢扫读,而且 Georgia 是**旧式数字(non-lining)**,进不了任何要对齐的数列。*/
+.prose{font-family:var(--font-serif);letter-spacing:0}
 body.no-scroll{overflow:hidden}
 ::selection{background:var(--selection)}
 a{color:var(--gold-ink);text-decoration:none}
@@ -134,27 +180,32 @@ a:hover{color:var(--gold-hi)}
 .skip-link:focus{top:8px}
 .main:focus{outline:none}
 
-/* ---------------- app 骨架(编辑式:更足的留白)---------------- */
+/* ---------------- app 骨架(纸墨:留白再放一档)---------------- */
 .app{min-height:100vh;padding-bottom:96px;color:var(--text)}
-.wrap{max-width:1240px;margin:0 auto;padding:30px 26px 0}
-.layout{display:grid;grid-template-columns:252px minmax(0,1fr);gap:30px;align-items:start}
+.wrap{max-width:1240px;margin:0 auto;padding:34px 28px 0}
+.layout{display:grid;grid-template-columns:252px minmax(0,1fr);gap:32px;align-items:start}
 .main{min-width:0}
 
 /* ---------------- topbar(实底填充,永不 blur/sticky)---------------- */
 .topbar{background:var(--header-bg);border-bottom:1px solid var(--line)}
-.topbar__inner{max-width:1240px;margin:0 auto;padding:0 26px;min-height:68px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.topbar__inner{max-width:1240px;margin:0 auto;padding:0 28px;min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .brand{display:flex;align-items:center;gap:12px}
 .brand__logo{width:34px;height:34px;flex:none}
-.brand__name{font-size:17.5px;font-weight:700;letter-spacing:-.2px;line-height:1.12;white-space:nowrap}
-.brand__latin{color:var(--muted-2);font-size:12.5px;font-weight:500;margin-left:3px;letter-spacing:0}
-.brand__tag{font-size:10.5px;color:var(--muted-2);letter-spacing:1.4px;margin-top:3px;white-space:nowrap;text-transform:uppercase}
+.brand__name{font-size:18px;font-weight:600;letter-spacing:-.01em;line-height:1.15;white-space:nowrap}
+/* 域名走衬线:全站唯一「纯 Latin 且属于品牌语气」的一处,Georgia 在这里是纯赚的编辑感 */
+.brand__latin{font-family:var(--font-serif);color:var(--muted-2);font-size:13px;font-weight:400;margin-left:4px;letter-spacing:0}
+/* v6 排印规矩:全站不用 text-transform:uppercase、不用正字距(其站实测两者皆 normal)。
+   中文本来就没有大小写,大写只作用于夹杂的 Latin,反而让「日线/RSI」这类混排忽大忽小;
+   正字距则把中文字拉散(v5 已因此从 .12em 收到 .05em,v6 直接归零)。层级改由字号/
+   字重/墨色三者承担。*/
+.brand__tag{font-size:11.5px;color:var(--muted-2);letter-spacing:0;margin-top:3px;white-space:nowrap}
 .topbar__tools{display:flex;align-items:center;gap:10px}
 .hamburger{display:none;width:36px;height:36px;flex:none;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line);border-radius:var(--r-btn);color:var(--text);cursor:pointer}
 .theme-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex:none;background:transparent;border:1px solid var(--line);border-radius:var(--r-btn);color:var(--muted);cursor:pointer;font-size:14px;transition:color .15s,border-color .15s}
 .theme-btn:hover{color:var(--text);border-color:var(--muted)}
 
 /* 新鲜度胶囊(桌面三胶囊,非激活侧 .is-dim)*/
-.fresh{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);border-radius:var(--r-pill);padding:5px 12px;font-variant-numeric:tabular-nums;white-space:nowrap;transition:opacity var(--dur-smooth),border-color .15s;font-family:inherit;appearance:none;-webkit-appearance:none}
+.fresh{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);border-radius:var(--r-pill);padding:5.5px 13px;font-variant-numeric:tabular-nums;white-space:nowrap;transition:opacity var(--dur-smooth),border-color .15s;font-family:inherit;appearance:none;-webkit-appearance:none}
 .fresh.is-dim{opacity:.5;cursor:pointer}
 .fresh.is-dim:hover{opacity:.85;border-color:var(--line-2)}
 .fresh__dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--muted-2)}
@@ -172,33 +223,34 @@ a:hover{color:var(--gold-hi)}
 .fresh__next{color:var(--muted)}
 
 /* 通行证状态徽章(顶栏 + 抽屉共用)*/
-.lic-badge{display:inline-flex;align-items:center;font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:var(--r-pill)}
+.lic-badge{display:inline-flex;align-items:center;font-size:12px;font-weight:600;padding:5px 11px;border-radius:var(--r-pill)}
 .lic-off{color:var(--muted);background:var(--chip-wash);border:1px solid var(--line)}
-.lic-on{background:rgba(15,122,82,.12);color:var(--gold-ink);border:1px solid rgba(15,122,82,.3)}
+.lic-on{background:rgba(var(--gold-rgb),.12);color:var(--gold-ink);border:1px solid rgba(var(--gold-rgb),.32)}
 /* 失效徽章:亮色下 --down(#c4213a) 落在 rgba(down,.12) 粉底上仅 4.37:1(2026-07-24 审美 PASS
    实测),深一档到 #a81c31=5.5:1 达 AA;暗色底极深,--down(#f2495e) 本就达标,单独保持 */
 .lic-expired{background:rgba(196,33,58,.12);color:#a81c31;border:1px solid rgba(196,33,58,.32)}
 [data-theme="dark"] .lic-expired{color:var(--down)}
-.lic-btn-mini{background:rgba(var(--gold-rgb),.08);border:1px solid rgba(var(--gold-rgb),.42);color:var(--gold-ink);font-size:12px;font-weight:600;padding:6px 14px;border-radius:var(--r-btn);cursor:pointer;transition:all .18s;white-space:nowrap}
-.lic-btn-mini:hover{background:var(--btn-fill);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(var(--btn-fill-rgb),.3)}
+.lic-btn-mini{background:rgba(var(--gold-rgb),.08);border:1px solid rgba(var(--gold-rgb),.42);color:var(--gold-ink);font-size:12.5px;font-weight:600;padding:6px 14px;border-radius:var(--r-btn);cursor:pointer;transition:all .18s;white-space:nowrap}
+.lic-btn-mini:hover{background:var(--btn-fill);color:var(--btn-ink);border-color:transparent;box-shadow:var(--shadow-btn)}
 .drawer__license{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line)}
 
-/* buttons */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:var(--font-sans);font-weight:600;line-height:1.2;border:1px solid transparent;border-radius:var(--r-btn);cursor:pointer;white-space:nowrap;padding:9px 18px;font-size:13px;transition:background .18s,color .18s,border-color .18s,box-shadow .18s,transform .15s}
-.btn--sm{padding:6px 14px;font-size:12px}
-.btn--primary{background:var(--btn-fill);color:#fff;font-weight:700}
-.btn--primary:hover{box-shadow:0 4px 14px rgba(var(--btn-fill-rgb),.32)}
+/* buttons —— 主按钮是**墨黑实心**(其站的 CTA 就是墨黑,不是品牌色实心);
+   文字色一律 var(--btn-ink),暗色主题下按钮整体反色为象牙底墨字 */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:var(--font-sans);font-weight:600;line-height:1.2;border:1px solid transparent;border-radius:var(--r-btn);cursor:pointer;white-space:nowrap;padding:9.5px 19px;font-size:13.5px;transition:background .18s,color .18s,border-color .18s,box-shadow .18s,transform .15s}
+.btn--sm{padding:6.5px 15px;font-size:12.5px}
+.btn--primary{background:var(--btn-fill);color:var(--btn-ink);font-weight:600}
+.btn--primary:hover{box-shadow:var(--shadow-btn)}
 .btn--ghost{background:transparent;color:var(--muted);border-color:var(--line-2)}
 .btn--ghost:hover{color:var(--text);border-color:var(--muted)}
 
 /* ---------------- 横幅(A股快照说明 / 数据延迟)---------------- */
-.banner{position:relative;padding:8px 36px;text-align:center;font-size:12.5px;color:var(--gold-ink);border-top:1px solid rgba(var(--gold-rgb),.3);background:rgba(var(--gold-rgb),.08)}
+.banner{position:relative;padding:9px 36px;text-align:center;font-size:13px;color:var(--gold-ink);border-top:1px solid rgba(var(--gold-rgb),.3);background:rgba(var(--gold-rgb),.08)}
 .banner--down{color:var(--down);border-top-color:rgba(196,33,58,.3);background:rgba(196,33,58,.08)}
 .banner__close{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:inherit;cursor:pointer;font-size:13px;opacity:.7;padding:9px;line-height:1}
 .banner__close:hover{opacity:1}
 
 /* ---------------- rail 导航(编辑式侧栏)---------------- */
-.rail{display:flex;flex-direction:column;gap:16px;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow-1)}
+.rail{display:flex;flex-direction:column;gap:18px;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px;box-shadow:var(--shadow-1)}
 .asset-seg{display:flex;gap:4px;padding:4px;background:var(--bg0);border:1px solid var(--line);border-radius:var(--r-pill)}
 /* transition 只留 color:实测「完全透明→不透明纯色」的 background/box-shadow 过渡会在
    本引擎卡死在起始值(2026-07-22 真实复现),active 态改纯色后才踩中,别恢复。*/
@@ -222,21 +274,23 @@ a:hover{color:var(--gold-hi)}
 [data-theme="dark"] .asset-seg__opt[data-k="us"].is-active{color:#160b2e}
 [data-theme="dark"] .asset-seg__opt[data-k="etf"].is-active{color:#04211c}
 [data-theme="dark"] .asset-seg__opt.is-active .asset-seg__dot{background:rgba(0,0,0,.4)}
-.board-nav{display:flex;flex-direction:column;gap:13px}
+.board-nav{display:flex;flex-direction:column;gap:14px}
 .nav-group{display:flex;flex-direction:column;gap:3px}
-.nav-group+.nav-group{border-top:1px dashed var(--group-dash);padding-top:11px}
-.nav-group__label{font-size:10.5px;font-weight:600;letter-spacing:.05em;color:var(--muted-2);padding:2px 8px 5px;text-transform:uppercase}
-.nav-item{position:relative;display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:transparent;border:none;border-radius:var(--r-btn);padding:9px 10px 9px 14px;cursor:pointer;font-family:var(--font-sans);color:var(--muted);font-size:13px;transition:background .14s,color .14s}
+.nav-group+.nav-group{border-top:1px dashed var(--group-dash);padding-top:12px}
+.nav-group__label{font-size:11.5px;font-weight:600;letter-spacing:0;color:var(--muted-2);padding:2px 8px 6px}
+.nav-item{position:relative;display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:transparent;border:none;border-radius:var(--r-btn);padding:9.5px 10px 9.5px 14px;cursor:pointer;font-family:var(--font-sans);color:var(--muted);font-size:13.5px;transition:background .14s,color .14s}
 .nav-item:hover{background:var(--nav-hover);color:var(--text)}
 .nav-item.is-active{background:var(--active-wash);color:var(--text)}
+/* ⚠️ 四个资产统一走 -rgb token(v6 前 ashare/us/etf 写死旧色号 ⇒ 暗色下高亮几乎看不见,
+   只有 crypto 正常。见 tokens 里 -rgb 三兄弟的注释,别写回字面 rgba)*/
 [data-asset="crypto"] .nav-item.is-active{background:rgba(var(--asset-crypto-rgb),.12)}
-[data-asset="ashare"] .nav-item.is-active{background:rgba(33,102,204,.1)}
-[data-asset="us"] .nav-item.is-active{background:rgba(124,58,237,.1)}
-[data-asset="etf"] .nav-item.is-active{background:rgba(13,138,122,.1)}
+[data-asset="ashare"] .nav-item.is-active{background:rgba(var(--asset-ashare-rgb),.12)}
+[data-asset="us"] .nav-item.is-active{background:rgba(var(--asset-us-rgb),.12)}
+[data-asset="etf"] .nav-item.is-active{background:rgba(var(--asset-etf-rgb),.12)}
 .nav-item__name{font-weight:500}
 .nav-item.is-active .nav-item__name{font-weight:600}
 .tab-lock{width:11px;height:11px;flex:none;opacity:.7;vertical-align:-1px}
-.nav-item__count{margin-left:auto;flex:none;font-family:var(--mono);font-size:10.5px;color:var(--muted-2);font-variant-numeric:tabular-nums}
+.nav-item__count{margin-left:auto;flex:none;font-family:var(--mono);font-size:11px;color:var(--muted-2);font-variant-numeric:tabular-nums}
 .nav-item__count.is-zero{opacity:.45}
 .nav-item.is-active .nav-item__count{color:var(--muted)}
 .nav-item__bar{position:absolute;left:0;top:50%;transform:translateY(-50%);height:0;width:2.5px;border-radius:3px;background:var(--asset-accent);opacity:0;transition:height .16s,opacity .16s}
@@ -244,37 +298,37 @@ a:hover{color:var(--gold-hi)}
 .tf-chip{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:4px;font-size:10px;font-weight:700;flex:none}
 .tf-chip--wide{width:auto;min-width:15px;padding:0 4px;letter-spacing:.2px}
 [data-asset="crypto"] .tf-chip{background:rgba(var(--asset-crypto-rgb),.16);color:var(--asset-crypto-ink)}
-[data-asset="ashare"] .tf-chip{background:rgba(33,102,204,.14);color:var(--asset-ashare-ink)}
-[data-asset="us"] .tf-chip{background:rgba(124,58,237,.14);color:var(--asset-us-ink)}
-[data-asset="etf"] .tf-chip{background:rgba(13,138,122,.14);color:var(--asset-etf-ink)}
+[data-asset="ashare"] .tf-chip{background:rgba(var(--asset-ashare-rgb),.16);color:var(--asset-ashare-ink)}
+[data-asset="us"] .tf-chip{background:rgba(var(--asset-us-rgb),.16);color:var(--asset-us-ink)}
+[data-asset="etf"] .tf-chip{background:rgba(var(--asset-etf-rgb),.16);color:var(--asset-etf-ink)}
 /* 暗色下资产色变亮,tf-chip 底/字跟随(靠 token 自动翻,无需逐一覆盖)*/
-.rail-foot{margin-top:2px;padding:11px 8px 2px;border-top:1px solid var(--line);font-size:11px;color:var(--muted-2);letter-spacing:.02em;font-variant-numeric:tabular-nums}
+.rail-foot{margin-top:2px;padding:12px 8px 2px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted-2);letter-spacing:0;font-variant-numeric:tabular-nums;line-height:1.6}
 
 /* ---------------- 市场脉搏(无缝状态条)---------------- */
-.pulse{display:flex;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);overflow:hidden;margin-bottom:14px}
-.pulse__cell{flex:1;min-width:0;padding:15px 18px}
+.pulse{display:flex;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);overflow:hidden;margin-bottom:16px}
+.pulse__cell{flex:1;min-width:0;padding:16px 19px}
 .pulse__cell+.pulse__cell{border-left:1px solid var(--line)}
-.pulse__label{font-size:10.5px;color:var(--muted-2);letter-spacing:.05em;margin-bottom:7px;white-space:nowrap;text-transform:uppercase}
-.pulse__value{font-size:23px;font-weight:700;letter-spacing:-.02em;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.1}
+.pulse__label{font-size:11.5px;color:var(--muted-2);letter-spacing:0;margin-bottom:7px;white-space:nowrap}
+.pulse__value{font-size:24px;font-weight:600;letter-spacing:-.02em;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.1}
 .pulse__value .is-gold{color:var(--gold-ink)}
 .pulse__value .is-up{color:var(--price-up)}
 .pulse__value .is-down{color:var(--price-down)}
-.pulse__suffix{font-size:12px;font-weight:600;margin-left:6px}
+.pulse__suffix{font-size:12.5px;font-weight:600;margin-left:6px}
 .pulse__suffix.is-up{color:var(--price-up)}
 .pulse__suffix.is-down{color:var(--price-down)}
 .pulse__suffix.is-muted{color:var(--muted-2)}
-.pulse__sub{font-size:10.5px;color:var(--muted-2);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pulse__sub{font-size:11.5px;color:var(--muted-2);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ---------------- 市场概览全局条(免费,加密专属)---------------- */
-.mkt{background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);margin-bottom:14px;overflow:hidden}
+.mkt{background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);margin-bottom:16px;overflow:hidden}
 .mkt__inner{display:flex;flex-wrap:wrap;align-items:stretch}
-.mkt__item{display:flex;flex-direction:column;justify-content:center;gap:5px;padding:11px 18px;min-width:0;border-right:1px solid var(--line)}
+.mkt__item{display:flex;flex-direction:column;justify-content:center;gap:5px;padding:12px 19px;min-width:0;border-right:1px solid var(--line)}
 .mkt__item:last-child{border-right:none}
-.mkt__k{font-size:10px;color:var(--muted-2);letter-spacing:.05em;white-space:nowrap;text-transform:uppercase}
-.mkt__v{font-size:14.5px;font-weight:600;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--text)}
+.mkt__k{font-size:11.5px;color:var(--muted-2);letter-spacing:0;white-space:nowrap}
+.mkt__v{font-size:15px;font-weight:600;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--text)}
 .mkt__v .is-up{color:var(--price-up)}
 .mkt__v .is-down{color:var(--price-down)}
-.mkt__sub{font-size:11px;font-weight:600;color:var(--muted-2);margin-left:7px}
+.mkt__sub{font-size:11.5px;font-weight:600;color:var(--muted-2);margin-left:7px}
 .mkt__senti{display:flex;align-items:center;gap:9px}
 .mkt__gauge{position:relative;width:80px;height:6px;border-radius:3px;background:linear-gradient(90deg,#c4213a 0%,#c4890f 50%,#0b7a50 100%);flex:none}
 .mkt__marker{position:absolute;top:50%;transform:translate(-50%,-50%);width:3px;height:13px;border-radius:2px;background:var(--text);box-shadow:0 0 0 2px var(--panel)}
@@ -285,19 +339,22 @@ a:hover{color:var(--gold-hi)}
 [data-theme="dark"] .mkt-z--fear2{color:#f2495e}[data-theme="dark"] .mkt-z--fear{color:#e5844d}[data-theme="dark"] .mkt-z--neutral{color:var(--muted)}[data-theme="dark"] .mkt-z--greed{color:#46a758}[data-theme="dark"] .mkt-z--greed2{color:#30c98a}
 
 /* ---------------- board 头(标识 + 搜索)---------------- */
-.board-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px 20px;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:14px}
+.board-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px 22px;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:16px}
 .board-head__title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.board-head__name{font-size:20px;font-weight:700;margin:0;letter-spacing:-.015em}
-.board-head__note{font-size:12.5px;color:var(--muted);margin-top:7px;font-variant-numeric:tabular-nums;line-height:1.5}
-.asset-tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;letter-spacing:.04em;color:var(--asset-crypto-ink);background:rgba(var(--asset-crypto-rgb),.14);white-space:nowrap}
-.asset-tag.is-ashare{color:var(--asset-ashare-ink);background:rgba(33,102,204,.14)}
-.asset-tag.is-us{color:var(--asset-us-ink);background:rgba(124,58,237,.14)}
-.asset-tag.is-etf{color:var(--asset-etf-ink);background:rgba(13,138,122,.14)}
-.tf-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);white-space:nowrap;letter-spacing:.04em}
-.search{display:flex;align-items:center;gap:8px;width:250px;flex:none;padding:8px 12px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-btn);transition:border-color var(--dur),box-shadow var(--dur)}
-.search:focus-within{border-color:rgba(var(--gold-rgb),.5);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.1)}
+/* 其站 h2/h3 实测 = Sans 600 / 24px / 无字距。标题放大一档、字重反而收一档:
+   纸墨体系里「大而不重」才是编辑感,700 会显得像后台管理系统。*/
+.board-head__name{font-size:24px;font-weight:600;margin:0;letter-spacing:-.015em;line-height:1.25}
+/* 说明行是全站最像「正文」的一处 ⇒ 走衬线(Latin 部分为 Georgia,CJK 无衬线) */
+.board-head__note{font-family:var(--font-serif);font-size:13.5px;color:var(--muted);margin-top:8px;font-variant-numeric:tabular-nums;line-height:1.6}
+.asset-tag{font-size:11.5px;font-weight:600;padding:3.5px 9px;border-radius:6px;letter-spacing:0;color:var(--asset-crypto-ink);background:rgba(var(--asset-crypto-rgb),.14);white-space:nowrap}
+.asset-tag.is-ashare{color:var(--asset-ashare-ink);background:rgba(var(--asset-ashare-rgb),.14)}
+.asset-tag.is-us{color:var(--asset-us-ink);background:rgba(var(--asset-us-rgb),.14)}
+.asset-tag.is-etf{color:var(--asset-etf-ink);background:rgba(var(--asset-etf-rgb),.14)}
+.tf-badge{font-size:11.5px;font-weight:600;padding:3.5px 9px;border-radius:6px;color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);white-space:nowrap;letter-spacing:0}
+.search{display:flex;align-items:center;gap:8px;width:250px;flex:none;padding:8.5px 12px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-btn);transition:border-color var(--dur),box-shadow var(--dur)}
+.search:focus-within{border-color:rgba(var(--gold-rgb),.55);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.12)}
 .search__icon{width:14px;height:14px;color:var(--muted-2);flex:none}
-.search__input{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font-size:13px;font-family:inherit}
+.search__input{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font-size:13.5px;font-family:inherit}
 .search__input::placeholder{color:var(--muted-2)}
 
 /* ---------------- 排序条(多轴选择 chips;表头值列只显当前轴)---------------- */
@@ -313,22 +370,23 @@ a:hover{color:var(--gold-hi)}
    「黑屏 GPU 合成器 bug」一节），排序条这种常驻元素不引入任何新的合成层。
    ⚠️ align-items 由 center 改 flex-start：换行后「排序」标签要贴第一行，不能垂直居中
    到两行的中间。标签用 padding-top 与第一排 chip 做光学对齐。 */
-.sort-strip{display:flex;align-items:flex-start;gap:8px;margin-bottom:12px}
-.sort-strip__label{flex:none;padding-top:9px;font-size:10px;font-weight:600;letter-spacing:.05em;color:var(--muted-2);user-select:none;text-transform:uppercase}
+.sort-strip{display:flex;align-items:flex-start;gap:9px;margin-bottom:13px}
+.sort-strip__label{flex:none;padding-top:9px;font-size:11.5px;font-weight:600;letter-spacing:0;color:var(--muted-2);user-select:none}
 .sort-strip__chips{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0;padding:2px}
 .sort-strip__chips::-webkit-scrollbar{display:none}
-.sort-chip{flex:none;display:inline-flex;align-items:center;gap:4px;padding:6px 13px;font-size:12px;font-weight:600;font-family:var(--font-sans);color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);border-radius:var(--r-pill);cursor:pointer;white-space:nowrap;transition:color .14s,border-color .14s,background .14s}
+.sort-chip{flex:none;display:inline-flex;align-items:center;gap:4px;padding:6.5px 13px;font-size:12.5px;font-weight:500;font-family:var(--font-sans);color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);border-radius:var(--r-pill);cursor:pointer;white-space:nowrap;transition:color .14s,border-color .14s,background .14s}
 .sort-chip:hover{color:var(--text);border-color:var(--muted)}
 .sort-chip__arrow{font-size:9px;line-height:1}
+.sort-chip.is-active{font-weight:600}
 [data-asset="crypto"] .sort-chip.is-active{background:rgba(var(--asset-crypto-rgb),.14);border-color:rgba(var(--asset-crypto-rgb),.5);color:var(--asset-crypto-ink)}
-[data-asset="ashare"] .sort-chip.is-active{background:rgba(33,102,204,.13);border-color:rgba(33,102,204,.5);color:var(--asset-ashare-ink)}
-[data-asset="us"] .sort-chip.is-active{background:rgba(124,58,237,.13);border-color:rgba(124,58,237,.5);color:var(--asset-us-ink)}
-[data-asset="etf"] .sort-chip.is-active{background:rgba(13,138,122,.13);border-color:rgba(13,138,122,.5);color:var(--asset-etf-ink)}
+[data-asset="ashare"] .sort-chip.is-active{background:rgba(var(--asset-ashare-rgb),.13);border-color:rgba(var(--asset-ashare-rgb),.5);color:var(--asset-ashare-ink)}
+[data-asset="us"] .sort-chip.is-active{background:rgba(var(--asset-us-rgb),.13);border-color:rgba(var(--asset-us-rgb),.5);color:var(--asset-us-ink)}
+[data-asset="etf"] .sort-chip.is-active{background:rgba(var(--asset-etf-rgb),.13);border-color:rgba(var(--asset-etf-rgb),.5);color:var(--asset-etf-ink)}
 
 /* ---------------- 表格(表头/表体分离——表体内滚动,绝不 sticky)---------------- */
 .table{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-1);overflow:hidden}
 .thead{display:flex;align-items:stretch;background:var(--th-bg);border-bottom:1px solid var(--line);overflow-y:hidden;scrollbar-gutter:stable}
-.th{display:flex;align-items:center;font-size:10.5px;font-weight:600;letter-spacing:.05em;color:var(--muted);user-select:none;padding:12px 0;text-transform:uppercase}
+.th{display:flex;align-items:center;font-size:11.5px;font-weight:600;letter-spacing:0;color:var(--muted);user-select:none;padding:13px 0}
 .tbody{max-height:min(60vh,640px);overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;overscroll-behavior:contain}
 .tbody::-webkit-scrollbar{width:11px}
 .tbody::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:6px;border:3px solid var(--panel)}
@@ -337,7 +395,7 @@ a:hover{color:var(--gold-hi)}
 .tr:hover{background:var(--hover-wash)}
 .c-check{width:46px;flex:none;display:flex;align-items:center;justify-content:center;position:relative}
 .c-rank{width:60px;flex:none;display:flex;align-items:center;padding-left:6px}
-.c-sym{flex:1;min-width:0;padding:11px 10px 11px 2px}
+.c-sym{flex:1;min-width:0;padding:12px 10px 12px 2px}
 .c-val{width:240px;flex:none;display:flex;align-items:center;justify-content:flex-end;padding:0 18px 0 8px;white-space:nowrap}
 .sort-opt{color:inherit;cursor:pointer;padding:2px 5px;border-radius:4px;transition:color .12s}
 [data-asset="crypto"] .sort-opt.active,[data-asset="crypto"] .sort-arrow{color:var(--asset-crypto-ink)}
@@ -353,7 +411,7 @@ a:hover{color:var(--gold-hi)}
 .row-accent{position:absolute;left:0;top:15%;height:70%;width:2.5px;border-radius:3px;background:var(--asset-accent);opacity:0;transition:opacity .14s}
 .tr:hover .row-accent{opacity:1}
 /* 名次:top-3 用扁平精修徽记(金/银/铜墨 + hairline 环,无渐变/无游戏感)*/
-.medal{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:7px;font-size:11.5px;font-weight:700;font-family:var(--mono)}
+.medal{display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:var(--r-sm);font-size:11.5px;font-weight:700;font-family:var(--mono)}
 .medal--1{background:rgba(180,140,40,.13);color:#7a5f10;box-shadow:inset 0 0 0 1px rgba(180,140,40,.42)}
 .medal--2{background:rgba(140,148,162,.14);color:#5c6472;box-shadow:inset 0 0 0 1px rgba(140,148,162,.4)}
 .medal--3{background:rgba(170,104,48,.13);color:#8a531f;box-shadow:inset 0 0 0 1px rgba(170,104,48,.4)}
@@ -362,30 +420,30 @@ a:hover{color:var(--gold-hi)}
 [data-theme="dark"] .medal--3{background:rgba(214,140,80,.13);color:#df9a5c;box-shadow:inset 0 0 0 1px rgba(214,140,80,.32)}
 .rank-num{color:var(--muted-2);font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px}
 .sym{display:inline-flex;align-items:baseline;gap:7px;max-width:100%;color:inherit;text-decoration:none;cursor:pointer}
-.sym__base{font-weight:600;font-size:14px;letter-spacing:0;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .12s}
+.sym__base{font-weight:600;font-size:14.5px;letter-spacing:0;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .12s}
 .tr:hover .sym__base{color:var(--gold-ink)}
-.sym__suffix{color:var(--muted-2);font-weight:500;font-size:10.5px;letter-spacing:.02em}
-.sym__tv{opacity:0;font-size:10px;color:var(--muted-2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;white-space:nowrap;transform:translateY(-1px);transition:opacity .15s,color .15s,border-color .15s;flex:none}
+.sym__suffix{color:var(--muted-2);font-weight:500;font-size:11px;letter-spacing:0}
+.sym__tv{opacity:0;font-size:10.5px;color:var(--muted-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;white-space:nowrap;transform:translateY(-1px);transition:opacity .15s,color .15s,border-color .15s;flex:none}
 .tr:hover .sym__tv{opacity:1;color:var(--gold-ink);border-color:rgba(var(--gold-rgb),.4)}
-.sub{font-size:11px;color:var(--muted-2);margin-top:4px;line-height:1.45;font-variant-numeric:tabular-nums}
-.val{position:relative;display:inline-block;padding-bottom:7px;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:15px;letter-spacing:-.01em;white-space:nowrap;color:var(--text)}
+.sub{font-size:11.5px;color:var(--muted-2);margin-top:5px;line-height:1.5;font-variant-numeric:tabular-nums}
+.val{position:relative;display:inline-block;padding-bottom:7px;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:15.5px;letter-spacing:-.01em;white-space:nowrap;color:var(--text)}
 .val--up{color:var(--price-up)}
 .val--down{color:var(--price-down)}
 /* 强度条更细更静(编辑式克制):2px,直角略收 */
 .val__bar{position:absolute;bottom:0;right:0;height:2px;border-radius:2px;min-width:8px;max-width:100%;background:var(--bar-neutral);opacity:.85}
 .val--up .val__bar{background:var(--bar-pos)}
 .val--down .val__bar{background:var(--bar-neg)}
-.table-foot{margin-top:12px;padding:0 4px;font-size:11.5px;color:var(--muted-2);text-align:right;letter-spacing:.02em;font-variant-numeric:tabular-nums}
-.foot-cta{margin-left:8px;padding:3px 12px;border-radius:6px;border:1px solid transparent;background:var(--btn-fill);color:#fff;font-weight:700;font-size:11.5px;cursor:pointer}
-.foot-cta:hover{box-shadow:0 3px 10px rgba(var(--btn-fill-rgb),.3)}
+.table-foot{margin-top:13px;padding:0 4px;font-size:12px;color:var(--muted-2);text-align:right;letter-spacing:0;font-variant-numeric:tabular-nums}
+.foot-cta{margin-left:8px;padding:3.5px 12px;border-radius:6px;border:1px solid transparent;background:var(--btn-fill);color:var(--btn-ink);font-weight:600;font-size:12px;cursor:pointer;font-family:inherit}
+.foot-cta:hover{box-shadow:var(--shadow-btn)}
 
 /* ---------------- 状态(骨架=静态灰条;空态)---------------- */
 .skeleton-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--row-line)}
 .sk{display:block;height:13px;border-radius:5px;background:var(--panel-3)}
-.empty{text-align:center;padding:56px 20px 62px}
-.empty__icon{width:44px;height:44px;margin:0 auto 14px;border-radius:50%;background:var(--panel-2);border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;font-size:19px}
-.empty__title{font-size:14.5px;color:var(--text);font-weight:600;margin-bottom:6px}
-.empty__desc{font-size:12px;color:var(--muted-2);line-height:1.7}
+.empty{text-align:center;padding:58px 20px 64px}
+.empty__icon{width:46px;height:46px;margin:0 auto 15px;border-radius:50%;background:var(--panel-2);border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;font-size:19px}
+.empty__title{font-size:16px;color:var(--text);font-weight:600;margin-bottom:7px}
+.empty__desc{font-family:var(--font-serif);font-size:13px;color:var(--muted);line-height:1.75}
 .empty__cta{margin-top:18px;padding:10px 26px}
 
 /* 锁定橱窗(未解锁/失效的策略榜):模糊预览行 + 品牌锁卡片。GPU 三约束不触碰。*/
@@ -405,77 +463,87 @@ a:hover{color:var(--gold-hi)}
 .lockgate__icon{width:48px;height:48px;margin-bottom:14px;border-radius:50%;background:var(--panel-2);border:1px solid var(--line-2);
     display:flex;align-items:center;justify-content:center;color:var(--asset-accent)}
 .lockgate__icon svg{width:23px;height:23px}
-.lockgate__count{font-size:15px;font-weight:600;color:var(--text)}
-.lockgate__count b{margin:0 3px;font-size:20px;font-weight:800;color:var(--asset-accent);font-variant-numeric:tabular-nums}
-.lockgate__desc{margin-top:8px;font-size:12.5px;line-height:1.65;color:var(--muted);max-width:290px}
-.lockgate__cta{margin-top:20px;min-width:190px;padding:11px 30px;border-radius:var(--r-btn);font-size:14.5px;font-weight:700;
+.lockgate__count{font-size:16px;font-weight:600;color:var(--text)}
+.lockgate__count b{margin:0 3px;font-size:21px;font-weight:700;color:var(--asset-accent);font-variant-numeric:tabular-nums;font-family:var(--mono)}
+.lockgate__desc{font-family:var(--font-serif);margin-top:9px;font-size:13.5px;line-height:1.7;color:var(--muted);max-width:296px}
+.lockgate__cta{margin-top:21px;min-width:190px;padding:11.5px 30px;border-radius:var(--r-btn);font-size:14.5px;font-weight:600;
     font-family:inherit;cursor:pointer;transition:box-shadow .15s}
-.lockgate__link{margin-top:14px;padding:4px;background:none;border:none;color:var(--muted-2);font-size:12px;font-family:inherit;
+.lockgate__link{margin-top:14px;padding:4px;background:none;border:none;color:var(--muted-2);font-size:12.5px;font-family:inherit;
     cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .lockgate__link:hover{color:var(--text)}
 
-/* ---------------- 导出坞(一次性入场动画)---------------- */
-.dock{position:fixed;left:50%;bottom:22px;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:12px;max-width:92%;padding:9px 10px 9px 18px;background:var(--dock-bg);border:1px solid rgba(var(--gold-rgb),.4);border-radius:999px;font-size:13px;color:var(--text);box-shadow:var(--shadow-pop);animation:dock-in .22s ease-out}
-.dock__count{font-variant-numeric:tabular-nums;color:var(--gold-ink);font-weight:600;white-space:nowrap}
+/* ---------------- 导出坞 = 全站唯一的「反色墨块」(一次性入场动画)---------------- */
+/* 其站用墨黑实块给象牙页面打标点;本站把这个位置留给导出坞——它是浮层、天然该跳出纸面。
+   ⚠️ 两个主题下坞都是暗的 ⇒ 坞内一切颜色**必须走 --dock-***,不能用 --text/--muted/
+   --line/--gold-ink 这些跟主题走的 token(亮色主题下它们是墨色,压在墨底上等于隐形)。*/
+.dock{position:fixed;left:50%;bottom:22px;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:12px;max-width:92%;padding:9px 10px 9px 18px;background:var(--dock-bg);border:1px solid var(--dock-line);border-radius:999px;font-size:13.5px;color:var(--dock-ink);box-shadow:var(--shadow-pop);animation:dock-in .22s ease-out}
+.dock__count{font-variant-numeric:tabular-nums;color:var(--dock-accent);font-weight:600;white-space:nowrap}
+.dock .btn--ghost{color:rgba(250,249,245,.74);border-color:rgba(250,249,245,.28)}
+.dock .btn--ghost:hover{color:var(--dock-ink);border-color:rgba(250,249,245,.6)}
+.dock .btn--primary{background:var(--dock-ink);color:#141413}
+.dock .btn--primary:hover{box-shadow:0 2px 10px rgba(0,0,0,.45)}
 @keyframes dock-in{from{transform:translate(-50%,14px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
 
 /* ---------------- 移动抽屉(≤640 显示;一次性滑入)---------------- */
-.scrim{position:fixed;inset:0;background:rgba(30,24,14,.42);opacity:0;pointer-events:none;transition:opacity .24s ease-out;z-index:69}
+.scrim{position:fixed;inset:0;background:rgba(20,20,19,.44);opacity:0;pointer-events:none;transition:opacity .24s ease-out;z-index:69}
 .scrim.is-open{opacity:1;pointer-events:auto}
 .drawer{position:fixed;top:0;left:0;bottom:0;width:286px;max-width:84%;display:flex;flex-direction:column;gap:14px;padding:14px;background:var(--panel-hi),var(--panel);border-right:1px solid var(--line);box-shadow:var(--shadow-pop);z-index:70;transform:translateX(-102%);transition:transform .24s ease-out;overflow-y:auto;overscroll-behavior:contain}
 .drawer.is-open{transform:translateX(0)}
-.drawer__head{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;font-weight:600;letter-spacing:.05em;color:var(--muted-2);text-transform:uppercase}
+.drawer__head{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:600;letter-spacing:0;color:var(--muted-2)}
 .drawer__close{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:4px;line-height:1}
 
 /* ---------------- 页脚 ---------------- */
-.footer{margin-top:30px;padding:20px 0 8px;text-align:center;border-top:1px solid var(--line)}
-.footer-links{display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:9px}
-.flink{background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:2px 4px;transition:color .15s}
+.footer{margin-top:34px;padding:22px 0 8px;text-align:center;border-top:1px solid var(--line)}
+.footer-links{display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:10px}
+.flink{background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:2px 4px;transition:color .15s;font-family:inherit}
 .flink:hover{color:var(--gold-ink)}
 .fdot{color:var(--muted-2);font-size:11px}
-.footer-note{font-size:11px;color:var(--muted-2);line-height:1.8;max-width:640px;margin:0 auto}
+.footer-note{font-family:var(--font-serif);font-size:12.5px;color:var(--muted-2);line-height:1.8;max-width:640px;margin:0 auto}
 
 /* ---------------- 弹窗(通用 dialog)---------------- */
-.modal{margin:auto;background:var(--modal-bg);border:1px solid var(--line-2);border-radius:var(--r-lg);padding:26px;width:92%;max-width:390px;color:var(--text);box-shadow:var(--shadow-modal)}
-.modal-wide{max-width:470px}
-.modal::backdrop{background:rgba(30,24,14,.34)}
-[data-theme="dark"] .modal::backdrop{background:rgba(0,0,0,.6)}
-.modal h3{font-size:17px;margin-bottom:10px;font-weight:700;letter-spacing:-.01em}
-.modal-actions{display:flex;align-items:center;gap:8px;margin-top:18px}
+.modal{margin:auto;background:var(--modal-bg);border:1px solid var(--line);border-radius:var(--r-lg);padding:28px;width:92%;max-width:400px;color:var(--text);box-shadow:var(--shadow-modal)}
+.modal-wide{max-width:480px}
+.modal::backdrop{background:rgba(20,20,19,.38)}
+[data-theme="dark"] .modal::backdrop{background:rgba(0,0,0,.62)}
+.modal h3{font-size:20px;margin-bottom:12px;font-weight:600;letter-spacing:-.012em;line-height:1.3}
+.modal-actions{display:flex;align-items:center;gap:8px;margin-top:20px}
 .spacer{flex:1}
-.modal-actions button,.modal-actions a{padding:9px 18px;border-radius:var(--r-btn);font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;transition:all .15s;text-align:center}
+.modal-actions button,.modal-actions a{padding:9.5px 19px;border-radius:var(--r-btn);font-size:13.5px;font-weight:600;cursor:pointer;text-decoration:none;transition:all .15s;text-align:center;font-family:inherit}
 .btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--muted)}
 .btn-ghost:hover{border-color:var(--muted);color:var(--text)}
-.modal-hint{font-size:12.5px;color:var(--muted);line-height:1.75;margin-bottom:16px}
-.btn-primary{background:var(--btn-fill);border:1px solid transparent;color:#fff;font-weight:700}
-.btn-primary:hover{box-shadow:0 4px 14px rgba(var(--btn-fill-rgb),.32)}
-.modal-foot{margin-top:13px;font-size:11.5px;color:var(--muted-2);line-height:1.65}
-.text-input{width:100%;padding:12px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:var(--r-sm);color:var(--text);font-size:14px;transition:border-color .15s,box-shadow .15s}
+/* 提示/说明属长文 ⇒ 衬线 */
+.modal-hint{font-family:var(--font-serif);font-size:13.5px;color:var(--muted);line-height:1.8;margin-bottom:18px}
+.btn-primary{background:var(--btn-fill);border:1px solid transparent;color:var(--btn-ink);font-weight:600}
+.btn-primary:hover{box-shadow:var(--shadow-btn)}
+.modal-foot{margin-top:14px;font-size:12px;color:var(--muted-2);line-height:1.7}
+.text-input{width:100%;padding:12.5px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:var(--r-sm);color:var(--text);font-size:14.5px;font-family:inherit;transition:border-color .15s,box-shadow .15s}
 [data-theme="dark"] .text-input{background:var(--bg0)}
-.text-input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.15)}
+.text-input:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.16)}
+/* 卡密是固定格式的机读串,这里的大写/字距是**功能性**的(便于逐段核对),不属于
+   v6「全站零大写零字距」那条排印规矩管辖的范围 —— 别当漏网之鱼去掉。*/
 #licenseInput.text-input{font-family:var(--mono);letter-spacing:1px;text-transform:uppercase;text-align:center}
-.lic-msg{font-size:12px;min-height:18px;margin:9px 0 0;color:var(--muted);text-align:center}
+.lic-msg{font-size:12.5px;min-height:18px;margin:9px 0 0;color:var(--muted);text-align:center}
 .lic-ok{color:var(--up)}
 .lic-err{color:var(--down)}
 
 /* 购买弹窗 */
 .buy-plans{display:flex;gap:8px;margin-bottom:16px}
-.buy-plan{position:relative;flex:1;background:var(--chip-wash);border:1px solid var(--line-2);border-radius:var(--r-md);padding:15px 8px 12px;cursor:pointer;text-align:center;color:var(--text);transition:all .15s}
+.buy-plan{position:relative;flex:1;background:var(--chip-wash);border:1px solid var(--line-2);border-radius:var(--r-md);padding:16px 8px 13px;cursor:pointer;text-align:center;color:var(--text);transition:all .15s;font-family:inherit}
 .buy-plan:hover{border-color:var(--muted);transform:translateY(-1px)}
-.buy-plan.is-selected{border-color:var(--gold)!important;background:rgba(var(--gold-rgb),.08);box-shadow:0 0 0 1px rgba(var(--gold-rgb),.4),0 4px 14px rgba(var(--gold-rgb),.12)}
-.buy-plan__tag{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--btn-fill);color:#fff;font-size:10px;font-weight:800;padding:2px 8px;border-radius:999px;white-space:nowrap}
-.buy-plan__label{font-size:12px;color:var(--muted)}
-.buy-plan__price{font-size:18px;font-weight:800;font-family:var(--mono);margin:4px 0 1px}
+.buy-plan.is-selected{border-color:var(--gold)!important;background:rgba(var(--gold-rgb),.08);box-shadow:0 0 0 1px rgba(var(--gold-rgb),.4)}
+.buy-plan__tag{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--btn-fill);color:var(--btn-ink);font-size:10.5px;font-weight:600;padding:2.5px 9px;border-radius:999px;white-space:nowrap}
+.buy-plan__label{font-size:12.5px;color:var(--muted)}
+.buy-plan__price{font-size:19px;font-weight:700;font-family:var(--mono);margin:5px 0 1px}
 .buy-plan.is-selected .buy-plan__price{color:var(--gold-ink)}
-.buy-steps{font-size:13px;color:var(--muted);line-height:2.05;padding-left:20px}
+.buy-steps{font-family:var(--font-serif);font-size:13.5px;color:var(--muted);line-height:2.05;padding-left:20px}
 .buy-steps b{color:var(--gold-ink);font-family:var(--mono)}
 
-/* FAQ / 免责声明 */
-.faq{max-height:55vh;overflow-y:auto;font-size:13px;color:var(--muted);line-height:1.85;padding-right:4px;overscroll-behavior:contain}
-.faq h4{color:var(--text);font-size:13.5px;margin:15px 0 4px;font-weight:600}
+/* FAQ / 免责声明 —— 全站唯一的长文区,衬线在这里最名副其实 */
+.faq{max-height:55vh;overflow-y:auto;font-family:var(--font-serif);font-size:14px;color:var(--muted);line-height:1.9;padding-right:4px;overscroll-behavior:contain}
+.faq h4{font-family:var(--font-sans);color:var(--text);font-size:14.5px;margin:19px 0 6px;font-weight:600}
 .faq h4:first-child{margin-top:0}
-.faq p{margin-bottom:6px}
-.faq b{color:var(--text)}
+.faq p{margin-bottom:8px}
+.faq b{color:var(--text);font-weight:700}
 
 /* ---------------- ≤640px:抽屉导航 + 折叠表格 ---------------- */
 @media (max-width:640px){
@@ -487,7 +555,7 @@ a:hover{color:var(--gold-hi)}
     .brand__tag{display:none}
     .topbar__tools .fresh.is-dim{display:none}
     #licenseStatus,#licenseBtn{display:none}
-    .fresh{padding:4px 10px;font-size:11.5px}
+    .fresh{padding:4px 10px;font-size:12px}
     .fresh__next{display:none}
     .wrap{padding:14px 12px 84px;padding:14px 12px calc(84px + env(safe-area-inset-bottom,0px))}
     .layout{display:block}
@@ -496,16 +564,16 @@ a:hover{color:var(--gold-hi)}
     .pulse__cell{flex:1 1 calc(50% - 4px);padding:11px 13px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
     .pulse__cell+.pulse__cell{border-left:1px solid var(--line)}
     .pulse__label{margin-bottom:4px}
-    .pulse__value{font-size:17px}
+    .pulse__value{font-size:18px}
     .pulse__sub{margin-top:3px}
     .mkt{border:none;background:none;box-shadow:none;overflow:visible}
     .mkt__inner{gap:8px}
     .mkt__item{flex:1 1 calc(50% - 4px);padding:9px 13px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel)}
     .mkt__item--senti{flex-basis:100%}
     .mkt__gauge{flex:1}
-    .board-head{flex-direction:column;align-items:stretch;gap:9px;padding:13px 14px}
-    .board-head__name{font-size:18px}
-    .board-head__note{margin-top:5px;line-height:1.5}
+    .board-head{flex-direction:column;align-items:stretch;gap:9px;padding:14px 15px}
+    .board-head__name{font-size:21px}
+    .board-head__note{margin-top:6px;font-size:13px;line-height:1.6}
     .search{width:100%}
     /* iOS Safari <16px 输入框聚焦会强制放大整页——搜索/弹窗输入统一 ≥16px */
     .search__input{font-size:16px}
@@ -521,12 +589,12 @@ a:hover{color:var(--gold-hi)}
     .c-check .chk{width:16px;height:16px}
     .c-rank{width:42px;padding-left:4px}
     .c-val{width:116px;padding:0 12px 0 6px;overflow:hidden;text-overflow:ellipsis}
-    .c-sym{padding:9px 6px 9px 2px}
-    .sym__base{font-size:13px}
+    .c-sym{padding:10px 6px 10px 2px}
+    .sym__base{font-size:13.5px}
     .medal{width:21px;height:21px;font-size:11px;border-radius:6px}
-    .sub{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .sub{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .sym__tv{display:none}
-    .val{font-size:13px}
+    .val{font-size:13.5px}
     .table-foot{text-align:center}
     .dock{bottom:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));width:calc(100% - 20px);justify-content:space-between;padding:8px 8px 8px 12px;gap:8px;flex-wrap:wrap;row-gap:6px;border-radius:22px}
 }
@@ -556,6 +624,10 @@ a:hover{color:var(--gold-hi)}
        `white-space:nowrap` 是兜底:日后有人加长标签(如「美股ETF」)时宁可挤也不再折行。
        ⚠️ 高度刻意用 padding:10px 补回 36px,与 ≥861px 档的 37px 基本齐平——只压字号不补
        padding 会掉到 32px,比相邻档矮一截、点击目标也变小。 */
+    /* ⚠️ rail 内距在 v6 由 16→18px,这一档要退回 14px:否则 210px 的 rail 内可用宽从
+       176→172,每个分段项只剩 40px、文字空间 31px,比上面算出的 32px 安全线还窄。
+       退到 14 后可用宽 180、每项 42px、文字空间 33px,比 v5 更宽松。*/
+    .rail{padding:14px}
     .asset-seg{gap:2px;padding:3px}
     .asset-seg__opt{gap:4px;font-size:12.5px;white-space:nowrap;padding:10px 0}
     .asset-seg__dot{width:5px;height:5px}

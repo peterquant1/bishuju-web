@@ -1897,11 +1897,11 @@ function applyTheme(t) {
     if (btn) btn.textContent = t === "light" ? "☀" : "◐";
     // 手机浏览器工具栏颜色跟随主题——index.html 首屏内联脚本只管「加载时」,
     // 这里补上「切换时」,否则亮色页面配深色地址栏。
-    // ⚠️ 两个 hex 必须跟 style.css 的 --bg1(亮 #f7f4ec / 暗 #141311)保持一致——这里是
-    // 第三份独立硬编码拷贝(index.html 内联脚本 + manifest + 这里,共三处),改配色一起改,
-    // 否则每次切换/刷新会把 index.html 刚设对的值又覆盖回旧值。
+    // ⚠️ 两个 hex 必须跟 style.css 的 --bg1(亮 #f0eee6 骨白 / 暗 #141413 墨)保持一致——
+    // 这里是第三份独立硬编码拷贝(index.html 内联脚本 + manifest + 这里,共三处),改配色
+    // 一起改,否则每次切换/刷新会把 index.html 刚设对的值又覆盖回旧值。
     const meta = document.getElementById("themeColorMeta");
-    if (meta) meta.content = t === "light" ? "#f7f4ec" : "#141311";
+    if (meta) meta.content = t === "light" ? "#f0eee6" : "#141413";
 }
 // v5 起亮色为默认底盘:除非用户显式存过 dark,否则一律亮色
 applyTheme(safeStore.get("localStorage", LS_THEME) === "dark" ? "dark" : "light");
@@ -1973,6 +1973,15 @@ if (searchBoxEl) {
 const LS_TAB = "bishuju_last_tab";
 const savedTab = safeStore.get("localStorage", LS_TAB);
 if (savedTab && TABS_CONFIG[savedTab] && savedTab !== currentTab) switchTab(savedTab);
+// ⚠️ 2026-07-27 修:**首访者的 data-asset 一直是错的**。index.html 把 `data-asset="crypto"`
+// 写死在 .app 上，而只有 switchTab() 会去纠正它 —— 上面那行在「没有 savedTab」或
+// 「savedTab 恰好等于默认 tab」时都不会触发，于是新访客落在**美股**榜上、资产标签也显示
+// 「美股」，但 CSS 作用域仍是 crypto ⇒ --asset-accent、nav 选中底色、tf-chip、排序 chip
+// 选中态、行悬停装饰条全部用成加密琥珀而不是美股紫。涨跌语义碰巧没错（美股与加密同为
+// 涨绿跌红），所以它一直没被当成 bug 发现；换成 A股 做默认落地资产就会当场变成红绿颠倒。
+// 修法是无条件把 DOM 同步到 JS 的 currentAsset，别依赖 switchTab 的副作用。
+const appEl = document.getElementById("app");
+if (appEl) appEl.dataset.asset = currentAsset;
 initFooterUI();
 initPaywallUI();
 renderNav();

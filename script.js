@@ -149,13 +149,32 @@ const AXIS_MRSI = { key: "monthlyRsi", label: "月线RSI", format: v => fmtRsiVa
 // 均值），A股 为人民币元、美股/ETF 为 USD，格式化由后端 volumeFormatted 定。
 const AXIS_D_RSI = { key: "rsi", label: "日线RSI", format: v => fmtRsiVal(v.rsi) };
 const AXIS_D_VOL = { key: "volume", label: "日成交额", format: v => fmtVolVal(v) };
-const AXIS_D_CVD = { key: "cvdStrength", label: "日CVD强弱", format: v => fmtCvdVal(v.cvdStrength) };
+// ⚠️⚠️ 日CVD强弱 的买卖拆分是**按 K 线形态推断的**（阳线实体归买、影线对半；对齐
+// TradingView 上那个 CVD 指标），**不是真实成交归边**。2026-07-28 那轮排序轴审计实测：
+// 它与「日线RSI」横截面秩相关 **+0.790 且 86/86 天同号**，与真实归边的「日订单流」只有
+// **+0.206**；用价格动能四变量解释它 R²=0.668，用真实归边解释它只有 R²=0.060。
+// ⇒ **它名为资金流、实为价格动能。想看真钱流向请用「日订单流」。**
+// 这个结论**完全不依赖前瞻收益**（纯横截面相关），所以不受行情/样本/幸存者偏差影响。
+// ⚠️ 但**这不是删它的理由**（站长 2026-07-28 明确「不要删」，且它与 日ADX −0.052 /
+// 日量比 −0.036 / 日成交额 +0.128 确实正交）；公式也**不改** —— 五条改造路线（换真实
+// k[9]／正交残差／改 period／改归一化／原样）全试过，无一在同日公平对照下更优，
+// 且换成 k[9] 会让它与 calc_taker_strength 变成逐字相同的函数＝等价于删轴。
+// 详见 CLAUDE.md「2026-07-28 全部排序轴的量化审计」。
+const AXIS_D_CVD = { key: "cvdStrength", label: "日CVD强弱", format: v => fmtCvdVal(v.cvdStrength),
+                     hint: "按K线形态推断的买卖失衡，不是真实成交归边；想看真钱流向用「日订单流」" };
 const AXIS_D_VOLRATIO = { key: "volRatio", label: "日量比", format: v => fmtRatioVal(v.volRatio) };
 const AXIS_D_EMAGAP = { key: "emaGap", label: "日EMA间距", format: v => fmtGapVal(v.emaGap) };
 // 日订单流 = 真实 taker 归边比（币安 K 线自带 k[9]，零额外抓取）。**加密独有**——
 // tushare / Massive 的日线都没有归边字段，股票系那三个榜物理上挂不了这一轴。
-// 与 CVD强弱（按 K 线形态推断的代理）背离时是 Wyckoff effort-vs-result 信号。
-const AXIS_D_TAKER = { key: "takerStrength", label: "日订单流", format: v => fmtCvdVal(v.takerStrength) };
+// 它与 CVD强弱 是**互为对照**的两根（一个真实归边、一个形态推断）。
+// ⚠️ 站内曾把「两者背离 = Wyckoff effort-vs-result（阴线+订单流正=借跌吸筹）」当成设计
+// 意图。2026-07-28 审计直接测了这个 2×2，**没有得到支持**（两个"背离"象限并不系统性更好，
+// "双确认"象限反而最差）。⇒ 文案里可以说"两根互为对照"，**别说"背离是信号"**。
+// ⚠️⚠️ **显示的绝对数字会稳定误导**：全市场只有 **7.4%** 的标的这个值为正、中位在
+// **−0.022** 附近 —— 那是**常态**不是"资金在流出"。排序本身只看相对位置、不受影响，
+// 所以只加 hint 说明，**不要动公式**。（榜内比例高些：inDEE 25.4%、周线榜 14.9%。）
+const AXIS_D_TAKER = { key: "takerStrength", label: "日订单流", format: v => fmtCvdVal(v.takerStrength),
+                       hint: "真实成交归边（币安taker数据）。全市场只有约7%为正、常态在−0.02附近，负值是常态不是异常" };
 
 // === 方向性运动系统 ADX / DMI（2026-07-25 站长：「在升降序里面引入 ADX 以及 DI 逻辑」）===
 // 四个资产**同批加同一组四根轴**（后端 calc_adx_dmi 一份实现、四条管道共用，对齐
@@ -165,9 +184,11 @@ const AXIS_D_TAKER = { key: "takerStrength", label: "日订单流", format: v =>
 // 周ADX + 周+DI）。**这条推翻了本段原来那句"四根各自回答不同问题、别只留一根"的告诫**
 // ——那是我 2026-07-25 写的建议，站长看过之后明确要求砍。以站长的决定为准，别照着旧
 // 告诫（或旧 commit 里的注释）把它们加回来。
-// ⚠️ 砍掉的代价要知道（不是 bug，是知情取舍）：`日−DI` 与 `日DI差` 没了之后，**排序条上
-// 无法直接排出"空方占优"那一侧** —— DI差 是原来四根里唯一带符号、单根即可排多空的。
-// 现在只能用 日ADX 升序（最横盘）+ 日+DI 升序（多方压力最弱）间接看。
+// ⚠️ 砍掉的代价**比原来写的小得多**（2026-07-28 审计实测修正）：原注释说"DI差 是唯一带符号、
+// 单根即可排多空的，没了只能间接看"——但 **`rho(日+DI, DI差) = +0.930、86/86 天同号**，
+// 正交化后 DI差 的增量分辨力只剩 +0.013 且区间含 0 ⇒ **降序那一侧几乎没有损失，砍对了**。
+// 唯一有实质损失的是**升序端**：按 +DI 升序取 BOTTOM20，其中"其实是空方占优"的平均只有
+// 2.7%（某天到过 50%）；而降序 TOP20 里"其实空方占优"的只有 0.3%。**别据此把它加回来。**
 // **复活极便宜**：前端把两个 AXIS_* 常量加回来（定义见本次删除 commit 的父提交）、后端把
 // build 层四个行 payload 里的 `diMinus`/`diSpread` 两行加回来即可 —— **compute 层一直
 // 照常在算这两个值**（`daily_lookup` 与各 payload dict 里都还在，属保留字段）。
@@ -175,8 +196,13 @@ const AXIS_D_TAKER = { key: "takerStrength", label: "日订单流", format: v =>
 // 保留的两根各自回答什么：
 //   · 日ADX  —— 趋势"有多强"，**不含方向**（DX 只取 |+DI−−DI| 的绝对值）。ADX 45 的
 //     暴跌和 ADX 45 的主升浪同分。经验档：<20 震荡 / 20-25 萌芽 / >25 趋势确立 /
-//     >40 强趋势（也可能是过热末段）。**降序=最有趋势的，升序=最横盘的**（升序那头对
-//     "等突破"的埋伏思路才是有用的一端，不是废数据）。
+//     >40 强趋势（也可能是过热末段）。**降序=最有趋势的，升序=最横盘的**，升序不是废数据。
+//     ⚠️⚠️ **但"升序＝蓄势待突破"这个机制说法是错的**（2026-07-28 审计实测推翻，原注释
+//     写的就是它）：低 ADX 那批之后的**绝对波动更小不是更大**（mean|fwd10| 0.1051
+//     vs >40 档 0.1388；跌超 10% 的概率 21.3% vs 31.0%）—— 它不是在蓄势，只是在那段
+//     跌市里跌得少。升序那头的正确读法是「**最安静的**」，不是「**要爆发的**」。
+//     ⚠️ 另一处作用域：「ADX 不含方向、与动量正交」**只在全市场成立**；榜内会退化成动量
+//     代理（inDEE 内 adx~diPlus 从全市场 −0.089 变成 **+0.526**）。
 //   · 日+DI —— 多方的方向压力（0-100）。配 ADX 一起读：ADX 高且 +DI 高＝多头在推。
 // 标签同样带「日」前缀：本站四个榜的行里装的全是日线值（榜的筛选条件却横跨月/周/日），
 // 这是 2026-07-24 站长问过一次的歧义，新轴一并遵守。
@@ -196,12 +222,41 @@ const dmiSorts = [AXIS_D_ADX, AXIS_D_DIPLUS];
 // 降序 TOP 就开始被"暴跌途中反弹"占据（加密 SIREN 柱 +19.95% 而线 −44.77%；美股 4× 时
 // TOP8 有 3/8、5× 时 6/8 是仙股反弹）。完整取值规则与三个市场的实测数据见后端
 // `calc_macd_strength` 上方的常量注释块 —— **改这根轴前先读那里**。
-// ⚠️ 与「日EMA间距」轴相关性偏高（加密 +0.801 / 美股 +0.728，都高于周线那根的 +0.505）
-// ——这是为保住 TOP 干净付的价，已知并接受。但与**周MACD强弱**几乎正交（r=−0.080），
-// 两根并排读才是设计意图：日线 + 而周线 − ＝「周线崩塌中的日线反弹」。
+// ⚠️ 与「日EMA间距」轴相关性偏高——这是为保住 TOP 干净付的价，已知并接受。
+//   口径要分清（2026-07-28 审计补测）：旧记的 **+0.801(加密) / +0.728(美股) 是单日 Pearson**；
+//   **横截面秩相关 86 日均 +0.870（86/86 天同号）、inDEE 榜内 +0.928、TOP5 重叠 89.8%**。
+//   最直白的一句：**它与"过去 14 日涨幅"秩相关 +0.895** ⇒ 跨标的排序上约等于一根 14 日动能排名。
+// ⚠️ **即便如此也不要降级它**（审计结论）：它冗余的对象 `emaGap` **不在加密排序条上**
+//   （后端刻意不发那两个榜），加密页面上并不存在可见重复；而 RSI 在 inDEE 榜内已经饱和
+//   （成员 100% >50、中位落在全市场第 94 百分位、几乎排不动）⇒ **它是加密日线榜上唯一
+//   还能读出"有多超伸"的轴**。按冗余度砍它，砍掉的正是 RSI 本该干却干不了的活。
+//   ⚠️ 但**股票系 13 轴里「日EMA间距」与「日MACD强弱」是并排站着的** —— 全站唯一一处两根
+//   高度重复的轴同时出现在一条排序条上。该数字由加密面板测得、**股票系本轮零实测**，
+//   属推断，要动得先在股票系数据上重测。
+// ⚠️ 与**周MACD强弱**几乎正交（设计意图成立：日线 + 而周线 − ＝「周线崩塌中的日线反弹」）。
+//   ~~r=−0.080~~ **那个具体数字已删**：它是某一天的快照，逐日范围 −0.236 ~ +0.382，
+//   引用单日数字会误导。只保留"几乎正交"这个结论。
 // 需 ≥35 根已收盘日 K（26+9），不足 null 沉底（加密实测 523/528 有值）。
 const AXIS_D_MACD = { key: "macdStrength", label: "日MACD强弱",
                       format: v => fmtGapVal(v.macdStrength) };
+
+// === 日波动幅度（2026-07-28 新增，四个资产同批加）===
+// 值 = **ATR(14) / 最新已收盘价 × 100** ——"这东西平均一天晃价格的百分之几"。
+// ⚠️⚠️⚠️ **这是全站唯一一根【风险披露】轴，不是选股轴。desc / 任何对外文案都绝不能写
+// "低波动会跑赢"。** 2026-07-28 那轮排序轴审计实测：它那点"预测力"全部来自「跌市里低波动
+// 少跌」——每日区分力与当日大盘收益相关 +0.536，跌日 −0.131 而涨日只有 +0.007，前后半段
+// 还衰减 4 倍 ⇒ 是 beta 不是 alpha，换一段涨市大概率反过来。
+// **为什么要加它**：加密那 10 根轴全落在「趋势—动能—规模」一族（相关矩阵实测有效维度只有
+// 约 5.5 个，第一主轴就占 34.7%），**完全没有"风险"这个坐标**；而榜内同一天的波动率
+// p5→p95 差约 4 倍 —— 那决定仓位和止损宽度，不决定谁涨。
+// 升序 = 同样上榜里最好拿的（仓位大的人用）；降序 = 最投机、搏弹性。**两端语义都干净。**
+// ⚠️ 排的是 atrPct 不是 ATR：ATR 带价格量纲，跨标的直接排 ≈ 排价格（同 CVD 轴那条纪律）。
+// ⚠️ 选 ATR 口径而不是"年化已实现波动率"：后者的年化因子加密 √365 / 股票 √252，会变成
+// **同名轴两套公式**（本项目明令警惕的坑）；atrPct 是纯比值，四个资产同一个公式。
+// 格式化复用 `fmtAmpVal`（非负两位小数 + %）——**别用 fmtGapVal**（那个带符号，而 ATR 恒非负）。
+// 需 ≥15 根已收盘日 K（比 日ADX 的 28 根宽 ⇒ 不新增覆盖损失）。
+const AXIS_D_ATR = { key: "atrPct", label: "日波动幅度", format: v => fmtAmpVal(v.atrPct),
+                     hint: "平均每天晃价格的百分之几（ATR14）。用来判断仓位和止损宽度，不是用来判断谁会涨" };
 
 // === 周线版 ADX / DMI（2026-07-25 晚站长指令⑩「加周线级别就行」）===
 // 与上面那组**同一套算法、同一个后端 calc_adx_dmi**（对齐 TV `ta.dmi(14,14)`），只是喂进去
@@ -237,16 +292,24 @@ const AXIS_W_MACD = { key: "weeklyMacdStrength", label: "周MACD强弱",
 // ⚠️ 这两根轴是为 `weeklyExpansionDailyCvd` 建的，那个榜 2026-07-26 晚被移除；轴**照常
 // 保留**——现存的周线榜走同一个后端行构造 `_wk_expansion_row`，两根轴一直有值。
 // 站长原话「也要有周成交额，周RSI等数据」。周RSI 直接复用既有的 AXIS_WRSI，周成交额是新轴。
-// ⚠️ **`weeklyVolume` 是"最新已收盘那一根周 K"的 USDT 成交额**（后端 get_weekly_rsi 的
-// closedVolume），既不是 7 天滚动累计、也不是日均——它跟同一行里的日成交额是两个不同口径
-// 的数，所以两根轴都必须写明周期。格式化走后端预先算好的 weeklyVolumeFormatted（B/M/K，
-// 与日成交额同一套 format_volume）。
-const AXIS_W_VOL = { key: "weeklyVolume", label: "周成交额",
-                     format: v => v.weeklyVolumeFormatted != null ? v.weeklyVolumeFormatted : "N/A" };
+// ⚠️⚠️ **`AXIS_W_VOL`（周成交额）已于 2026-07-28 移除，别加回来。**
+// 它是建榜时（指令⑪「也要有周成交额，周RSI等数据」）加的，但 2026-07-28 那轮排序轴审计
+// 实测：**与 `AXIS_D_VOL`（日成交额）横截面秩相关 +0.826、86/86 天同号**，控住日成交额后
+// 残差分辨力只剩 −0.02 量级 ⇒ 两根轴回答的是同一个问题（"这合约装不装得下我的仓位"）。
+// ⚠️ 复活时**前端加轴 + 后端 `_wk_expansion_row` 加回 weeklyVolume/weeklyVolumeFormatted
+// 两个 key 必须一起做**：`axesSub` 是数据驱动的（`"weeklyVolume" in item` 就渲染一段），
+// 只加轴 = 永远全 null 的幽灵轴，只加字段 = 副行留下没有对应 chip 的孤儿摘要。
+// 旧定义：`{ key: "weeklyVolume", label: "周成交额",
+//            format: v => v.weeklyVolumeFormatted != null ? v.weeklyVolumeFormatted : "N/A" }`
+// （口径备查：它是"最新已收盘那一根周 K"的 USDT 成交额＝后端 closedVolume，
+//   既不是 7 天滚动累计也不是日均。`closedVolume` 后端仍照常产出，是保留字段。）
 // 周线EMA间距 =（周线EMA9 − 周线EMA21）/周线EMA21 ×100。**本榜的筛选条件就是周线两线扩张**，
 // 给这根轴对得上语义（同 weeklyDaily 的末轴规则："只放本榜真正引用到、且可排序的更大周期量"）。
-// ⚠️ 不保证为正：本榜是 (9/21 ∪ 9/26) 并集，只走 9/26 那条路径命中的标的，9/21 可能还没张开
-// ⇒ 间距可以是负的。升序那头正好排出"9/26 先张开、9/21 还没跟上"的最早期形态。
+// ⚠️ 不保证为正 ⇒ 间距可以是负的。两端是什么形态：降序＝周线结构已经跑开的；
+// 升序＝EMA9 还在 EMA21 下方或刚要交叉的最早期一档。
+// ⚠️⚠️ **别断言哪一端"更强"或"更该买"**（2026-07-28 审计）：这根轴在那 8 个月里的"正向"
+// 几乎全是跌市 beta —— 每日分辨力与当日大盘收益相关 **−0.823**，**21 个上涨日里 0 天为正**。
+// 换一段涨市大概率反过来。只描述两端是什么形态，不要写哪端会赢。
 // （本常量 2026-07-25 晚随「移除加密所有TAB」删过一次，现按同名同义复活。）
 const AXIS_W_EMAGAP = { key: "weeklyEmaGap", label: "周线EMA间距", format: v => fmtGapVal(v.weeklyEmaGap) };
 
@@ -254,8 +317,9 @@ const AXIS_W_EMAGAP = { key: "weeklyEmaGap", label: "周线EMA间距", format: v
 // 四轴 + 月线RSI —— 严格按"日线 → 周线 → 月线"的周期递进排，同周期的挤在一起。
 // **首轴仍是 日线RSI**（= 默认排序，必须与后端 `value` 取的量一致，别把新轴插到最前）。
 // 2026-07-26 指令⑤ 再加 日MACD强弱（接在日线块末尾、周线块之前）⇒ **十七轴**。
+// 2026-07-28 再加 日波动幅度（同样接在日线块末尾）⇒ **十四轴**。
 const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO, AXIS_D_EMAGAP,
-                             ...dmiSorts, AXIS_D_MACD,
+                             ...dmiSorts, AXIS_D_MACD, AXIS_D_ATR,
                              AXIS_WRSI, ...weeklyDmiSorts, AXIS_W_MACD, AXIS_MRSI];
 // 加密两个榜**共用**的轴集。前四根是**站长两次逐字点名的同一组**：「支持成交额，RSI，
 // CVD，订单流。四种升降序。」——顺序也照他写的（**首轴即默认排序**，必须与后端 `value`
@@ -282,8 +346,11 @@ const singleStrategySorts = [AXIS_D_RSI, AXIS_D_VOL, AXIS_D_CVD, AXIS_D_VOLRATIO
 // ⚠️ 轴数是**注释里最容易发霉的一类数字**（指令④⑤⑥连着三次改轴，本文件和 fetch_data.py
 // 的注释、以及两个周线榜的 desc 全部停在了旧值，2026-07-26 审计才扫掉）。**改轴时把
 // 数字一起改，或者干脆别在注释里写数字。**
+// 2026-07-28 加 日波动幅度（全站第一根「风险」轴，接在日线块末尾）⇒ **当前十一轴**。
+// ⚠️ 这一根让排序条**在 1280 视口从单行变两行**（原 10 轴 ≈812px 已经卡在 877px 容器的
+// 单行上限）。桌面是 flex-wrap 换行、移动端横滑，两种都不裁切，实测过。
 const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
-                             ...dmiSorts, AXIS_D_MACD,
+                             ...dmiSorts, AXIS_D_MACD, AXIS_D_ATR,
                              ...weeklyDmiSorts, AXIS_W_MACD];
 // 加密周线榜 `weeklyEmaBearish`（指令①③）的 **13 轴**（指令⑥砍 DI 前是 15 轴）。
 // 站长原话「支持现在各种日线的升降序。也要有周成交额，周RSI等数据。」
@@ -297,9 +364,12 @@ const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
 // 宁可把日线七根写全，也不要一个顺序错乱的轴条。
 // ⚠️ 另两个加密榜的行**没有** weeklyVolume/weeklyRsi/weeklyEmaGap 字段（后端没发），
 // 所以它们继续用 cryptoStrategySorts，别图省事合并成一个常量 —— 会多出永远全 null 的幽灵轴。
+// 2026-07-28 两处同批改动：**删 周成交额**（与日成交额秩相关 +0.826、86/86 天同号，见
+// AXIS_W_VOL 那处的存档）**＋ 加 日波动幅度** ⇒ 轴数仍是 **13**，但周线块由 6 根变 5 根、
+// 日线块由 7 根变 8 根。
 const cryptoWeeklyExpansionSorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER, ...dmiSorts,
-                                    AXIS_D_MACD,
-                                    AXIS_W_VOL, AXIS_WRSI, AXIS_W_EMAGAP, ...weeklyDmiSorts, AXIS_W_MACD];
+                                    AXIS_D_MACD, AXIS_D_ATR,
+                                    AXIS_WRSI, AXIS_W_EMAGAP, ...weeklyDmiSorts, AXIS_W_MACD];
 // （已删的轴与工厂，复活时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
 //  stockTurnoverSorts/stockAmpSorts〔2026-07-24〕；加密 cryptoRsiFirst/cryptoVolFirst/
 //  cryptoChange/cryptoTurnoverSorts/cryptoAmpSorts/cryptoFundingSorts 与 AXIS_AMPLITUDE/
@@ -428,7 +498,7 @@ const TAB_GROUPS = [
             // desc 里不写会漂移的实测命中数：bhNote 本就渲染实时命中数，写死的快照只会和
             // 旁边那个实时数当场打架（这一条是 2026-07-26 审计删掉一句写死数字后定的规矩）。
             { key: "dailyEmaExpansion", name: "日线9/21/55扩张", tf: "日线",
-              desc: "最新已收盘日线的 EMA9、EMA21、EMA55 从上到下排好，且 9/21 与 21/55 两档间距都比前一天更大——短、中两级均线一起张开的那一刻。比只看 9/21 严得多：多出来的 EMA55 那道门槛挡掉了「短线反弹但中期均线还压在上面」的那一类。这里只看均线结构，不再要求资金同步流入，所以「结构张开了但还没人接盘」的也会留在榜上——想再筛一道就按日CVD强弱排序。上市不足 56 天的新合约算不出 EMA55，不入榜。范围是全部 USDT 永续合约。" },
+              desc: "最新已收盘日线的 EMA9、EMA21、EMA55 从上到下排好，且 9/21 与 21/55 两档间距都比前一天更大——短、中两级均线一起张开的那一刻。比只看 9/21 严得多：多出来的 EMA55 那道门槛挡掉了「短线反弹但中期均线还压在上面」的那一类。这里只看均线结构，不要求资金同步流入，所以「结构张开了但还没人接盘」的也会留在榜上——想再筛一道请按「日订单流」排序（那是真实成交归边；「日CVD强弱」是按 K 线形态推断的，在本榜里九成以上都是正的，升序那头看不出「派发」，只是「买得最不起劲」）。上市不足 56 天的新合约算不出 EMA55，不入榜。范围是全部 USDT 永续合约。" },
             // tf 日线。⚠️ 2026-07-26 指令②「最新已收盘日线依然是EMA9/21/55/200多头排列存续
             // 期间（不要求四线扩张）」。**name 用「排列」不用「扩张」**：站内「扩张」专指
             // 间距在变大，本榜恰恰不要求那个，两个词混用会把判据说反。
@@ -798,7 +868,7 @@ function renderSortStrip() {
         config.sorts.map(s => {
             const act = s.key === sortField;
             return `<button type="button" class="sort-chip${act ? " is-active" : ""}" data-sortkey="${s.key}"
-                aria-pressed="${act}" title="${act ? "再点一次切换升/降序" : `按${s.label}排序`}">${s.label}${act ? `<span class="sort-chip__arrow">${arrow}</span>` : ""}</button>`;
+                aria-pressed="${act}" title="${(act ? "再点一次切换升/降序" : `按${s.label}排序`) + (s.hint ? "　·　" + s.hint : "")}">${s.label}${act ? `<span class="sort-chip__arrow">${arrow}</span>` : ""}</button>`;
         }).join("") + `</div>`;
     // 重建 innerHTML 会把横向滚动位归零——点最右侧的轴(如 订单流)后 chips 弹回左端、
     // 刚点的轴反而看不见了；同 tab 内重渲染时手动还原

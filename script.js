@@ -1,12 +1,14 @@
-// === 排序轴（2026-07-17 加 CVD强弱 第三轴 + 订单流；OI增仓 曾于 2026-07-19 加、07-20 移除；
-// 2026-07-20 深夜给 A股/美股/ETF 加 量比/EMA间距 两进阶轴；2026-07-22 深夜给加密日线策略
-// 行家族〔dailyEma921/weeklyStrategy〕加 参与度/距前高 两轴 + weeklyStrategy 周线强度轴）===
+// === 排序轴 ===
 // 每个 tab 的每一行 payload 统一带 rsi / volume / volumeFormatted / cvdStrength 字段
-// （加密行另带 takerStrength，A股/美股/ETF 行另带 volRatio/emaGap；加密日线策略行家族
-// 另带 volRatio/emaGap/highDist，weeklyStrategy 再带 weeklyRsi），排序键稳定：
-//   A股/美股/ETF 策略 tab 五轴 [RSI, 成交额, CVD强弱, 量比, EMA间距]、涨跌幅六轴 [涨幅, ...]；
-//   加密 普通策略 tab 四轴（+订单流）、加密 涨跌幅五轴；加密日线策略行家族 七/八轴。
-//   默认轴＝该 tab 本来的主指标排最前。
+// （加密行另带 takerStrength，A股/美股/ETF 行另带 volRatio/emaGap），排序键稳定；
+// 默认轴（sorts[0]）＝该 tab 的主指标，**必须与后端 `value` 取的量一致**，否则首屏值列
+// 显示的是另一根轴的数。
+// ⚠️⚠️ **本段刻意不再写死"某族几轴"**（2026-07-29 审计）：原文停在「股票系五轴 / 加密
+// 四轴 / 涨跌幅六轴」，那是 2026-07-22 的快照，此后加 ADX/DI、砍 DI、加日/周MACD、加日
+// 波动幅度、删周成交额若干轮，全都没跟着改，且还在引用早已移除的 `dailyEma921`/
+// `weeklyStrategy`/涨跌幅榜。**要数轴就去数下面那几个 sorts 常量本身**
+// （现役：`cryptoStrategySorts` / `cryptoWeeklyExpansionSorts` / `singleStrategySorts`）——
+// 这个"注释里写死数字然后发霉"的坑本仓库已经犯到第四次。
 // sortField 直接是行上的字段名，getSortedItems 按它比较（null 沉底）。
 //
 // CVD强弱 = 归一化买卖失衡比 ∈ [−1,+1]（后端 calc_cvd_strength）：+1 纯买/吸筹、0 均衡、

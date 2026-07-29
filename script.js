@@ -457,7 +457,7 @@ const ashareMonthlyChangeSorts = stockChangeSorts("月", "月线RSI");
 const TABS_CONFIG = {
     // === 加密涨跌幅：三个榜（2026-07-29 站长「新增TAB：日线级涨跌幅，周线级涨跌幅，
     // 月线级涨跌幅」）===
-    // **无筛选、全市场入榜**，是全站仅有的三个行情榜。轴集走 changeSorts 工厂（五轴，
+    // **无筛选、全市场入榜**。轴集走 cryptoChangeSorts 工厂（五轴，
     // 完整设计说明见那里）。
     // ⚠️ 三处必须同时到位，缺一个都不报错但会静默坏掉：
     //   ① 这里的 sorts（首轴 = value = 涨跌幅，与后端 `value` 取的量一致）
@@ -1205,7 +1205,8 @@ function renderTable() {
             const desc = expired
                 ? "通行证已失效（过期或被停用）<br>续费后即可继续查看完整名单"
                 // ⚠️ 2026-07-29 由「全部策略榜」改成「全部榜单」：站内已不只有策略榜，
-                // 同日新增的三个涨跌幅榜是行情榜（无筛选、全市场），同样要付费解锁。
+                // 当天新增的六个涨跌幅榜（加密 3 + A股 3）是行情榜（无筛选、全市场），
+                // 同样要付费解锁。
                 : "购买通行证，解锁本站全部榜单的完整名单与多轴排序";
             const ctaLabel = expired ? "重新输入 / 续费" : "立即解锁";
             const ctaAction = expired ? () => openUnlockDialog() : openPurchaseDialog;
@@ -1349,10 +1350,17 @@ function renderTable() {
         // 用户刚看完 TOP1 正想看剩下的）,平常一句「共 N」
         const total = (data[currentTab] || []).length;
         const teaserLocked = PAYWALL_ENABLED && currentTab === TEASER_TAB && !license.valid;
+        // ⚠️⚠️ 量词必须随榜的语义走（与 renderBoardHead 同一判据）：策略榜「命中 N」、
+        // 行情榜「共 N」——行情榜无任何筛选，说"命中 5193"会被读成"筛出了 5193 个"。
+        // **2026-07-29 A股 三个涨跌幅榜（各 ~5190 行）上线后才暴露**：加密那三个只有 528 行、
+        // 从未越过 RENDER_CAP(1000)，所以截断分支历史上从没在行情榜上触发过；正常态那句
+        // （下面的 else）本来就写的是"共"，于是 board-head 说「共 5193」而同屏表尾说
+        // 「命中 5193」，**自相矛盾**。搜索分支同理——截断提示恰恰在劝用户去搜索。
+        const q = isStrategyTab(currentTab) ? "命中" : "共";
         if (searchQuery) {
-            foot.textContent = `匹配 ${items.length} / 命中 ${total} 个${capped ? ` · 仅渲染前 ${RENDER_CAP} 行` : ""}`;
+            foot.textContent = `匹配 ${items.length} / ${q} ${total} 个${capped ? ` · 仅渲染前 ${RENDER_CAP} 行` : ""}`;
         } else if (capped) {
-            foot.textContent = `显示 ${RENDER_CAP} / 命中 ${total} 个 · 单榜最多渲染 ${RENDER_CAP} 行,其余可用搜索定位`;
+            foot.textContent = `显示 ${RENDER_CAP} / ${q} ${total} 个 · 单榜最多渲染 ${RENDER_CAP} 行,其余可用搜索定位`;
         } else if (teaserLocked) {
             const hits = tabCount(currentTab); // paidMeta 的真实命中数（不是被截成 1 行的数组长度）
             const rest = hits != null && hits > total ? `其余 ${hits - total} 个标的` : "完整榜单";

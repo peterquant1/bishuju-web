@@ -114,19 +114,27 @@ function axesSub(item, sf, volLabel, extra) {
     if (extra) shown.push(extra);
     return shown.join(" | ");
 }
-// ⚠️ 以下两个 helper 当前**无调用方**（休眠，保留供复活）：momentumStr 服务已移除的
-// weeklyRsi 榜（2026-07-22），changeSub 服务已移除的涨跌幅榜（股票系 2026-07-24 /
-// 加密 2026-07-25）。都只依赖 axesSub，复活榜时直接可用。
+// ⚠️ momentumStr 当前**无调用方**（休眠，保留供复活）：它服务已移除的 weeklyRsi 榜
+// （2026-07-22）。只依赖 axesSub，复活那个榜时直接可用。
 // 周线 RSI tab 的动能上下文（rsiPrev→rsiCurr 箭头），并入副行
 function momentumStr(v) {
     if (v.rsiPrev == null || v.rsiCurr == null) return "";
     const a = v.rsiCurr > v.rsiPrev ? "↑" : v.rsiCurr < v.rsiPrev ? "↓" : "→";
     return `动能 ${v.rsiPrev.toFixed(2)} → ${v.rsiCurr.toFixed(2)} ${a}`;
 }
-// 涨跌幅 tab 副行：排「涨幅」轴时展示价格上下文（原始开收/昨收→收），排其他轴时改展示
-// 「涨幅 +X%」——涨幅是涨跌幅 tab 的核心数字，值列被别的轴占用时不能让它彻底消失。
-function changeSub(v, sf, volLabel, priceCtx) {
-    const tail = sf === "value" ? priceCtx : `涨幅 ${formatPercent(v.value)}`;
+// 涨跌幅榜副行：排「涨跌幅」轴（sf === "value"）时展示价格上下文「开 X → 收 Y」，排其他
+// 轴时改展示「涨跌幅 +X%」——涨跌幅是本榜的核心数字，值列被别的轴占用时不能让它彻底消失。
+// ⚠️ **2026-07-29 复活**（休眠自 2026-07-25 加密涨跌幅榜下线）。这次顺手做了两处收敛：
+//   ① 价格上下文原来由调用方以 priceCtx 参数传入（当年 A股 是"昨收 X → 收 Y"、加密是
+//      "开 X → 收 Y"，两套口径）。现在只有加密三个榜，一律 K 线实体口径 ⇒ 就地生成、
+//      少一个每个 tab 都要写对的参数。**若日后股票系涨跌幅榜复活，它们是 close-to-close，
+//      文案必须是「昨收 X → 收 Y」——那时把 priceCtx 参数加回来，别直接套用这里的措辞。**
+//   ② `formatPercent` → `fmtGapVal`：两者对非 null 输出逐字相同，但后者 null 安全。
+// ⚠️ 判据 `sf === "value"` 与轴 key 绑死（见 changeSorts 那处的警告），别改成 changePercent。
+function changeSub(v, sf, volLabel) {
+    const tail = sf === "value"
+        ? `开 ${fmtMktPrice(v.open)} → 收 ${fmtMktPrice(v.close)}`
+        : `涨跌幅 ${fmtGapVal(v.value)}`;
     return axesSub(v, sf, volLabel, tail);
 }
 
@@ -376,6 +384,47 @@ const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
 const cryptoWeeklyExpansionSorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER, ...dmiSorts,
                                     AXIS_D_MACD, AXIS_D_ATR,
                                     AXIS_WRSI, AXIS_W_EMAGAP, ...weeklyDmiSorts, AXIS_W_MACD];
+
+/** 三个涨跌幅榜（2026-07-29 站长「新增TAB：日线级涨跌幅，周线级涨跌幅，月线级涨跌幅」）
+ *  的 **五轴**：涨跌幅 · 成交额 · RSI · CVD强弱 · 订单流。
+ *
+ *  ⚠️⚠️ **这是工厂不是三份常量，是刻意的。** 三个榜的轴只差周期前缀，若写成
+ *  AXIS_D_CHG / AXIS_W_CHG / AXIS_M_CHG… 九个近亲常量，就正中本项目栽过多次的那个坑
+ *  （"两个几乎一样的常量选错一个、不报错只能肉眼发现"）。同 singleStrategyGroup 的思路。
+ *
+ *  ⚠️⚠️ **五个 key 全是通用 key**（value / volume / rsi / cvdStrength / takerStrength），
+ *  三个榜共用同一批 key —— **后端按各榜自己的周期填值**（周线榜的 `rsi` 装的是周线 RSI、
+ *  月线榜装月线 RSI）。这与另六个策略榜相反（那些榜通用 key 一律是日线值、周线值另带
+ *  `weekly` 前缀）。副行标签走 axisLabelFor 从**当前榜自己的 sorts** 反查，所以页面上
+ *  显示的是「周线RSI」而不是「日线RSI」，标签与数值对得上。
+ *  也正因为用的是通用 key：`axesSub` 里 rsi / volume / cvdStrength / takerStrength
+ *  四段本来就都在 ⇒ **这三个榜零新增 axesSub 代码**。
+ *
+ *  ⚠️⚠️ **涨跌幅轴的 key 必须是 `value`，别"更语义化"地改成 changePercent** ——
+ *  renderTable 里红绿上色的判据写死了 `sortField === "value"`（切到 RSI/成交额 时值列
+ *  展示的是那个指标，红绿会误导 ⇒ 一律 neutral）。改了 key 红绿会**静默失效**。
+ *  同理 getColorClass 还要求这三个 tab key 在 CHANGE_PCT_TABS 里，两处缺一不可。
+ *
+ *  ⚠️ 为什么只有五轴、不像策略榜那样再带 ADX/+DI/MACD/波动幅度：① 站长这次一个字没提
+ *  排序，五轴正是站内涨跌幅榜的历史形态（＝站长两次逐字点名的「成交额，RSI，CVD，订单流」
+ *  四根 ＋ 涨跌幅本身）；② **月线端后端根本没产 ADX/MACD**，硬加就是全 null 幽灵轴，
+ *  三个榜还会不对称；③ 这是**全市场 ~528 行 × 3 个榜**，每加一根轴都要乘 ~1584 行进付费 KV。
+ *  要加轴：后端 `_change_row` 先补字段（日线端 daily_lookup 全都有、周线端 rsi_data 有
+ *  adx/diPlus/macdStrength、月线端没有），再在这里加 —— 别只在这里加。
+ *
+ *  tf = 周期前缀（"日"/"周"/"月"）；rsiLabel 单列，因为站内写法是「日线RSI」不是「日RSI」。 */
+const changeSorts = (tf, rsiLabel) => [
+    { key: "value",         label: `${tf}涨跌幅`,  format: v => fmtGapVal(v.value) },
+    { key: "volume",        label: `${tf}成交额`,  format: v => fmtVolVal(v) },
+    { key: "rsi",           label: rsiLabel,       format: v => fmtRsiVal(v.rsi) },
+    { key: "cvdStrength",   label: `${tf}CVD强弱`, format: v => fmtCvdVal(v.cvdStrength),
+      hint: "按K线形态推断的买卖失衡，不是真实成交归边；想看真钱流向用「订单流」" },
+    { key: "takerStrength", label: `${tf}订单流`,  format: v => fmtCvdVal(v.takerStrength),
+      hint: "真实成交归边（币安taker数据）。全市场只有约7%为正、常态在−0.02附近，负值是常态不是异常" },
+];
+const dailyChangeSorts = changeSorts("日", "日线RSI");
+const weeklyChangeSorts = changeSorts("周", "周线RSI");
+const monthlyChangeSorts = changeSorts("月", "月线RSI");
 // （已删的轴与工厂，复活时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
 //  stockTurnoverSorts/stockAmpSorts〔2026-07-24〕；加密 cryptoRsiFirst/cryptoVolFirst/
 //  cryptoChange/cryptoTurnoverSorts/cryptoAmpSorts/cryptoFundingSorts 与 AXIS_AMPLITUDE/
@@ -387,7 +436,23 @@ const cryptoWeeklyExpansionSorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_T
 //  布尔 SAR→不设末轴），别为了"看起来统一"合并成一个常量。）
 
 const TABS_CONFIG = {
-    // === 加密：六个榜（2026-07-25 晚站长先「移除加密所有TAB」清空 → 逐条指令加回五个 →
+    // === 加密涨跌幅：三个榜（2026-07-29 站长「新增TAB：日线级涨跌幅，周线级涨跌幅，
+    // 月线级涨跌幅」）===
+    // **无筛选、全市场入榜**，是全站仅有的三个行情榜。轴集走 changeSorts 工厂（五轴，
+    // 完整设计说明见那里）。
+    // ⚠️ 三处必须同时到位，缺一个都不报错但会静默坏掉：
+    //   ① 这里的 sorts（首轴 = value = 涨跌幅，与后端 `value` 取的量一致）
+    //   ② `CHANGE_PCT_TABS` 里要有这三个 key（否则值列的红绿上色恒 neutral）
+    //   ③ subFormat 传的 volLabel 要写对周期（副行的成交额标签，axesSub 不会自己反查它）
+    // ⚠️ subFormat 走 changeSub 而不是直接 axesSub：它多一段"价格上下文 / 涨跌幅"的尾巴，
+    // 保证切到别的排序轴时涨跌幅这个核心数字不会从行里彻底消失。
+    dailyChange: { sorts: dailyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "日成交额") },
+    weeklyChange: { sorts: weeklyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "周成交额") },
+    // ⚠️ 月线榜的数值每月 1 号 00:00 UTC 才变一次（后端走月线缓存）——整月不动是正确行为，
+    // 不是缓存卡住了。日线榜每小时随日 K 变，周线榜每周一变。
+    monthlyChange: { sorts: monthlyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "月成交额") },
+
+    // === 加密策略：六个榜（2026-07-25 晚站长先「移除加密所有TAB」清空 → 逐条指令加回五个 →
     // 2026-07-26 晚移除「周线两线扩张＋CVD递增」剩四个 → 2026-07-28 新增
     // `dailyFourEmaPersist` 的同日，站长决定它与 `dailyFourEmaAligned` **二选一、只留新的**
     // ⇒ 仍是四个 → 同日站长再新增 `dailyBreakWeeklyBearSar` ⇒ 五个 → 紧接着新增
@@ -509,6 +574,31 @@ const TAB_GROUPS = [
     // ⚠️ **内部 key 一律不动**（`dailyEma921` 等）：改 key 会连累三条抓取管道 + 公开
     // JSON + 缓存 schema——key 与显示名是两回事，历史上因此定过"key 固定、只改显示名"
     // 的规矩（*MonthlyStrategy / weeklyStrategy 先例），继续有效。
+    {
+        // === 加密行情：三个涨跌幅榜（2026-07-29 站长「新增TAB：日线级涨跌幅，周线级涨跌幅，
+        // 月线级涨跌幅」）===
+        // ⚠️ **资产范围是推断的（站长没写资产）**，判据留在这里以便日后复盘：按 CLAUDE.md
+        // 记了四次的先例「新增TAB 不点资产 ＝ 加密」做加密（2026-07-26 指令② / 2026-07-28
+        // 的 dailyFourEmaPersist / dailyBreakWeeklyBearSar / weeklyBreakBearSar 四例）。
+        // **这条与「加排序轴不点资产 ＝ 四资产同批加」不是同一条规矩，别混。** 扩到四个
+        // 资产是纯 build 层的事（股票系三条管道的 compute 早就产出各周期涨跌幅）。
+        //
+        // ⚠️ **排在策略组之前**：它们无筛选、是"先看全市场在涨什么、再进策略榜筛"的入口，
+        // 也是站内历史上一贯的排法（当年 crypto 的组序是 行情 → 日线策略 → 周线策略 → 月线策略）。
+        // ⚠️ **组的 tf 不下发**：本组横跨日/周/月，tf 挂在每个 tab 上（房规，见 TAB_META
+        // 的注释）。chip 名就写周期本身（日线/周线/月线）+ full 统一写「涨跌幅」——组标签
+        // 已经说了"涨跌幅"、tf 角标已经说了周期，chip 再写「日线级涨跌幅」是三重重复，
+        // 而 rail 只有 148px 可用宽。站长口中的"日线级涨跌幅"＝ 本组标签 + 本 chip。
+        label: "加密行情", asset: "加密",
+        tabs: [
+            { key: "dailyChange", name: "日线", full: "涨跌幅", tf: "日线",
+              desc: "最新已收盘日 K 的涨跌幅（当根收盘 ÷ 当根开盘，币安日 K 每天 00:00 UTC 收盘，所以看的是昨天那一整根）。没有任何筛选条件——全部 USDT 永续合约都在里面，谁涨谁跌一眼看全，是先看清全市场在发生什么、再去策略榜里筛的入口。默认按涨幅从高到低，点排序条可以切成日成交额（涨得多是不是也有人接）、日线RSI（是不是已经超买）、日CVD强弱与日订单流（这波是买盘推的还是卖盘砸的）。上市当天、还没有一根已收盘日 K 的新合约不入榜；上市不足约 23 天的合约涨跌幅照常显示，但 RSI / CVD强弱 / 订单流 会显示「—」（暖机根数不够），排序时自动沉底。" },
+            { key: "weeklyChange", name: "周线", full: "涨跌幅", tf: "周线",
+              desc: "最新已收盘周 K 的涨跌幅（周 K 每周一 00:00 UTC 收盘，所以整周之内这张榜的数值是不变的，下周一才换一批）。没有任何筛选条件，全部 USDT 永续合约。它比日线那张钝得多，正好用来分辨「这几天的涨只是反弹」还是「整周都在往上走」。请注意排序条上的 RSI、CVD强弱、订单流全部是周线口径而不是日线值，成交额也是那一根周 K 的成交额，不是 7 天滚动也不是日均。只要有 1 根已收盘周 K 就入榜，所以刚上市一两周的新合约也在；但它们的周线 RSI 要 16 根周 K 才算得出来，不够的显示「—」并在排序时沉底。" },
+            { key: "monthlyChange", name: "月线", full: "涨跌幅", tf: "月线",
+              desc: "最新已收盘月 K 的涨跌幅（月 K 每月 1 号 00:00 UTC 收盘，所以整个月之内这张榜是不动的——那是正确行为，不是数据卡住了）。没有任何筛选条件，全部 USDT 永续合约。这是站内周期最长的一张行情榜，看的是「这个月谁真的走出来了」，短线噪音基本被抹平。请注意排序条上的 RSI、CVD强弱、订单流全部是月线口径，成交额是那一根月 K 的成交额。只要有 1 根已收盘月 K 就入榜（上市当月的新合约还没有，暂不入榜）；月线 RSI 需要 16 根月 K、约一年半才算得出来，所以有四成左右的合约这几根轴会显示「—」并在排序时沉底——这本身也是一种信息：显示「—」的就是还没走完一轮周期的品种。" },
+        ],
+    },
     {
         // 加密：四个榜（2026-07-25 晚站长先「移除加密所有TAB」把当天定版的三个榜全部清空、
         // 随后逐条指令加回五个 → 2026-07-26 晚移除一个周线榜剩四个 → 2026-07-28 新增
@@ -698,10 +788,14 @@ function tabCount(key) {
 }
 
 // 涨跌幅榜：无筛选、全量入榜、值是涨跌幅，走红绿配色（getColorClass）。
-// **2026-07-25 起为空集**：全站已无涨跌幅榜（加密那三个是最后的成员）。空集下
-// getColorClass 恒返回中性色、isStrategyTab 恒为 true——都是正确行为，无需特判。
-// 复活涨跌幅榜时把 key 加回来。
-const CHANGE_PCT_TABS = new Set([]);
+// **2026-07-29 站长新增三个加密涨跌幅榜后重新非空**（2026-07-25～07-29 之间曾是空集）。
+// ⚠️⚠️ 这个 Set 现在同时决定**三件事**，加涨跌幅类 tab 时三件一起生效、漏加则三件一起
+// 静默失效（都不报错）：
+//   ① 值列红绿上色（getColorClass；另需 renderTable 里 sortField === "value"，见下）
+//   ② 导航 chip **不挂命中徽标**（isStrategyTab，见下面那行）——涨跌幅榜恒为全市场数量，
+//      挂个 528 既没信息量又会被误读成"筛出了 528 个"
+//   ③ 空状态文案走"暂无数据"而不是"0 命中是正常信号"（策略榜才有后一种语义）
+const CHANGE_PCT_TABS = new Set(["dailyChange", "weeklyChange", "monthlyChange"]);
 
 // 免费引流层（2026-07-22 站长定：通用行情开放引流，策略筛选付费）。整榜免费的通用
 // 行情榜：涨跌幅 + 成交额 + 振幅 + 资金费率。**必须跟后端 fetch_data.py 的同名
@@ -715,9 +809,15 @@ const FREE_TABS = new Set([]);
 // 振幅 + 资金费率），当晚站长再下「移除加密所有TAB」，加密新定版的 3 个榜也一并下线、
 // 资产整体退役。免费引流面现在只剩「橱窗 1 行（TEASER_TAB）+ 市场概览全局条」。
 // 后端 fetch_data.py 的同名 FREE_TABS 同样是空集，两边必须一致。
-// 策略榜 = 非免费榜（有筛选条件，"0 命中"是正常信号而非故障，值是 RSI/成交额等指标）。
-// 空状态文案、脉搏策略计数、导航命中徽标都据此——免费行情榜不参与这些语义。
-const isStrategyTab = tab => !FREE_TABS.has(tab);
+// 策略榜 = **有筛选条件的榜**（"0 命中"是正常信号而非故障，值是 RSI/成交额等指标）。
+// 空状态文案、脉搏策略计数、导航命中徽标都据此——行情榜（涨跌幅）不参与这些语义。
+// ⚠️⚠️ **2026-07-29 加了 `&& !CHANGE_PCT_TABS.has(tab)`**：在此之前判据只有
+// `!FREE_TABS.has(tab)`，那是因为历史上涨跌幅榜**同时**在 FREE_TABS 里（免费引流层），
+// 一个条件顺带盖住了两件事。这次新增的三个涨跌幅榜**是付费的**（FREE_TABS 仍是空集），
+// 两者第一次解耦 ⇒ 只判 FREE_TABS 会把行情榜当成策略榜：chip 上挂出「528」这种没有信息
+// 量的命中徽标、空榜时说"0 命中是正常的"（对全市场行情榜而言那分明是故障）、脉搏磁贴的
+// 策略榜计数从 6 虚增到 9。**"是不是策略榜"是语义问题，与免费/付费无关。**
+const isStrategyTab = tab => !FREE_TABS.has(tab) && !CHANGE_PCT_TABS.has(tab);
 
 function getColorClass(val, tab) {
     if (CHANGE_PCT_TABS.has(tab)) {
@@ -921,7 +1021,10 @@ function renderBoardHead() {
     // desc 说明的是"取哪根 K、有没有筛选"，同样有用。
     const note = document.getElementById("bhNote");
     const n = tabCount(currentTab);
-    const hit = n != null ? `命中 ${n} 个标的` : "";
+    // ⚠️ 2026-07-29：量词按榜的类型分开。**只有策略榜说"命中"**（有筛选条件、N 是筛出来
+    // 的）；涨跌幅这类行情榜没有任何筛选、N 恒等于全市场标的数，说"命中 528"会被读成
+    // "筛出了 528 个"。行情榜改说"共 N 个标的"，与 .table-foot 正常态的措辞一致。
+    const hit = n != null ? `${isStrategyTab(currentTab) ? "命中" : "共"} ${n} 个标的` : "";
     note.textContent = m.desc ? (hit ? `${m.desc} · ${hit}` : m.desc) : hit;
     head.hidden = false;
 }
@@ -1052,7 +1155,9 @@ function renderTable() {
             const expired = !!license.key; // 有 key 但 !valid = 过期/吊销
             const desc = expired
                 ? "通行证已失效（过期或被停用）<br>续费后即可继续查看完整名单"
-                : "购买通行证，解锁本站全部策略榜的完整名单与多轴排序";
+                // ⚠️ 2026-07-29 由「全部策略榜」改成「全部榜单」：站内已不只有策略榜，
+                // 同日新增的三个涨跌幅榜是行情榜（无筛选、全市场），同样要付费解锁。
+                : "购买通行证，解锁本站全部榜单的完整名单与多轴排序";
             const ctaLabel = expired ? "重新输入 / 续费" : "立即解锁";
             const ctaAction = expired ? () => openUnlockDialog() : openPurchaseDialog;
             // 未解锁时额外给一条"已有通行证？"入口(回访用户直接输码,不必先进购买弹窗)
@@ -1391,13 +1496,21 @@ function pulseTile(k, v, sub) {
     return `<div class="pulse__cell"><div class="pulse__label">${k}</div><div class="pulse__value">${v}</div><div class="pulse__sub">${sub}</div></div>`;
 }
 
-// 价格/百分比格式化（市场概览用）：大额无小数带千分位、小额留精度
+// 价格/百分比格式化：大额无小数带千分位、小额留精度（USDT 永续从 BTC 6 万到 1000SATS
+// 的 1e-5 跨 9 个数量级，固定小数位一定有一头是废的）。
+// ⚠️ fmtMktPrice **有两个消费者**：市场概览的 BTC/ETH 锚点 + 三个涨跌幅榜副行的
+// 「开 X → 收 Y」（2026-07-29 起，见 changeSub）。改它会同时动这两处。
 function fmtMktPrice(p) {
     if (p == null) return "—";
     if (p >= 1000) return "$" + Math.round(p).toLocaleString("en-US");
     if (p >= 1) return "$" + p.toFixed(2);
     if (p >= 0.01) return "$" + p.toFixed(4);
-    return "$" + Number(p).toPrecision(2);
+    // ⚠️ 2026-07-29 由 toPrecision(2) 提到 4：涨跌幅榜副行要展示「开 X → 收 Y」，2 位有效
+    // 数字会让低价币的两个价格看起来对不上涨跌幅（AKE 0.0019814→0.0031325 是 +58.1%，
+    // 但显示成 $0.0020→$0.0031 只有 +55%）。**对市场概览零影响**：那里只喂 BTC/ETH，
+    // 永远走上面 >= 1000 那个分支，这一行是死枝。外面套 Number() 是为了去掉 toPrecision
+    // 补出来的尾零（0.0000123 → "0.00001230" → "0.0000123"）。
+    return "$" + Number(p.toPrecision(4));
 }
 function fmtMktPct(x, dp) {
     if (x == null) return "—";

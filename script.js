@@ -122,21 +122,23 @@ function momentumStr(v) {
     const a = v.rsiCurr > v.rsiPrev ? "↑" : v.rsiCurr < v.rsiPrev ? "↓" : "→";
     return `动能 ${v.rsiPrev.toFixed(2)} → ${v.rsiCurr.toFixed(2)} ${a}`;
 }
-// 涨跌幅榜副行：排「涨跌幅」轴（sf === "value"）时展示价格上下文「开 X → 收 Y」，排其他
-// 轴时改展示「涨跌幅 +X%」——涨跌幅是本榜的核心数字，值列被别的轴占用时不能让它彻底消失。
-// ⚠️ **2026-07-29 复活**（休眠自 2026-07-25 加密涨跌幅榜下线）。这次顺手做了两处收敛：
-//   ① 价格上下文原来由调用方以 priceCtx 参数传入（当年 A股 是"昨收 X → 收 Y"、加密是
-//      "开 X → 收 Y"，两套口径）。现在只有加密三个榜，一律 K 线实体口径 ⇒ 就地生成、
-//      少一个每个 tab 都要写对的参数。**若日后股票系涨跌幅榜复活，它们是 close-to-close，
-//      文案必须是「昨收 X → 收 Y」——那时把 priceCtx 参数加回来，别直接套用这里的措辞。**
-//   ② `formatPercent` → `fmtGapVal`：两者对非 null 输出逐字相同，但后者 null 安全。
-// ⚠️ 判据 `sf === "value"` 与轴 key 绑死（见 changeSorts 那处的警告），别改成 changePercent。
-function changeSub(v, sf, volLabel) {
-    const tail = sf === "value"
-        ? `开 ${fmtMktPrice(v.open)} → 收 ${fmtMktPrice(v.close)}`
-        : `涨跌幅 ${fmtGapVal(v.value)}`;
+// 涨跌幅榜副行：排「涨跌幅」轴（sf === "value"）时展示价格上下文，排其他轴时改展示
+// 「涨跌幅 +X%」——涨跌幅是本榜核心数字，值列被别的轴占用时不能让它彻底消失。
+// ⚠️ 价格上下文由调用方以 priceCtx(v) 传入，因为**两套资产口径不同**：
+//   · 加密 = K 线实体，「开 X → 收 Y」（$ 价、fmtMktPrice）——cryptoPriceCtx
+//   · A股  = close-to-close，「昨收/上周收/上月收 X → 收/本周收/本月收 Y」（¥ 价、fmtCnyPrice）——asharePriceCtx
+// **2026-07-29 站长「A股 也新增涨跌幅榜，基于收盘的」时把 priceCtx 参数加了回来**——正是
+// 上一版注释预言的那一步（"日后股票系涨跌幅榜复活时把它加回来、别直接套加密的措辞"）。
+// ⚠️ 判据 `sf === "value"` 与轴 key 绑死（见 cryptoChangeSorts 那处的警告），别改成 changePercent。
+function changeSub(v, sf, volLabel, priceCtx) {
+    const tail = sf === "value" ? priceCtx(v) : `涨跌幅 ${fmtGapVal(v.value)}`;
     return axesSub(v, sf, volLabel, tail);
 }
+// 加密：K 线实体口径「开 X → 收 Y」，美元价。
+const cryptoPriceCtx = v => `开 ${fmtMktPrice(v.open)} → 收 ${fmtMktPrice(v.close)}`;
+// A股：close-to-close，前收/现收标签随周期不同（昨收→收 / 上周收→本周收 / 上月收→本月收），
+// 人民币价。preClose/close 由后端 _change_row 提供（compute 层 round(_,2)，沪深报价精度即 0.01）。
+const asharePriceCtx = (preLabel, curLabel) => v => `${preLabel} ${fmtCnyPrice(v.preClose)} → ${curLabel} ${fmtCnyPrice(v.close)}`;
 
 // 共享 sort-item 定义（key = 行字段名，全 tab 统一）
 // ⚠️ 2026-07-23：随 tab 显示名恢复直白命名（见 TAB_GROUPS 顶部注释），排序轴 label 同批
@@ -413,7 +415,7 @@ const cryptoWeeklyExpansionSorts = [AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_T
  *  adx/diPlus/macdStrength、月线端没有），再在这里加 —— 别只在这里加。
  *
  *  tf = 周期前缀（"日"/"周"/"月"）；rsiLabel 单列，因为站内写法是「日线RSI」不是「日RSI」。 */
-const changeSorts = (tf, rsiLabel) => [
+const cryptoChangeSorts = (tf, rsiLabel) => [
     { key: "value",         label: `${tf}涨跌幅`,  format: v => fmtGapVal(v.value) },
     { key: "volume",        label: `${tf}成交额`,  format: v => fmtVolVal(v) },
     { key: "rsi",           label: rsiLabel,       format: v => fmtRsiVal(v.rsi) },
@@ -422,9 +424,26 @@ const changeSorts = (tf, rsiLabel) => [
     { key: "takerStrength", label: `${tf}订单流`,  format: v => fmtCvdVal(v.takerStrength),
       hint: "真实成交归边（币安taker数据）。全市场只有约7%为正、常态在−0.02附近，负值是常态不是异常" },
 ];
-const dailyChangeSorts = changeSorts("日", "日线RSI");
-const weeklyChangeSorts = changeSorts("周", "周线RSI");
-const monthlyChangeSorts = changeSorts("月", "月线RSI");
+// 股票系（A股/美股/ETF）涨跌幅榜的**四轴**——比加密少一根「订单流」：tushare/Massive 的
+// 日线都没有 taker 逐笔归边字段（数据源硬边界，同 singleStrategySorts 不含 AXIS_D_TAKER）。
+// ⚠️⚠️ 必须是**独立的第二个工厂、不能给 cryptoChangeSorts 加个 withTaker 开关**：
+//   audit_consistency.py 的 A 项靠正则**静态**抽取工厂定义体里的 key 来校验"轴↔行字段"，
+//   看不懂运行时的条件裁剪——一个带 takerStrength 字面量的工厂体会让它以为 A股 行缺
+//   takerStrength 字段而误报。两个工厂各自把自己的轴写全，正是这道静态守卫要求的。
+// ⚠️ CVD hint 也与加密不同：这里没有「订单流」那根轴可指，不能照抄那句"想看真钱流向用订单流"。
+const stockChangeSorts = (tf, rsiLabel) => [
+    { key: "value",       label: `${tf}涨跌幅`,  format: v => fmtGapVal(v.value) },
+    { key: "volume",      label: `${tf}成交额`,  format: v => fmtVolVal(v) },
+    { key: "rsi",         label: rsiLabel,       format: v => fmtRsiVal(v.rsi) },
+    { key: "cvdStrength", label: `${tf}CVD强弱`, format: v => fmtCvdVal(v.cvdStrength),
+      hint: "按K线形态推断的买卖失衡，不是真实成交归边（tushare 日线无逐笔归边数据）" },
+];
+const dailyChangeSorts = cryptoChangeSorts("日", "日线RSI");
+const weeklyChangeSorts = cryptoChangeSorts("周", "周线RSI");
+const monthlyChangeSorts = cryptoChangeSorts("月", "月线RSI");
+const ashareDailyChangeSorts = stockChangeSorts("日", "日线RSI");
+const ashareWeeklyChangeSorts = stockChangeSorts("周", "周线RSI");
+const ashareMonthlyChangeSorts = stockChangeSorts("月", "月线RSI");
 // （已删的轴与工厂，复活时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
 //  stockTurnoverSorts/stockAmpSorts〔2026-07-24〕；加密 cryptoRsiFirst/cryptoVolFirst/
 //  cryptoChange/cryptoTurnoverSorts/cryptoAmpSorts/cryptoFundingSorts 与 AXIS_AMPLITUDE/
@@ -446,11 +465,11 @@ const TABS_CONFIG = {
     //   ③ subFormat 传的 volLabel 要写对周期（副行的成交额标签，axesSub 不会自己反查它）
     // ⚠️ subFormat 走 changeSub 而不是直接 axesSub：它多一段"价格上下文 / 涨跌幅"的尾巴，
     // 保证切到别的排序轴时涨跌幅这个核心数字不会从行里彻底消失。
-    dailyChange: { sorts: dailyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "日成交额") },
-    weeklyChange: { sorts: weeklyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "周成交额") },
+    dailyChange: { sorts: dailyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "日成交额", cryptoPriceCtx) },
+    weeklyChange: { sorts: weeklyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "周成交额", cryptoPriceCtx) },
     // ⚠️ 月线榜的数值每月 1 号 00:00 UTC 才变一次（后端走月线缓存）——整月不动是正确行为，
     // 不是缓存卡住了。日线榜每小时随日 K 变，周线榜每周一变。
-    monthlyChange: { sorts: monthlyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "月成交额") },
+    monthlyChange: { sorts: monthlyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "月成交额", cryptoPriceCtx) },
 
     // === 加密策略：六个榜（2026-07-25 晚站长先「移除加密所有TAB」清空 → 逐条指令加回五个 →
     // 2026-07-26 晚移除「周线两线扩张＋CVD递增」剩四个 → 2026-07-28 新增
@@ -526,6 +545,14 @@ const TABS_CONFIG = {
     // 写「日成交额」。
     // ⚠️ TABS_CONFIG 是平查找表、与 TAB_GROUPS 分离，所以这三条要手写；
     // singleStrategyGroup 工厂只管导航，不管这里。三条必须保持一致，改一条要改三条。
+    //
+    // A股 三个涨跌幅榜（2026-07-29 站长「A股 也新增：日线级/周线级/月线级涨跌幅，基于收盘的」）：
+    // 与加密三个涨跌幅榜同构，但 ① 走 stockChangeSorts（**4 轴**，无订单流——tushare 无 taker）；
+    // ② 副行价格上下文是 close-to-close 的「昨收/上周收/上月收 X → …Y」（asharePriceCtx，¥ 价），
+    // 不是加密的 K 线实体「开→收」。**CHANGE_PCT_TABS 里也要有这三个 key**（红绿上色 + 不挂命中徽标），别漏。
+    ashareDailyChange: { sorts: ashareDailyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "日成交额", asharePriceCtx("昨收", "收")) },
+    ashareWeeklyChange: { sorts: ashareWeeklyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "周成交额", asharePriceCtx("上周收", "本周收")) },
+    ashareMonthlyChange: { sorts: ashareMonthlyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "月成交额", asharePriceCtx("上月收", "本月收")) },
     ashareMonthlyWeeklyDaily: { sorts: singleStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     usMonthlyWeeklyDaily: { sorts: singleStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     etfMonthlyWeeklyDaily: { sorts: singleStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
@@ -690,6 +717,25 @@ const TAB_GROUPS = [
     // name/desc 现在只对 美股/ETF 成立），后两者继续用工厂。轴集三者仍完全相同
     // （singleStrategySorts 14 轴，A股 的三个「递增」是布尔值不设轴），故 TABS_CONFIG
     // 上方那三条仍共用同一份、无需拆。universe 参数是各资产标的范围说明。
+    {
+        // === A股行情：三个涨跌幅榜（2026-07-29 站长「A股 也新增：日线级涨跌幅，周线级涨跌幅，
+        // 月线级涨跌幅。基于收盘的」）===
+        // ⚠️ **口径 close-to-close**（站长明写"基于收盘的"）：日线用交易所官方 pct_chg
+        // （相对昨收、含集合竞价跳空），周/月线用本周收 vs 上周收——与加密的 K 线实体
+        // (close−open)/open 不同（A股 有跳空，股民认的是相对上一根收盘的涨跌）。
+        // ⚠️ **4 轴不是 5 轴**：A股 无「订单流」（tushare 日线无 taker 归边字段）。
+        // ⚠️ 排在「A股策略」之前（行情=先看全市场、再进策略榜筛的入口，同加密组序）。
+        // ⚠️ 组 tf 不下发（本组横跨日/周/月），tf 挂在每个 tab 上；chip 名写周期本身 + full「涨跌幅」。
+        label: "A股行情", asset: "A股",
+        tabs: [
+            { key: "ashareDailyChange", name: "日线", full: "涨跌幅", tf: "日线",
+              desc: "最新交易日的收盘涨跌幅——相对昨天收盘价算（交易所官方口径，含早盘集合竞价的跳空缺口），不是拿开盘价算。没有任何筛选条件，全部沪深 A 股都在里面（当天停牌的除外）：谁涨谁跌一眼看全，是先看清全市场在发生什么、再进策略榜筛的入口。默认按涨幅从高到低，点排序条可以切成日成交额（涨得多是不是也有量）、日线RSI（是不是已经超买）、日CVD强弱（这波是买盘推的还是卖盘砸的）。副行给出「昨收 X → 收 Y」两个价格便于核对。当天停牌的股票挂着的是停牌前的旧涨跌幅、会误导，一律不入榜。" },
+            { key: "ashareWeeklyChange", name: "周线", full: "涨跌幅", tf: "周线",
+              desc: "最新已收盘那一周的收盘涨跌幅——本周收盘价 ÷ 上周收盘价（close-to-close，含跨周的跳空），当周最后一个交易日收盘后定型、整周之内不变，下周才换一批。没有任何筛选条件，全部沪深 A 股。它比日线那张钝得多，正好用来分辨「这几天的涨只是反弹」还是「整周都在往上走」。请注意排序条上的 RSI、CVD强弱、成交额全部是周线口径（成交额是那一根周 K 的成交额，不是 5 日累计也不是日均），不是日线值。要有 2 根已收盘周 K 才入榜；周线 RSI 需 16 根周 K 才算得出来，不够的显示「—」并在排序时沉底。" },
+            { key: "ashareMonthlyChange", name: "月线", full: "涨跌幅", tf: "月线",
+              desc: "最新已收盘那一个月的收盘涨跌幅——本月收盘价 ÷ 上月收盘价（close-to-close，含月初的跳空），当月最后一个交易日收盘后定型、整个月之内不变（那是正确行为，不是数据卡住了）。没有任何筛选条件，全部沪深 A 股。这是站内周期最长的一张 A股 行情榜，看的是「这个月谁真的走出来了」，短线噪音基本被抹平。排序条上的 RSI、CVD强弱、成交额全部是月线口径。要有 2 根已收盘月 K 才入榜（上市当月、还只有一根月 K 的新股暂不入榜）；月线 RSI 需 16 根月 K、约一年半才算得出来，不够的这几根轴显示「—」并沉底。" },
+        ],
+    },
     { label: "A股策略", asset: "A股", tf: "月线",
       tabs: [
         { key: "ashareMonthlyWeeklyDaily", name: "月线扩张 × 周线SAR × 日线量/CVD/RSI递增",
@@ -795,7 +841,10 @@ function tabCount(key) {
 //   ② 导航 chip **不挂命中徽标**（isStrategyTab，见下面那行）——涨跌幅榜恒为全市场数量，
 //      挂个 528 既没信息量又会被误读成"筛出了 528 个"
 //   ③ 空状态文案走"暂无数据"而不是"0 命中是正常信号"（策略榜才有后一种语义）
-const CHANGE_PCT_TABS = new Set(["dailyChange", "weeklyChange", "monthlyChange"]);
+// 加密 3 个 + A股 3 个（2026-07-29）。A股 的三个走 close-to-close，但红绿/非策略语义与加密
+// 一致，同样进这个集合。红绿方向由 CSS 的 [data-asset] 作用域翻（A股 涨红跌绿）。
+const CHANGE_PCT_TABS = new Set(["dailyChange", "weeklyChange", "monthlyChange",
+                                 "ashareDailyChange", "ashareWeeklyChange", "ashareMonthlyChange"]);
 
 // 免费引流层（2026-07-22 站长定：通用行情开放引流，策略筛选付费）。整榜免费的通用
 // 行情榜：涨跌幅 + 成交额 + 振幅 + 资金费率。**必须跟后端 fetch_data.py 的同名
@@ -1511,6 +1560,12 @@ function fmtMktPrice(p) {
     // 永远走上面 >= 1000 那个分支，这一行是死枝。外面套 Number() 是为了去掉 toPrecision
     // 补出来的尾零（0.0000123 → "0.00001230" → "0.0000123"）。
     return "$" + Number(p.toPrecision(4));
+}
+// A股 价格：沪深报价精度恒为 0.01 ⇒ 两位小数即完整；¥ 前缀（不是 crypto 的 $）。
+// A股 涨跌幅榜副行「昨收 X → 收 Y」用（close-to-close，见 asharePriceCtx）。
+function fmtCnyPrice(p) {
+    if (p == null) return "—";
+    return "¥" + p.toFixed(2);
 }
 function fmtMktPct(x, dp) {
     if (x == null) return "—";

@@ -464,8 +464,8 @@ const TABS_CONFIG = {
     monthlyChange: { sorts: monthlyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "月成交额", cryptoPriceCtx) },
 
     // === 加密策略：七个榜（数轮增删后 2026-07-30 一度达九个 → 同日站长移除三个周线族 SAR
-    // 榜 ⇒ 六个 → 同日站长「最新已收盘月线SAR多头且周线也是SAR多头」复活 monthlyWeeklySar
-    // ⇒ **七个**。被移除各榜判据存档见后端 build_rankings docstring 末尾）===
+    // 榜 ⇒ 六个 → 2026-08-01 站长「最新已收盘月线SAR多头且周线也是SAR多头」复活
+    // monthlyWeeklySar ⇒ **七个**。被移除各榜判据存档见后端 build_rankings docstring 末尾）===
     // **轴集只有一族**：七个榜全部共用 **16 轴的 cryptoStrategySorts**，行全部走后端唯一的
     // `_strategy_row`（2026-07-30 站长「能否对齐轴数？以最多的为准」；对齐前是 ①②③④ 用
     // 11 轴、⑤⑥ 用 13 轴的 cryptoWeeklyExpansionSorts 两族）。
@@ -531,7 +531,7 @@ const TABS_CONFIG = {
     // 建榜时是 13 轴的 cryptoWeeklyExpansionSorts，2026-07-30 轴数对齐后并入）。
     // ⚠️ 显示名写「9/21扩张」不写「两线扩张」：后者是 (9/21 ∪ 9/26) 并集的专称，本榜是严格 9/21。
     weeklyEmaSarBull: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    // ⑦ **月线 SAR 多头 且 周线 SAR 多头（2 个条件，月+周两级，没有日线端）** —— 2026-07-30
+    // ⑦ **月线 SAR 多头 且 周线 SAR 多头（2 个条件，月+周两级，没有日线端）** —— 2026-08-01
     // 站长新增。判据与 2026-07-24 的 `monthlyWeeklySar` 旧榜逐字相同 ⇒ **key 复用＝复活**
     // （同 weeklyEmaBearish 2026-07-26 复活的先例；那个榜 2026-07-25 随「移除加密所有TAB」下线过）。
     // ⚠️ 与 ① 是**严格超集**：① ＝ 本榜 ∩ 日线 SAR 多头 ⇒ ① ⊆ 本榜（免费自检点）。
@@ -630,8 +630,8 @@ const TAB_GROUPS = [
     },
     {
         // 加密：**七个榜**（2026-07-30 一度达九个 → 同日站长移除三个周线族 SAR 榜 ⇒ 六个
-        // → 同日站长「最新已收盘月线SAR多头且周线也是SAR多头」复活 monthlyWeeklySar ⇒
-        // **七个**；被移除各榜的显示名/desc/判据存档见 git 历史与后端 build_rankings
+        // → 2026-08-01 站长「最新已收盘月线SAR多头且周线也是SAR多头」复活 monthlyWeeklySar
+        // ⇒ **七个**；被移除各榜的显示名/desc/判据存档见 git 历史与后端 build_rankings
         // docstring 末尾）。
         // ⚠️ **刻意不套 singleStrategyGroup 工厂**：那个工厂的 name/desc 写死的是股票系
         // 的 5 个条件（月线SAR + 周线SAR + 周线扩张 + 日线扩张 + CVD），与这七个榜都不
@@ -713,7 +713,7 @@ const TAB_GROUPS = [
             // ⚠️ name 写「9/21扩张」不写「两线扩张」：后者是 (9/21 ∪ 9/26) 并集专称，本榜严格 9/21。
             { key: "weeklyEmaSarBull", name: "周线9/21扩张＋SAR多头", tf: "周线",
               desc: "最新已收盘周线要同时满足两条：一是 EMA9 在 EMA21 上方、而且两者的间距比上一周更大（均线正在张开，不是单纯的多头排列），二是这根周线的 Parabolic SAR 站在多头一侧。它在「周线 SAR 站多头」这个方向门槛之上，还要求 EMA9/21 均线结构本身正在加速张开，所以命中数比单看方向少得多，找的是「趋势方向和结构强度双双确认」的标的，而不是「方向朝上但可能还在磨」的一大批。用法上，SAR 保证了方向，EMA 扩张保证了力度，两者叠加天然偏强势；排序时按周ADX 或周MACD强弱 能进一步区分「大级别力度足」和「刚起步」。需要至少 22 根已收盘周 K 才算得出 EMA9/21 扩张，所以上市不足约半年的新合约不入榜。表格里的日线八轴不参与筛选，用来在这批标的里再看日线强弱。范围是全部 USDT 永续合约。" },
-            // tf 月线：判据的最大级别在月线（① 同理挂月线角标）。⚠️ 2026-07-30 站长逐字：
+            // tf 月线：判据的最大级别在月线（① 同理挂月线角标）。⚠️ 2026-08-01 站长逐字：
             // 「新增一个TAB，逻辑是：最新已收盘月线SAR多头且周线也是SAR多头。」（没点资产 ⇒
             // 按记了八次的先例做加密）
             // ⚠️⚠️ 判据与 2026-07-24 的 `monthlyWeeklySar` 旧榜逐字相同 ⇒ **key 复用＝复活**

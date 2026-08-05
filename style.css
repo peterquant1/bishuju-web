@@ -176,6 +176,14 @@ body.no-scroll{overflow:hidden}
 a{color:var(--gold-ink);text-decoration:none}
 a:hover{color:var(--gold-hi)}
 :focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px}
+/* 焦点环唯一例外：资产分段控件的四个按钮坐在 .asset-seg 的轨道上，而那条轨道的底色是 --bg0
+   (亮色 #e3dacc)；上面那条规则 outline-offset:2px 让环画在按钮之外 ⇒ 环压的是轨道不是按钮自身。
+   亮色下 --gold(#c6613f) 对 #e3dacc 只有 2.926:1，低于 WCAG 2.4.11 / 1.4.11 的 3:1。
+   换成站内已有的墨色变体 --gold-ink(#a94a26) 后是 4.105:1；暗色下这两个 token 同值(#e08a66)，
+   ⇒ 暗色观感零变化。全站只有这一处可聚焦元素坐在 --bg0 上，其余最低 3.488(--bg1)，无需改。
+   ⚠️ 2026-08-05 审计补：此前几轮审美 PASS 都是「拿 gold 逐个比 --panel 系令牌」，从没把 --bg0
+   算进去，所以这处一直没被查出来。正确判据是「逐个可聚焦元素，量环色 vs 它外侧的实际底色」。 */
+.asset-seg__opt:focus-visible{outline-color:var(--gold-ink)}
 .skip-link{position:absolute;left:8px;top:-48px;z-index:200;padding:8px 14px;background:var(--panel);color:var(--gold-ink);border:1px solid var(--line);border-radius:8px;font-size:13px;transition:top .15s}
 .skip-link:focus{top:8px}
 .main:focus{outline:none}

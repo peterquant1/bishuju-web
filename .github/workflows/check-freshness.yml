@@ -71,7 +71,14 @@ jobs:
       # /api/status 只回元信息（updateTime/tab 数/字节数），公开无鉴权。
       # ⚠️ 若日后紧急关闭付费墙（PAYWALL_ENABLED=false），上传停止、这步会开始告警——
       # 届时把本步一并注释掉。
+      # ⚠️⚠️ `if: always()` 不能删（2026-08-05 审计补）：GH Actions 默认「前一步 fail 就跳过
+      # 后续所有步骤」，而上一步会因 A股/美股 陈旧而 fail —— 两件事本来毫不相干，却让公开侧
+      # 的陈旧把付费侧的监控一起弄瞎。2026-08-03~05 机器睡眠事故实测：A股 陈旧 65 小时期间
+      # 本步被**连续跳过 15 次**，付费数据链路（客户真正读的那条、也正是当初 400 事故静默近
+      # 一天的那条）整整 40 小时零监控。加上之后两条检查互相独立；job 整体仍会因上一步 fail
+      # 而 fail，告警语义不变。
       - name: Check paid-data KV freshness (Worker /api/status)
+        if: always()
         run: |
           # 自定义 UA：Cloudflare 会把已知机器人 UA 直接 403（error 1010，license.py 同款坑）
           body=$(curl -sS --retry 3 --retry-delay 5 -A "bishuju-freshness-check/1.0" \

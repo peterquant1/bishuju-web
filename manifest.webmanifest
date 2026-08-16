@@ -1,7 +1,7 @@
 {
   "name": "狗庄74",
   "short_name": "狗庄74",
-  "description": "加密 + A股 + 美股 + ETF 指标筛选排行榜",
+  "description": "加密 + A股 指标筛选排行榜",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f0eee6",

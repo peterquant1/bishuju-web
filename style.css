@@ -63,22 +63,27 @@
     /* 墨色文字阶梯。纸的明度高 ⇒ 这套阶梯余量比 v5 宽得多(v5 最低 4.503 贴着 AA 线,
        v6 最低 4.6+),但**改 --bg1/--panel 仍必须重测**(muted-2 在两个面上都要 ≥4.5)。*/
     --text:#141413; --muted:#5c5a54; --muted-2:#6d6b64;
-    /* 四资产识别色(功能性,非装饰;亮色下均已按 WCAG 调深)：加密琥珀/A股蓝/美股紫/ETF 深青 */
+    /* 资产识别色(功能性,非装饰;亮色下均已按 WCAG 调深)：加密琥珀 / A股蓝。
+       ⚠️ 2026-08-16 移除美股/ETF，随之删掉 --asset-us / --asset-etf 三组 token
+       （原值：us 紫 #7c3aed / ink #6a2ed0 / rgb 124,58,237；etf 深青 #0a7061 /
+       ink #086055 / rgb 10,112,97；暗色 us #a78bfa / ink #b7a0ff、etf #2dd4bf 两处同值）。
+       留着就是没人引用的孤儿 token，会破坏「令牌定义数 == 引用数」那条审美自检；
+       复活时连同下面各处 [data-asset="us"|"etf"] 选择器一起从 git 捞。*/
     --asset-crypto:#9a4f04; --asset-crypto-ink:#8b4704; --asset-crypto-rgb:154,79,4;
-    --asset-ashare:#1d5cbf; --asset-us:#7c3aed; --asset-etf:#0a7061;
-    /* ⚠️ -ink = 作「文字」用的墨色，比同名填充色更深，四资产各一份（2026-07-24 审美 PASS 加）。
+    --asset-ashare:#1d5cbf;
+    /* ⚠️ -ink = 作「文字」用的墨色，比同名填充色更深，每个资产各一份（2026-07-24 审美 PASS 加）。
        起因：.tf-chip 实际嵌在**同色系选中态**里（.nav-item.is-active 自带 rgba(asset,.10~.12)），
-       底色叠两层后深一档，实测四资产全部跌破 AA。
+       底色叠两层后深一档，实测四资产（当时是四个）全部跌破 AA。
        **只给文字用**：填充语义（分段控件 is-active 背景、圆点、强度条、--asset-accent
-       装饰条）一律仍用不带 -ink 的原色，别混。*/
-    --asset-ashare-ink:#1a53ac; --asset-us-ink:#6a2ed0; --asset-etf-ink:#086055;
-    /* ⚠️ v6 新增 -rgb 三兄弟(crypto 早就有)。此前 ashare/us/etf 的淡底一律写死
+       装饰条）一律仍用不带 -ink 的原色，别混。加资产时这一份必须一起加并重测对比度。*/
+    --asset-ashare-ink:#1a53ac;
+    /* ⚠️ v6 新增 -rgb（crypto 早就有）。此前 ashare/us/etf 的淡底一律写死
        rgba(33,102,204,…)/rgba(13,138,122,…) 这类**旧色号**,有两个后果:
        ① 与 --asset-* 的实际值漂移(#2166cc vs #1d5cbf);
        ② **暗色主题下不跟随变亮** —— 深蓝 10% 压在 #1c1b19 上几乎看不见,而 crypto 因为
           走 var(--asset-crypto-rgb) 正常显示。即"选中态高亮只有加密看得见"。
-       现在四个资产统一走 rgb token,两个毛病一起消失。别再写死色号。*/
-    --asset-ashare-rgb:29,92,191; --asset-us-rgb:124,58,237; --asset-etf-rgb:10,112,97;
+       现在统一走 rgb token,两个毛病一起消失。别再写死色号。*/
+    --asset-ashare-rgb:29,92,191;
     /* directional(在 [data-asset] 下翻转)*/
     --price-up:var(--up); --price-down:var(--down); --asset-accent:var(--asset-crypto);
     /* 强度条渐变 */
@@ -128,16 +133,17 @@
     --warn:#e0a437;
     --text:#f5f3ed; --muted:#a8a49a; --muted-2:#96938a;
     --asset-crypto:#f2a93c; --asset-crypto-ink:#f2a93c; --asset-crypto-rgb:242,169,60;
-    --asset-ashare:#6ab0ff; --asset-us:#a78bfa; --asset-etf:#2dd4bf;
-    /* ⚠️ v6 起 ashare/us **暗色的 ink 必须比填充色更亮**（与亮色下"ink 更深"正好相反）。
-       起因是本轮修掉了「淡底写死亮色色号」那个 bug：修之前暗色下 .tf-chip 的底是
-       rgba(124,58,237,.14) 这种**深紫**、几乎等于没有底，字自然够对比；修之后底跟着变亮
-       (rgba(167,139,250,.16))，而 .tf-chip 又恰好嵌在同样变亮的 .nav-item.is-active
-       (rgba(us,.12)) 里 —— **两层亮紫叠加**把有效底抬到 rgb(64,56,84)，#a78bfa 掉到
-       4.03:1 不达 AA（本轮实测唯一一处 fail）。把 ink 提亮到 #b7a0ff 后回到 5.0+。
-       crypto/etf 的暗色 ink 与填充同值即可达标（实测 4.8+），无需拆开。*/
-    --asset-ashare-ink:#8cc3ff; --asset-us-ink:#b7a0ff; --asset-etf-ink:#2dd4bf;
-    --asset-ashare-rgb:106,176,255; --asset-us-rgb:167,139,250; --asset-etf-rgb:45,212,191;
+    --asset-ashare:#6ab0ff;
+    /* ⚠️ v6 起 ashare **暗色的 ink 必须比填充色更亮**（与亮色下"ink 更深"正好相反）。
+       起因是 v6 修掉了「淡底写死亮色色号」那个 bug：修之前暗色下 .tf-chip 的底是
+       rgba(旧深色号,.14)、几乎等于没有底，字自然够对比；修之后底跟着变亮，而 .tf-chip
+       又恰好嵌在同样变亮的 .nav-item.is-active (rgba(asset,.12)) 里 —— **两层亮色叠加**
+       把有效底抬高一档。当时已移除的美股紫就是这么掉到 4.03:1 的（v6 实测唯一一处 fail，
+       靠把 ink 提亮修回 5.0+）。crypto 的暗色 ink 与填充同值即可达标（实测 4.8+）。
+       ⚠️ **加资产时照这条重测一遍**：亮色看 ink 够不够深，暗色看 ink 够不够亮，
+       且必须量「.tf-chip 嵌在 .nav-item.is-active 里」那个两层叠加的实际底色。*/
+    --asset-ashare-ink:#8cc3ff;
+    --asset-ashare-rgb:106,176,255;
     --bar-up:linear-gradient(90deg,rgba(34,194,134,.12),rgba(34,194,134,.78));
     --bar-down:linear-gradient(90deg,rgba(242,73,94,.12),rgba(242,73,94,.78));
     --bar-crypto:linear-gradient(90deg,rgba(242,169,60,.10),rgba(242,169,60,.72));
@@ -159,8 +165,6 @@
 /* ---- 资产价格语义作用域(挂在 .app 上;A股 涨红跌绿)---- */
 [data-asset="crypto"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:var(--bar-crypto); --asset-accent:var(--asset-crypto); }
 [data-asset="ashare"]{ --price-up:var(--down); --price-down:var(--up); --bar-pos:var(--bar-down); --bar-neg:var(--bar-up); --bar-neutral:linear-gradient(90deg,rgba(var(--asset-ashare-rgb),.12),rgba(var(--asset-ashare-rgb),.7)); --asset-accent:var(--asset-ashare); }
-[data-asset="us"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:linear-gradient(90deg,rgba(var(--asset-us-rgb),.12),rgba(var(--asset-us-rgb),.7)); --asset-accent:var(--asset-us); }
-[data-asset="etf"]{ --price-up:var(--up); --price-down:var(--down); --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:linear-gradient(90deg,rgba(var(--asset-etf-rgb),.12),rgba(var(--asset-etf-rgb),.7)); --asset-accent:var(--asset-etf); }
 
 /* ---------------- reset + page ---------------- */
 *{margin:0;padding:0;box-sizing:border-box}
@@ -223,7 +227,6 @@ a:hover{color:var(--gold-hi)}
 .fresh__asset{font-weight:700}
 .fresh__asset.crypto{color:var(--asset-crypto-ink)}
 .fresh__asset.ashare{color:var(--asset-ashare-ink)}
-.fresh__asset.us{color:var(--asset-us-ink)}
 .fresh b{color:var(--text);font-weight:600}
 /* 用 --muted 不用 --muted-2：muted-2 是按 panel/panel-2 校准的，而 .fresh 药丸自带
    rgba(--text,.03) 底比它们更暗一档，muted-2 在这里只有 4.26:1（2026-07-24 审美 PASS
@@ -266,14 +269,10 @@ a:hover{color:var(--gold-hi)}
 .asset-seg__dot{width:6px;height:6px;border-radius:50%;flex:none}
 .asset-seg__opt[data-k="crypto"] .asset-seg__dot{background:var(--asset-crypto)}
 .asset-seg__opt[data-k="ashare"] .asset-seg__dot{background:var(--asset-ashare)}
-.asset-seg__opt[data-k="us"] .asset-seg__dot{background:var(--asset-us)}
-.asset-seg__opt[data-k="etf"] .asset-seg__dot{background:var(--asset-etf)}
 /* 激活态 = 资产色实块 + 极浅 shadow。文字色按 WCAG 定:四资产深色底一律白字
    (v5 审计实测 etf 深青底黑字仅 3.98:1 不达 AA,故 etf 也是白字,别按旧稿改回近黑)。*/
 .asset-seg__opt[data-k="crypto"].is-active{background:var(--asset-crypto);color:#fff;box-shadow:var(--shadow-1)}
 .asset-seg__opt[data-k="ashare"].is-active{background:var(--asset-ashare);color:#fff;box-shadow:var(--shadow-1)}
-.asset-seg__opt[data-k="us"].is-active{background:var(--asset-us);color:#fff;box-shadow:var(--shadow-1)}
-.asset-seg__opt[data-k="etf"].is-active{background:var(--asset-etf);color:#fff;box-shadow:var(--shadow-1)}
 /* 激活态圆点:亮色 .55→.72、暗色 .4→.58(v6)。原值下圆点压在资产实块上糊成一团 ——
    亮色最差是加密(琥珀底最深)2.95:1,**暗色四个资产全在 2.39–2.60**(那条 rgba(0,0,0,.4)
    的近黑点压在变亮的资产色上)。2026-07-27 审美 PASS 的**非文本对比**扫描查出来的,
@@ -285,8 +284,6 @@ a:hover{color:var(--gold-hi)}
 /* 暗色底盘:资产色变亮,active 文字改近黑 */
 [data-theme="dark"] .asset-seg__opt[data-k="crypto"].is-active{color:#1a1000}
 [data-theme="dark"] .asset-seg__opt[data-k="ashare"].is-active{color:#03121f}
-[data-theme="dark"] .asset-seg__opt[data-k="us"].is-active{color:#160b2e}
-[data-theme="dark"] .asset-seg__opt[data-k="etf"].is-active{color:#04211c}
 [data-theme="dark"] .asset-seg__opt.is-active .asset-seg__dot{background:rgba(0,0,0,.58)}
 .board-nav{display:flex;flex-direction:column;gap:14px}
 .nav-group{display:flex;flex-direction:column;gap:3px}
@@ -299,8 +296,6 @@ a:hover{color:var(--gold-hi)}
    只有 crypto 正常。见 tokens 里 -rgb 三兄弟的注释,别写回字面 rgba)*/
 [data-asset="crypto"] .nav-item.is-active{background:rgba(var(--asset-crypto-rgb),.12)}
 [data-asset="ashare"] .nav-item.is-active{background:rgba(var(--asset-ashare-rgb),.12)}
-[data-asset="us"] .nav-item.is-active{background:rgba(var(--asset-us-rgb),.12)}
-[data-asset="etf"] .nav-item.is-active{background:rgba(var(--asset-etf-rgb),.12)}
 .nav-item__name{font-weight:500}
 .nav-item.is-active .nav-item__name{font-weight:600}
 .tab-lock{width:11px;height:11px;flex:none;opacity:.7;vertical-align:-1px}
@@ -313,8 +308,6 @@ a:hover{color:var(--gold-hi)}
 .tf-chip--wide{width:auto;min-width:15px;padding:0 4px;letter-spacing:.2px}
 [data-asset="crypto"] .tf-chip{background:rgba(var(--asset-crypto-rgb),.16);color:var(--asset-crypto-ink)}
 [data-asset="ashare"] .tf-chip{background:rgba(var(--asset-ashare-rgb),.16);color:var(--asset-ashare-ink)}
-[data-asset="us"] .tf-chip{background:rgba(var(--asset-us-rgb),.16);color:var(--asset-us-ink)}
-[data-asset="etf"] .tf-chip{background:rgba(var(--asset-etf-rgb),.16);color:var(--asset-etf-ink)}
 /* 暗色下资产色变亮,tf-chip 底/字跟随(靠 token 自动翻,无需逐一覆盖)*/
 .rail-foot{margin-top:2px;padding:12px 8px 2px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted-2);letter-spacing:0;font-variant-numeric:tabular-nums;line-height:1.6}
 
@@ -362,8 +355,6 @@ a:hover{color:var(--gold-hi)}
 .board-head__note{font-family:var(--font-serif);font-size:13.5px;color:var(--muted);margin-top:8px;font-variant-numeric:tabular-nums;line-height:1.6}
 .asset-tag{font-size:11.5px;font-weight:600;padding:3.5px 9px;border-radius:6px;letter-spacing:0;color:var(--asset-crypto-ink);background:rgba(var(--asset-crypto-rgb),.14);white-space:nowrap}
 .asset-tag.is-ashare{color:var(--asset-ashare-ink);background:rgba(var(--asset-ashare-rgb),.14)}
-.asset-tag.is-us{color:var(--asset-us-ink);background:rgba(var(--asset-us-rgb),.14)}
-.asset-tag.is-etf{color:var(--asset-etf-ink);background:rgba(var(--asset-etf-rgb),.14)}
 .tf-badge{font-size:11.5px;font-weight:600;padding:3.5px 9px;border-radius:6px;color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);white-space:nowrap;letter-spacing:0}
 .search{display:flex;align-items:center;gap:8px;width:250px;flex:none;padding:8.5px 12px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-btn);transition:border-color var(--dur),box-shadow var(--dur)}
 .search:focus-within{border-color:rgba(var(--gold-rgb),.55);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.12)}
@@ -394,8 +385,6 @@ a:hover{color:var(--gold-hi)}
 .sort-chip.is-active{font-weight:600}
 [data-asset="crypto"] .sort-chip.is-active{background:rgba(var(--asset-crypto-rgb),.14);border-color:rgba(var(--asset-crypto-rgb),.5);color:var(--asset-crypto-ink)}
 [data-asset="ashare"] .sort-chip.is-active{background:rgba(var(--asset-ashare-rgb),.13);border-color:rgba(var(--asset-ashare-rgb),.5);color:var(--asset-ashare-ink)}
-[data-asset="us"] .sort-chip.is-active{background:rgba(var(--asset-us-rgb),.13);border-color:rgba(var(--asset-us-rgb),.5);color:var(--asset-us-ink)}
-[data-asset="etf"] .sort-chip.is-active{background:rgba(var(--asset-etf-rgb),.13);border-color:rgba(var(--asset-etf-rgb),.5);color:var(--asset-etf-ink)}
 
 /* ---------------- 表格(表头/表体分离——表体内滚动,绝不 sticky)---------------- */
 .table{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-1);overflow:hidden}
@@ -414,8 +403,6 @@ a:hover{color:var(--gold-hi)}
 .sort-opt{color:inherit;cursor:pointer;padding:2px 5px;border-radius:4px;transition:color .12s}
 [data-asset="crypto"] .sort-opt.active,[data-asset="crypto"] .sort-arrow{color:var(--asset-crypto-ink)}
 [data-asset="ashare"] .sort-opt.active,[data-asset="ashare"] .sort-arrow{color:var(--asset-ashare-ink)}
-[data-asset="us"] .sort-opt.active,[data-asset="us"] .sort-arrow{color:var(--asset-us-ink)}
-[data-asset="etf"] .sort-opt.active,[data-asset="etf"] .sort-arrow{color:var(--asset-etf-ink)}
 .sort-opt:hover{color:var(--text)}
 .sort-arrow{color:var(--asset-crypto-ink);font-size:10px;margin-left:2px}
 .chk{accent-color:var(--gold);width:15px;height:15px;cursor:pointer}

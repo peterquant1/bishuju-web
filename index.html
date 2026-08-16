@@ -10,7 +10,7 @@
          改配色时这两处一起改，否则地址栏/状态栏颜色会跟页面背景对不上。
          ⚠️ 同一对值另有两处副本:manifest.webmanifest 与 script.js 的 applyTheme()，共四处。 -->
     <script>try{if(localStorage.getItem("bishuju_theme")==="dark"){document.documentElement.dataset.theme="dark";document.getElementById("themeColorMeta").content="#141413";}}catch(e){}</script>
-    <title>狗庄74 — 加密 + A股 + 美股 + ETF 指标筛选排行榜</title>
+    <title>狗庄74 — 加密 + A股 指标筛选排行榜</title>
     <!-- ⚠️⚠️ 这段与下方 FAQ「哪些免费、哪些收费」「每个榜到底在筛什么」里的榜单描述，必须
          跟 script.js 的 TAB_GROUPS 保持一致——增删榜/改判据时一起改。
          **改这里前先数一遍 script.js 的 TAB_GROUPS，别信这行注释里的数字。**
@@ -46,8 +46,15 @@
          ⚠️ 排序轴一根没动（加密仍 17 / 股票系仍 16）—— 移除榜不影响轴数。
          ✅ 2026-08-13 新增「月线SAR多头首根」那轮，三处又一起改了（加密 10→11、全站 16→17；
          排序轴没动）。
-         全站现为 **17 个榜**：加密 11（3 涨跌幅 + **8** 策略）、A股 4（3 涨跌幅 + 1 策略）、美股 1、ETF 1。 -->
-    <meta name="description" content="加密永续合约的日线/周线/月线涨跌幅榜，加八个多周期趋势榜（月/周/日 SAR 三级共振、周线 SAR 多头首根、周线 9/21 扩张＋SAR 多头、日线 9/21/55 扩张＋CVD 递增、日线 9/21/55/200 四线扩张、日线 9/21 扩张＋SAR 多头首根、日线 9/21/55 扩张＋SAR 多头＋阴 K 回调、月线 SAR 多头首根），另有 A 股（日/周/月收盘涨跌幅榜 + 多周期共振榜）、美股与大类资产 ETF 的多周期共振榜，随收盘自动更新，一键导出自选清单；另附永续合约全市场情绪概览。">
+         🔴 2026-08-16 站长「移除美股，移除ETF」：**整整两个资产**下线（不是删榜），三处又一起改了。
+         ⚠️ 这一轮除三处外还多两处**用户可见**的连带：① `<title>`/og/twitter 六个 meta 里的
+         资产列表；② FAQ「哪些免费」那段原文写着「免费的是**美股**榜单里排名第一的那一只股票」
+         —— 橱窗 TEASER_TAB 随美股退役被迫搬到加密 `dailyTripleEmaCvd`，而加密策略榜按**日成交额**
+         排序、橱窗取的是**日线 RSI 最高**的那一行（两者不再重合，详见后端 _teaser_rows 的
+         docstring），所以那句话连"排名第一"这个说法都要改。**移除资产比移除榜要多扫这两处。**
+         ⚠️ 分段控件从四段变两段（加密/A股），第三个新鲜度胶囊 freshUS 一并删除。
+         全站现为 **15 个榜**：加密 11（3 涨跌幅 + **8** 策略）、A股 4（3 涨跌幅 + 1 策略）。 -->
+    <meta name="description" content="加密永续合约的日线/周线/月线涨跌幅榜，加八个多周期趋势榜（月/周/日 SAR 三级共振、周线 SAR 多头首根、周线 9/21 扩张＋SAR 多头、日线 9/21/55 扩张＋CVD 递增、日线 9/21/55/200 四线扩张、日线 9/21 扩张＋SAR 多头首根、日线 9/21/55 扩张＋SAR 多头＋阴 K 回调、月线 SAR 多头首根），另有 A 股的日/周/月收盘涨跌幅榜与多周期共振榜，随收盘自动更新，一键导出自选清单；另附永续合约全市场情绪概览。">
     <link rel="canonical" href="https://gouzhuang748.com/">
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <!-- PWA 基础:加主屏 = 全屏 app 体验。刻意不加 Service Worker——loadData 的
@@ -65,23 +72,23 @@
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="狗庄74">
     <meta property="og:locale" content="zh_CN">
-    <meta property="og:title" content="狗庄74 — 加密 + A股 + 美股 + ETF 指标筛选排行榜">
-    <meta property="og:description" content="指标筛选排行榜，覆盖加密永续合约、A 股、美股与大类资产 ETF 四个市场，随收盘自动更新。">
+    <meta property="og:title" content="狗庄74 — 加密 + A股 指标筛选排行榜">
+    <meta property="og:description" content="指标筛选排行榜，覆盖加密永续合约与 A 股两个市场，随收盘自动更新。">
     <meta property="og:image" content="https://gouzhuang748.com/og.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="狗庄74 — 加密/A股/美股/ETF 指标筛选排行榜">
+    <meta property="og:image:alt" content="狗庄74 — 加密/A股 指标筛选排行榜">
     <meta property="og:url" content="https://gouzhuang748.com/">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="狗庄74 — 加密 + A股 + 美股 + ETF 指标筛选排行榜">
-    <meta name="twitter:description" content="指标筛选排行榜，覆盖加密永续合约、A 股、美股与大类资产 ETF 四个市场，随收盘自动更新。">
+    <meta name="twitter:title" content="狗庄74 — 加密 + A股 指标筛选排行榜">
+    <meta name="twitter:description" content="指标筛选排行榜，覆盖加密永续合约与 A 股两个市场，随收盘自动更新。">
     <meta name="twitter:image" content="https://gouzhuang748.com/og.png">
-    <meta name="twitter:image:alt" content="狗庄74 — 加密/A股/美股/ETF 指标筛选排行榜">
+    <meta name="twitter:image:alt" content="狗庄74 — 加密/A股 指标筛选排行榜">
 
     <!-- 自托管 Geist 变量字体(Latin);预加载避免首屏 FOUT。CJK 走系统栈不预载 -->
     <link rel="preload" as="font" type="font/woff2" href="fonts/geist-latin.woff2" crossorigin>
     <link rel="preload" as="font" type="font/woff2" href="fonts/geist-mono-latin.woff2" crossorigin>
-    <link rel="stylesheet" href="style.css?v=49">
+    <link rel="stylesheet" href="style.css?v=50">
 </head>
 <body>
 <div class="app" id="app" data-asset="crypto">
@@ -110,15 +117,17 @@
                 </svg>
                 <div class="brand__text">
                     <div class="brand__name">狗庄74 <span class="brand__latin">gouzhuang748.com</span></div>
-                    <div class="brand__tag">加密 + A股 + 美股 + ETF · 策略筛选排行</div>
+                    <div class="brand__tag">加密 + A股 · 策略筛选排行</div>
                 </div>
             </div>
             <div class="topbar__tools">
-                <!-- 新鲜度胶囊：JS 填内容并给非当前资产加 .is-dim（ETF 无独立胶囊，与美股同管道共用 freshUS）。
-                     初始 .is-dim 状态要与 script.js 的默认落地资产一致（现为美股）。 -->
-                <button type="button" class="fresh is-dim" id="freshCrypto" title="查看加密榜单"><span class="fresh__dot"></span><span class="fresh__asset crypto">加密</span><span id="freshCryptoTxt">数据加载中…</span></button>
+                <!-- 新鲜度胶囊：JS 填内容并给非当前资产加 .is-dim。**初始 .is-dim 状态要与
+                     script.js 的默认落地资产一致（现为加密）** —— 移动端 CSS 只显示非 dim 的
+                     那一个，两个都 dim 会在首屏渲染前出现"一个胶囊都没有"的一帧。
+                     ⚠️ 2026-08-16 移除美股/ETF 后第三个胶囊 freshUS 已删（ETF 当年无独立胶囊、
+                     与美股同管道共用它）；script.js 的 renderUpdatePill 与点击处理器同步删了。 -->
+                <button type="button" class="fresh" id="freshCrypto" title="查看加密榜单"><span class="fresh__dot"></span><span class="fresh__asset crypto">加密</span><span id="freshCryptoTxt">数据加载中…</span></button>
                 <button type="button" class="fresh is-dim" id="freshAshare" title="查看A股榜单"><span class="fresh__dot"></span><span class="fresh__asset ashare">A股</span><span id="freshAshareTxt">—</span></button>
-                <button type="button" class="fresh" id="freshUS" title="查看美股榜单"><span class="fresh__dot"></span><span class="fresh__asset us">美股</span><span id="freshUSTxt">—</span></button>
                 <span id="licenseStatus"><span class="lic-badge lic-off">未解锁</span></span>
                 <button id="licenseBtn" class="lic-btn-mini">输入通行证</button>
                 <button class="theme-btn" id="themeBtn" aria-label="切换亮暗主题" title="切换亮/暗">◐</button>
@@ -128,7 +137,7 @@
             ⚠️ 数据更新出现延迟，正在恢复中 —— 榜单仍可查看，但可能不是最新一根 K 线。
         </div>
         <div class="banner" id="snapshotBanner" hidden>
-            ⚠️ <span data-banner-text>美股为每日收盘快照数据，非实时行情；每个交易日收盘后自动重算。</span>
+            ⚠️ <span data-banner-text>A股为每日收盘快照数据，非实时行情；每个交易日收盘后自动重算。</span>
             <button class="banner__close" id="snapshotBannerClose" aria-label="关闭">✕</button>
         </div>
     </header>
@@ -140,10 +149,8 @@
                 <!-- 资产分段控件。⚠️ script.js 的抽屉里有一份**同款结构的副本**（drawerBody
                      的 innerHTML），增删资产时两处必须一起改；初始 is-active 要与默认落地资产一致。 -->
                 <div class="asset-seg" id="assetSeg">
-                    <button class="asset-seg__opt" data-k="crypto"><span class="asset-seg__dot"></span>加密</button>
+                    <button class="asset-seg__opt is-active" data-k="crypto"><span class="asset-seg__dot"></span>加密</button>
                     <button class="asset-seg__opt" data-k="ashare"><span class="asset-seg__dot"></span>A股</button>
-                    <button class="asset-seg__opt is-active" data-k="us"><span class="asset-seg__dot"></span>美股</button>
-                    <button class="asset-seg__opt" data-k="etf"><span class="asset-seg__dot"></span>ETF</button>
                 </div>
                 <nav class="board-nav" id="boardNav"><!-- JS: 按当前资产渲染分组榜单（组数见 TAB_GROUPS） --></nav>
                 <div class="rail-foot" id="railFoot"></div>
@@ -160,7 +167,7 @@
                     <div class="board-head" id="boardHead" hidden>
                         <div class="board-head__main">
                             <div class="board-head__title">
-                                <span class="asset-tag" id="bhAsset">美股</span>
+                                <span class="asset-tag" id="bhAsset">加密</span>
                                 <span class="tf-badge" id="bhTf">日线</span>
                                 <h1 class="board-head__name" id="bhName">涨跌幅</h1>
                             </div>
@@ -224,10 +231,10 @@
     <h3 id="faqTitle">常见问题</h3>
     <div class="faq">
         <h4>数据多久更新一次？</h4>
-        <p>加密：每小时自动抓取一次（整点后约 2 分钟），覆盖全部加密 USDT 永续合约，日线以 UTC 00:00 收盘为准；顶部的市场概览条同一节奏刷新。A股：每个交易日收盘后（约北京时间 15:05 起，待数据源发布当日数据）更新一次，覆盖全部沪深 A 股（停牌股不入榜）。美股：每个交易日收盘后（待数据源发布当日数据）更新一次，覆盖全市场普通股与 ADR。ETF·大类资产：与美股同一条管道同时更新，覆盖黄金/白银/原油/主要股指/国别等约 42 只美股上市 ETF。</p>
+        <p>加密：每小时自动抓取一次（整点后约 2 分钟），覆盖全部加密 USDT 永续合约，日线以 UTC 00:00 收盘为准；顶部的市场概览条同一节奏刷新。A股：每个交易日收盘后（约北京时间 15:05 起，待数据源发布当日数据）更新一次，覆盖全部沪深 A 股（停牌股不入榜）。</p>
         <h4>哪些免费、哪些收费？</h4>
-        <p><b>免费的是美股榜单里排名第一的那一只股票</b>，以及顶部的市场概览条（全市场情绪、涨跌家数、总成交额、资金费率）。这两块永久免费、不需要通行证。</p>
-        <p><b>四个市场的榜单本身需要购买通行证解锁</b>——加密有三个涨跌幅榜（日线 / 周线 / 月线，全市场无筛选）和八个策略榜（月/周/日 SAR 三级共振、周线 SAR 多头首根、周线 9/21 扩张＋SAR 多头、日线 9/21/55 扩张＋CVD 递增、日线 9/21/55/200 四线扩张、日线 9/21 扩张＋SAR 多头首根、日线 9/21/55 扩张＋SAR 多头＋阴 K 回调、月线 SAR 多头首根），A 股有三个涨跌幅榜（日 / 周 / 月，全市场无筛选、基于收盘）和一个多周期共振榜，美股、ETF 各有一个多周期共振榜，是本站的核心价值。无需注册账号，付款用加密货币（OxaPay），到账后通行证自动发到邮箱。</p>
+        <p><b>免费的是加密「日线9/21/55扩张＋CVD递增」榜里日线 RSI 最高的那一个标的</b>，以及顶部的市场概览条（全市场情绪、涨跌家数、总成交额、资金费率）。这两块永久免费、不需要通行证。</p>
+        <p><b>两个市场的榜单本身需要购买通行证解锁</b>——加密有三个涨跌幅榜（日线 / 周线 / 月线，全市场无筛选）和八个策略榜（月/周/日 SAR 三级共振、周线 SAR 多头首根、周线 9/21 扩张＋SAR 多头、日线 9/21/55 扩张＋CVD 递增、日线 9/21/55/200 四线扩张、日线 9/21 扩张＋SAR 多头首根、日线 9/21/55 扩张＋SAR 多头＋阴 K 回调、月线 SAR 多头首根），A 股有三个涨跌幅榜（日 / 周 / 月，全市场无筛选、基于收盘）和一个多周期共振榜，是本站的核心价值。无需注册账号，付款用加密货币（OxaPay），到账后通行证自动发到邮箱。</p>
         <h4>每个榜到底在筛什么？</h4>
         <p>切到任一榜单，表格上方那行说明的就是<b>这个榜在找什么样的行情</b>。策略榜走的是多周期共振的思路——月线定方向、周线定趋势、日线定入场时机，几个级别同时点头才入榜；导航上的命中数不解锁也能看到。涨跌幅榜正相反，<b>没有任何筛选条件</b>，全市场按涨跌幅一字排开，用来先看清市场在发生什么、再进策略榜里筛。</p>
         <!-- ⚠️ 2026-07-23 站长已把榜名恢复成直白命名（榜名里就写着 9/21/55、SAR、CVD），
@@ -235,7 +242,7 @@
              真正不公开的是口径与阈值那一层，措辞按这个来。 -->
         <p><b>榜名已写明每个榜看的是哪些指标</b>，但具体口径与阈值——怎么才算「扩张」、CVD 如何定义、要多少根 K 线才够——不对外公开。这套组合方式是本站的核心，也是收费的理由。底层指标与 TradingView 同口径，榜上每个标的都可以点开图表自行复核。</p>
         <h4>涨跌颜色是怎么定的？</h4>
-        <p>A股榜单遵循中国市场习惯（涨红跌绿），加密、美股与 ETF 榜单遵循国际习惯（涨绿跌红），切换资产时颜色语义自动跟随。</p>
+        <p>A股榜单遵循中国市场习惯（涨红跌绿），加密榜单遵循国际习惯（涨绿跌红），切换资产时颜色语义自动跟随。</p>
     </div>
     <div class="modal-actions">
         <span class="spacer"></span>
@@ -303,6 +310,6 @@
     </ol>
 </dialog>
 
-<script src="script.js?v=227"></script>
+<script src="script.js?v=228"></script>
 </body>
 </html>

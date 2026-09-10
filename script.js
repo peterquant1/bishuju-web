@@ -21,6 +21,19 @@
 function fmtCvdVal(x) { return x == null ? "—" : (x >= 0 ? "+" : "") + x.toFixed(2); }
 function fmtRsiVal(x) { return x == null ? "N/A" : x.toFixed(2); }
 function fmtVolVal(v) { return v.volumeFormatted != null ? v.volumeFormatted : "N/A"; }
+// 全市场日成交额名次（2026-09-10 站长「在排序的日成交额里面，显示每个币的成交额是全市场的TOP几」）：
+// 后端 `volumeRank` ＝ 该标的最新已收盘日 K 的成交额在**全市场**（＝ 日涨跌幅榜的全部行）里排第几。
+// 只在按「日成交额」排序时出现，挂在值列数字左侧（renderTable 读轴定义上的 `badge`）。
+// ⚠️ 数据驱动：行上没有 `volumeRank` 就什么都不渲染 —— 现在只有**加密**的策略榜 + 日涨跌幅榜
+//    带它。A股 那两张同名轴（AXIS_D_VOL 是共用常量）因此不显示；要加 A股：fetch_ashare.py
+//    两处行构造补字段 + stockChangeSorts 日线那根挂上 badge，本函数不用动。
+// ⚠️ 只认整数：名次进 innerHTML，同「数据管道来的东西一律不裸拼」那条纪律（见 renderTable）。
+function volRankBadge(v) {
+    if (!Number.isInteger(v.volumeRank)) return "";
+    const n = tabCount(isAshareTab(currentTab) ? "ashareDailyChange" : "dailyChange");
+    const tip = `全市场${n != null ? ` ${n} 个标的` : ""}里日成交额排第 ${v.volumeRank} 名`;
+    return `<span class="val-rank" title="${tip}">TOP ${v.volumeRank}</span>`;
+}
 // 量比 = 当期成交量/前 5 期均量（无量纲倍数，1.00 = 与近期持平）；EMA间距 = (EMA9−EMA21)/EMA21
 // 的百分比（带符号——它真是百分比，跟 CVD强弱 刻意不带 % 的理由不冲突；涨跌幅榜切到此轴时
 // 副行仍显式带「涨幅 +X%」，不会混淆）。null（历史不足/新股）显示「—」，排序沉底，中性不上色。
@@ -180,7 +193,8 @@ const AXIS_MRSI = { key: "monthlyRsi", label: "月线RSI", format: v => fmtRsiVa
 // 语义提醒：`volume` 是**最新已收盘那一个交易日的单日成交额**（不是周/月累计、不是
 // 均值），A股 为人民币元、美股/ETF 为 USD，格式化由后端 volumeFormatted 定。
 const AXIS_D_RSI = { key: "rsi", label: "日线RSI", format: v => fmtRsiVal(v.rsi) };
-const AXIS_D_VOL = { key: "volume", label: "日成交额", format: v => fmtVolVal(v) };
+// `badge`（2026-09-10）：值列数字左侧的全市场名次「TOP N」，见 volRankBadge。
+const AXIS_D_VOL = { key: "volume", label: "日成交额", format: v => fmtVolVal(v), badge: volRankBadge };
 // 日涨跌幅（2026-08-12 站长「所有升降序也新增一个涨幅升降序」）：最新已收盘那根日 K 的
 // 涨跌幅（加轴时四资产同批，现存加密＋A股 两个）。挂在全部策略榜上（加密各榜 + A股 那个）；六个涨跌幅榜刻意不挂，见下。
 // ⚠️⚠️ **六个涨跌幅榜刻意没加这根轴**：它们的首轴 `value` 本身就是涨跌幅（标签「日/周/月
@@ -482,7 +496,8 @@ const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD, 
  *  tf = 周期前缀（"日"/"周"/"月"）；rsiLabel 单列，因为站内写法是「日线RSI」不是「日RSI」。 */
 const cryptoChangeSorts = (tf, rsiLabel) => [
     { key: "value",         label: `${tf}涨跌幅`,  format: v => fmtGapVal(v.value) },
-    { key: "volume",        label: `${tf}成交额`,  format: v => fmtVolVal(v) },
+    // badge 只挂「日」：名次是**日**成交额名次，周/月线榜的 volume 是周/月成交额（后端也只给日线榜发 volumeRank）
+    { key: "volume",        label: `${tf}成交额`,  format: v => fmtVolVal(v), badge: tf === "日" ? volRankBadge : undefined },
     { key: "rsi",           label: rsiLabel,       format: v => fmtRsiVal(v.rsi) },
     { key: "cvdStrength",   label: `${tf}CVD强弱`, format: v => fmtCvdVal(v.cvdStrength),
       hint: "按K线形态推断的买卖失衡，不是真实成交归边；想看真钱流向用「订单流」" },
@@ -1675,6 +1690,9 @@ function renderTable() {
             // 涨跌语义只标 up/down,红绿由 CSS 的 [data-asset] 作用域决定(A股 涨红跌绿自动翻)
             const valCls = colorClass === "positive" ? " val--up" : colorClass === "negative" ? " val--down" : "";
             const displayValue = sortDef ? sortDef.format(item) : config.format(item);
+            // 值列数字左侧的小标（2026-09-10：「日成交额」轴的全市场名次，见 volRankBadge）。
+            // 轴定义上没有 badge、或这一行没有名次时是空串 ⇒ 值列与改动前逐字相同。
+            const badge = sortDef && sortDef.badge ? sortDef.badge(item) : "";
             const checked = selectedSymbols.has(item.symbol) ? "checked" : "";
 
             const rankCell = rank <= 3
@@ -1707,8 +1725,8 @@ function renderTable() {
                         <span class="sym__tv">TV ↗</span>
                     </a>${subInfo}
                 </div>
-                <div class="c-val" role="cell">
-                    <span class="val${valCls}">${displayValue}<span class="val__bar" style="width:${barW}%"></span></span>
+                <div class="c-val${badge ? " c-val--badged" : ""}" role="cell">
+                    ${badge}<span class="val${valCls}">${displayValue}<span class="val__bar" style="width:${barW}%"></span></span>
                 </div>
             </div>`;
         })

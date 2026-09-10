@@ -434,6 +434,12 @@ a:hover{color:var(--gold-hi)}
 .val__bar{position:absolute;bottom:0;right:0;height:2px;border-radius:2px;min-width:8px;max-width:100%;background:var(--bar-neutral);opacity:.85}
 .val--up .val__bar{background:var(--bar-pos)}
 .val--down .val__bar{background:var(--bar-neg)}
+/* 值列左侧小标(2026-09-10:「日成交额」轴的全市场名次 TOP N,script.js volRankBadge)。
+   与数字**同一基线**并排;≤640px 值列只剩 116px 放不下,改叠在数字上方(见那一档)。
+   刻意不加药丸/描边:同一行里已有奖牌、TV 快链两种框,再来一种就花了。
+   ⚠️ 641–860px 档值列只有 150px:最宽组合「TOP 527」+「384.37K」实测要装得下,改字号先重量。*/
+.c-val--badged{align-items:baseline;gap:8px}
+.val-rank{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:11px;font-weight:500;color:var(--muted-2);white-space:nowrap}
 .table-foot{margin-top:13px;padding:0 4px;font-size:12px;color:var(--muted-2);text-align:right;letter-spacing:0;font-variant-numeric:tabular-nums}
 .foot-cta{margin-left:8px;padding:3.5px 12px;border-radius:6px;border:1px solid transparent;background:var(--btn-fill);color:var(--btn-ink);font-weight:600;font-size:12px;cursor:pointer;font-family:inherit}
 .foot-cta:hover{box-shadow:var(--shadow-btn)}
@@ -596,6 +602,9 @@ a:hover{color:var(--gold-hi)}
     .sub{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .sym__tv{display:none}
     .val{font-size:13.5px}
+    /* 名次小标叠到数字上方:116px 值列里「TOP 527」+「384.37K」并排要 ~110px,装不下 */
+    .c-val--badged{flex-direction:column;align-items:flex-end;justify-content:center;gap:1px}
+    .val-rank{font-size:10.5px;line-height:1.2}
     .table-foot{text-align:center}
     .dock{bottom:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));width:calc(100% - 20px);justify-content:space-between;padding:8px 8px 8px 12px;gap:8px;flex-wrap:wrap;row-gap:6px;border-radius:22px}
 }

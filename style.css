@@ -434,7 +434,8 @@ a:hover{color:var(--gold-hi)}
 .val__bar{position:absolute;bottom:0;right:0;height:2px;border-radius:2px;min-width:8px;max-width:100%;background:var(--bar-neutral);opacity:.85}
 .val--up .val__bar{background:var(--bar-pos)}
 .val--down .val__bar{background:var(--bar-neg)}
-/* 值列左侧小标(2026-09-10:「日成交额」轴的全市场名次 TOP N,script.js volRankBadge)。
+/* 值列左侧小标(2026-09-10:「日成交额」轴的全市场名次 TOP N;2026-09-11 起「周成交额」「月成交额」两根轴同款,
+   script.js volRankBadgeFor)。周 / 月成交额的最宽组合与日线同形(三位名次 + 六位数带单位),不用另调尺寸。
    与数字**同一基线**并排;≤640px 值列只剩 116px 放不下,改叠在数字上方(见那一档)。
    刻意不加药丸/描边:同一行里已有奖牌、TV 快链两种框,再来一种就花了。
    ⚠️ 641–860px 档值列只有 150px:最宽组合「TOP 527」+「384.37K」实测要装得下,改字号先重量。*/

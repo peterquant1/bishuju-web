@@ -10,7 +10,7 @@
          改配色时这两处一起改，否则地址栏/状态栏颜色会跟页面背景对不上。
          ⚠️ 同一对值另有两处副本:manifest.webmanifest 与 script.js 的 applyTheme()，共四处。 -->
     <script>try{if(localStorage.getItem("bishuju_theme")==="dark"){document.documentElement.dataset.theme="dark";document.getElementById("themeColorMeta").content="#141413";}}catch(e){}</script>
-    <title>狗庄74 — 加密 + A股 指标筛选排行榜</title>
+    <title>狗庄74 — 加密永续合约指标筛选排行榜</title>
     <!-- ⚠️⚠️ 这段与下方 FAQ「哪些免费、哪些收费」「每个榜到底在筛什么」里的榜单描述，必须
          跟 script.js 的 TAB_GROUPS 保持一致——增删榜/改判据时一起改。
          **改这里前先数一遍 script.js 的 TAB_GROUPS，别信这行注释里的数字。**
@@ -245,8 +245,25 @@
          那句补一个「月线 SAR 是不是还站在空头一侧」的例子。og.png 重生成（策略榜 15 → 16）。
          ⚠️ 连带：互斥两对 → **三对**（新榜 ∩「月线SAR多头首根＋收盘价反包所有空头SAR」，判据保证）；
          月线榜 5 → 6；**「站内不再有要求阴K 的榜」这句仍成立**（本榜只问 SAR 方向、不问 K 线阴阳）。
-         全站现为 **22 个榜**：加密 18（3 涨跌幅 + **15** 策略）、A股 4（3 涨跌幅 + 1 策略）。 -->
-    <meta name="description" content="加密永续合约的日线/周线/月线涨跌幅榜，加十五个多周期趋势榜（日线 9/21 扩张＋SAR 多头前四根＋成交额递增、月线 SAR 多头首根＋收盘价反包所有空头 SAR、周线 9/21 扩张＋SAR 多头、周线 SAR 多头＋RSI≥50、周线 9/21 扩张、月线四连阳、月线五连阴、周线 9/21 扩张＋SAR 多头前四根、周线四到六连阳、周线五连阴、日线 SAR 多头前四根、月线成交量递增、周线 9/21/55 扩张存续、月线 9/21 扩张存续、月线 SAR 空头），另有 A 股的日/周/月收盘涨跌幅榜与周线 9/21 扩张＋SAR 多头榜，随收盘自动更新，一键导出自选清单；另附永续合约全市场情绪概览。">
+         🔴🔴 2026-09-12（10:xx UTC）站长「A股直接移除所有TAB。我不玩A股了。需要恢复的时候我再告诉你。
+         暂时先直接移除整个A股的数据。」⇒ **A股 整族退役**（做法照 2026-08-16 移除美股/ETF 那一轮）：
+         四个榜（`ashareDailyChange` / `ashareWeeklyChange` / `ashareMonthlyChange` / `ashareMonthlyWeeklyDaily`）
+         从 `TABS_CONFIG` / `TAB_GROUPS` / `CHANGE_PCT_TABS` 三处删除；**全站从此只有加密一个资产**
+         ⇒ 资产分段控件（rail + 抽屉两份）与 A股 新鲜度胶囊 `#freshAshare` 一并从 DOM 删掉
+         （⚠️ 删胶囊必须同批删 `renderUpdatePill` 里的 `elA` 与那半段、以及 `#freshAshare` 的点击监听 ——
+         前者会让整个胶囊渲染静默 return，后者是 `null.addEventListener` 当场抛错）。
+         站名 / og:title / twitter:title / 两个 image alt / brand__tag / meta description / FAQ 三处
+         （免费收费枚举、更新节奏、涨红跌绿那一段）同批改成"只有加密"的说法。
+         ⚠️ 休眠件（**别删**，复活即用）：`singleStrategySorts` / `stockChangeSorts` / `asharePriceCtx` /
+         `fmtCnyPrice` / `ASSET_KEY` / `ASSET_CN` / `switchAsset` / `isAshareTab` / `volRankBadgeFor` 的
+         A股 分母 / `snapshotBanner` 整套 / `loadData` 里用 `ashareUpdateTime` 的三处守卫（`data` 里
+         没这个 key ⇒ 恒不触发、零副作用）/ `.asset-seg` 的全套 CSS。
+         ⚠️ 后端同批把 `"ashare"` 装进 `RETIRED_KEY_PREFIXES` ⇒ 公开 JSON 顶层 + paidMeta + 付费 KV +
+         本机镜像四处的 A股 残留（含标量 `ashareUpdateTime` / `ashareDataDate`）由下一枪自动清干净；
+         `bishuju-ashare-update` 定时任务停用（卡密每日备份先搬到加密那条链，别一起停掉）。
+         og.png 重生成（策略榜 16 → 15 ＝ 加密 15 + A股 0）。
+         全站现为 **18 个榜**：加密 18（3 涨跌幅 + 15 策略）；A股 0（整族退役，需要时站长会说）。 -->
+    <meta name="description" content="加密永续合约的日线/周线/月线涨跌幅榜，加十五个多周期趋势榜（日线 9/21 扩张＋SAR 多头前四根＋成交额递增、月线 SAR 多头首根＋收盘价反包所有空头 SAR、周线 9/21 扩张＋SAR 多头、周线 SAR 多头＋RSI≥50、周线 9/21 扩张、月线四连阳、月线五连阴、周线 9/21 扩张＋SAR 多头前四根、周线四到六连阳、周线五连阴、日线 SAR 多头前四根、月线成交量递增、周线 9/21/55 扩张存续、月线 9/21 扩张存续、月线 SAR 空头），随收盘自动更新，一键导出自选清单；另附永续合约全市场情绪概览。">
     <link rel="canonical" href="https://gouzhuang748.com/">
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <!-- PWA 基础:加主屏 = 全屏 app 体验。刻意不加 Service Worker——loadData 的
@@ -264,18 +281,18 @@
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="狗庄74">
     <meta property="og:locale" content="zh_CN">
-    <meta property="og:title" content="狗庄74 — 加密 + A股 指标筛选排行榜">
-    <meta property="og:description" content="指标筛选排行榜，覆盖加密永续合约与 A 股两个市场，随收盘自动更新。">
+    <meta property="og:title" content="狗庄74 — 加密永续合约指标筛选排行榜">
+    <meta property="og:description" content="指标筛选排行榜，覆盖全部加密 USDT 永续合约，随收盘自动更新。">
     <meta property="og:image" content="https://gouzhuang748.com/og.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="狗庄74 — 加密/A股 指标筛选排行榜">
+    <meta property="og:image:alt" content="狗庄74 — 加密永续合约指标筛选排行榜">
     <meta property="og:url" content="https://gouzhuang748.com/">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="狗庄74 — 加密 + A股 指标筛选排行榜">
-    <meta name="twitter:description" content="指标筛选排行榜，覆盖加密永续合约与 A 股两个市场，随收盘自动更新。">
+    <meta name="twitter:title" content="狗庄74 — 加密永续合约指标筛选排行榜">
+    <meta name="twitter:description" content="指标筛选排行榜，覆盖全部加密 USDT 永续合约，随收盘自动更新。">
     <meta name="twitter:image" content="https://gouzhuang748.com/og.png">
-    <meta name="twitter:image:alt" content="狗庄74 — 加密/A股 指标筛选排行榜">
+    <meta name="twitter:image:alt" content="狗庄74 — 加密永续合约指标筛选排行榜">
 
     <!-- 自托管 Geist 变量字体(Latin);预加载避免首屏 FOUT。CJK 走系统栈不预载 -->
     <link rel="preload" as="font" type="font/woff2" href="fonts/geist-latin.woff2" crossorigin>
@@ -309,7 +326,7 @@
                 </svg>
                 <div class="brand__text">
                     <div class="brand__name">狗庄74 <span class="brand__latin">gouzhuang748.com</span></div>
-                    <div class="brand__tag">加密 + A股 · 策略筛选排行</div>
+                    <div class="brand__tag">加密永续合约 · 策略筛选排行</div>
                 </div>
             </div>
             <div class="topbar__tools">
@@ -319,7 +336,10 @@
                      ⚠️ 2026-08-16 移除美股/ETF 后第三个胶囊 freshUS 已删（ETF 当年无独立胶囊、
                      与美股同管道共用它）；script.js 的 renderUpdatePill 与点击处理器同步删了。 -->
                 <button type="button" class="fresh" id="freshCrypto" title="查看加密榜单"><span class="fresh__dot"></span><span class="fresh__asset crypto">加密</span><span id="freshCryptoTxt">数据加载中…</span></button>
-                <button type="button" class="fresh is-dim" id="freshAshare" title="查看A股榜单"><span class="fresh__dot"></span><span class="fresh__asset ashare">A股</span><span id="freshAshareTxt">—</span></button>
+                <!-- 🔴🔴 2026-09-12 站长「A股直接移除所有TAB。我不玩A股了。」⇒ A股 胶囊 `freshAshare`
+                     已删（script.js 的 renderUpdatePill 那一半 + 点击处理器同批删 —— 留着 getElementById
+                     取不到会让整个胶囊渲染静默 return、加密胶囊从此不更新，同 2026-08-16 删 freshUS 那次的坑）。
+                     ⇒ **现在只剩一个胶囊，它恒为亮态**（移动端 CSS 只显示非 .is-dim 的那一个）。 -->
                 <span id="licenseStatus"><span class="lic-badge lic-off">未解锁</span></span>
                 <button id="licenseBtn" class="lic-btn-mini">输入通行证</button>
                 <button class="theme-btn" id="themeBtn" aria-label="切换亮暗主题" title="切换亮/暗">◐</button>
@@ -329,6 +349,8 @@
             ⚠️ 数据更新出现延迟，正在恢复中 —— 榜单仍可查看，但可能不是最新一根 K 线。
         </div>
         <div class="banner" id="snapshotBanner" hidden>
+            <!-- 🔴 2026-09-12 A股 整族退役 ⇒ 本横幅（收盘快照提示）**恒不触发**（applicable 判的是
+                 currentAsset === "ashare"，而全站只剩加密）。DOM 与文案原样保留为休眠件，复活 A股 即生效。 -->
             ⚠️ <span data-banner-text>A股为每日收盘快照数据，非实时行情；每个交易日收盘后自动重算。</span>
             <button class="banner__close" id="snapshotBannerClose" aria-label="关闭">✕</button>
         </div>
@@ -338,12 +360,11 @@
         <div class="layout">
 
             <aside class="rail" id="rail">
-                <!-- 资产分段控件。⚠️ script.js 的抽屉里有一份**同款结构的副本**（drawerBody
-                     的 innerHTML），增删资产时两处必须一起改；初始 is-active 要与默认落地资产一致。 -->
-                <div class="asset-seg" id="assetSeg">
-                    <button class="asset-seg__opt is-active" data-k="crypto"><span class="asset-seg__dot"></span>加密</button>
-                    <button class="asset-seg__opt" data-k="ashare"><span class="asset-seg__dot"></span>A股</button>
-                </div>
+                <!-- 🔴🔴 2026-09-12 站长「A股直接移除所有TAB」⇒ **资产分段控件整块删掉**（只剩一个资产时
+                     它表达不了任何选择）。原结构：`.asset-seg#assetSeg` 里两个 `.asset-seg__opt`
+                     （data-k="crypto" / "ashare"）；script.js 抽屉里那份同款副本同批删。
+                     `.asset-seg` 的 CSS、switchAsset、点击委托全部保留为休眠件 ⇒ 复活 A股 时两处一起加回来，
+                     初始 is-active 要与默认落地资产一致。 -->
                 <nav class="board-nav" id="boardNav"><!-- JS: 按当前资产渲染分组榜单（组数见 TAB_GROUPS） --></nav>
                 <div class="rail-foot" id="railFoot"></div>
             </aside>
@@ -423,10 +444,10 @@
     <h3 id="faqTitle">常见问题</h3>
     <div class="faq">
         <h4>数据多久更新一次？</h4>
-        <p>加密：每小时自动抓取一次（整点后约 2 分钟），覆盖全部加密 USDT 永续合约，日线以 UTC 00:00 收盘为准；顶部的市场概览条同一节奏刷新。A股：每个交易日收盘后（约北京时间 15:05 起，待数据源发布当日数据）更新一次，覆盖全部沪深 A 股（停牌股不入榜）。</p>
+        <p>加密：每小时自动抓取一次（整点后约 2 分钟），覆盖全部加密 USDT 永续合约，日线以 UTC 00:00 收盘为准；顶部的市场概览条同一节奏刷新。</p>
         <h4>哪些免费、哪些收费？</h4>
         <p><b>免费的是加密「日线9/21扩张＋SAR多头前四根＋成交额递增」榜里排名第一的那一个标的</b>，以及顶部的市场概览条（全市场情绪、涨跌家数、总成交额、资金费率）。这两块永久免费、不需要通行证。</p>
-        <p><b>两个市场的榜单本身需要购买通行证解锁</b>——加密有三个涨跌幅榜（日线 / 周线 / 月线，全市场无筛选）和十五个策略榜（日线 9/21 扩张＋SAR 多头前四根＋成交额递增、月线 SAR 多头首根＋收盘价反包所有空头 SAR、周线 9/21 扩张＋SAR 多头、周线 SAR 多头＋RSI≥50、周线 9/21 扩张、月线四连阳、月线五连阴、周线 9/21 扩张＋SAR 多头前四根、周线四到六连阳、周线五连阴、日线 SAR 多头前四根、月线成交量递增、周线 9/21/55 扩张存续、月线 9/21 扩张存续、月线 SAR 空头），A 股有三个涨跌幅榜（日 / 周 / 月，全市场无筛选、基于收盘）和一个策略榜（周线 9/21 扩张＋SAR 多头），是本站的核心价值。无需注册账号，付款用加密货币（OxaPay），到账后通行证自动发到邮箱。</p>
+        <p><b>两个市场的榜单本身需要购买通行证解锁</b>——加密有三个涨跌幅榜（日线 / 周线 / 月线，全市场无筛选）和十五个策略榜（日线 9/21 扩张＋SAR 多头前四根＋成交额递增、月线 SAR 多头首根＋收盘价反包所有空头 SAR、周线 9/21 扩张＋SAR 多头、周线 SAR 多头＋RSI≥50、周线 9/21 扩张、月线四连阳、月线五连阴、周线 9/21 扩张＋SAR 多头前四根、周线四到六连阳、周线五连阴、日线 SAR 多头前四根、月线成交量递增、周线 9/21/55 扩张存续、月线 9/21 扩张存续、月线 SAR 空头），是本站的核心价值。无需注册账号，付款用加密货币（OxaPay），到账后通行证自动发到邮箱。</p>
         <h4>每个榜到底在筛什么？</h4>
         <p>切到任一榜单，表格上方那行说明的就是<b>这个榜在找什么样的行情</b>。策略榜各问各的问题：有的看多周期共振（月线定方向、周线定趋势、日线定入场时机，几个级别同时点头才入榜），有的只盯一个周期上的某种结构（比如周线上的两条均线是不是正在张开、周线上三条均线张开过之后上下顺序是不是一直没乱、月线上两条均线张开过之后是不是一直没交叉回去、周线 SAR 是不是站在多头一侧且周线 RSI 不低于 50、日线 SAR 是不是刚翻多、还在头四天之内、月线 SAR 是不是还站在空头一侧），有的只数 K 线的阴阳（比如月线上恰好连涨四个月、周线上连涨四到六周〔四、五、六三档合在一张榜上〕，或者恰好连跌五个月、五周），有的只看成交量、完全不看价格（比如月线上这个月的成交量比上个月大，放量上涨和放量下跌都会进来）；导航上的命中数不解锁也能看到。涨跌幅榜正相反，<b>没有任何筛选条件</b>，全市场按涨跌幅一字排开，用来先看清市场在发生什么、再进策略榜里筛。</p>
         <!-- ⚠️ 2026-07-23 站长已把榜名恢复成直白命名（榜名里就写着 9/21/55、SAR、CVD），
@@ -434,7 +455,7 @@
              真正不公开的是口径与阈值那一层，措辞按这个来。 -->
         <p><b>榜名已写明每个榜看的是哪些指标</b>，但具体口径与阈值——怎么才算「扩张」、CVD 如何定义、要多少根 K 线才够——不对外公开。这套组合方式是本站的核心，也是收费的理由。底层指标与 TradingView 同口径，榜上每个标的都可以点开图表自行复核。</p>
         <h4>涨跌颜色是怎么定的？</h4>
-        <p>A股榜单遵循中国市场习惯（涨红跌绿），加密榜单遵循国际习惯（涨绿跌红），切换资产时颜色语义自动跟随。</p>
+        <p>榜单遵循国际习惯：<b>涨绿跌红</b>。</p>
     </div>
     <div class="modal-actions">
         <span class="spacer"></span>
@@ -502,6 +523,6 @@
     </ol>
 </dialog>
 
-<script src="script.js?v=275"></script>
+<script src="script.js?v=276"></script>
 </body>
 </html>

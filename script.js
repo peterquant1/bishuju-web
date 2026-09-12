@@ -727,7 +727,10 @@ const TABS_CONFIG = {
     // ✏️ **2026-09-11 14:xx UTC 站长「…SAR多头前4根…涉及到SAR多头前2根的都改为SAR多头前4根」** ⇒ 条件② 改**前四根**（key 不动）：
     //   后端 ＝ `ema921_expansion_data` ∩（`daily_sar_flip_data` ∪ `sarSecondBar` ∪ `sarThirdBar` ∪ `sarFourthBar`）∩ `turnoverRising`。
     //   ⇒ 上面「sarBullBars 恒 ∈ {1, 2}」「命中＝首根＋第二根」「能连着待两天、第三天必然掉出」「别化简成 `sarBullBars in (1,2)`」
-    //   一律按「∈ {1,2,3,4}」「四支之和」「最多连着四天、第五天必掉出」「别化简成 `sarBullBars <= 4`」读；emaGap 恒正与 ⊊ `dailySarFirstBar` 照旧。
+    //   一律按「∈ {1,2,3,4}」「四支之和」「最多连着四天、第五天必掉出」「别化简成 `sarBullBars <= 4`」读；emaGap 恒正照旧。
+    // ✏️✏️ **2026-09-12 1x:xx 本榜再改「SAR多头前六根＋CVD递增」** ⇒ 上面两段一律再按「∈ {1..6}」「六支之和」
+    //   「最多连着六天、第七天必掉出」「别化简成 `sarBullBars <= 6`」读；emaGap 恒正仍照旧，但 **⊊ `dailySarFirstBar`
+    //   已作废**（那张仍是前四根、站长这次只点了本榜）⇒ 两张互相都不包含。详见 TAB_GROUPS 里本榜那条。
     dailyEmaSarFirstTwo: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // ✏️ **2026-09-10 12:1x UTC 站长追加条件②「且收盘价反包所有空头SAR」⇒ 2 个条件、都在月线**
@@ -1135,7 +1138,8 @@ const TAB_GROUPS = [
         //     09-12 06:2x 移除那两张时本类没变、**同日 08:5x 把周线四连阳与六连阳合并成一张 ⇒ 四个**；
         //     `monthlyVolRising` 只数成交量，从头到尾不计入）
         //
-        // 【结构性关系 —— **2026-09-12 1x:xx 起**（包含 四对 → **五对**〔新增 `monthlyFourBull` ⊊ `monthlyFourToSixBull`〕；
+        // 【结构性关系 —— **2026-09-12 1x:xx 起**（包含 四对 → 五对〔新增 `monthlyFourBull` ⊊ `monthlyFourToSixBull`〕
+        //   → **同日稍后又 −1 ⇒【四对】**〔橱窗榜改「前六根」而 `dailySarFirstBar` 仍前四根、那对断了〕；
         //   互斥 八对 → 四对〔06:2x〕→ 两对〔08:5x 合并 4/5/6 连阳〕→ 三对〔09:xx 新增 `monthlySarBearish`〕
         //   → **一对**〔1x:xx 两张五连阴一次移除，带走前两对的对家〕）】
         //   · **包含：四对**（九对 → 09-09 15:3x 三对 → 09-10 新增 `weeklyEmaSarFirstTwo` 一次带来三对，回到六对
@@ -1145,7 +1149,8 @@ const TAB_GROUPS = [
         //       `weeklyEmaSarBull`      ⊊ `weeklyEma921Expansion`   （＝ 后者 ∩ 周线SAR多头）
         //       `weeklyEmaSarFirstTwo`  ⊊ `weeklyEmaSarBull`        （＝ 后者 ∩ SAR前四根；09-11 14:xx 前是前两根，包含不受影响）
         //       `weeklyEmaSarFirstTwo`  ⊊ `weeklyEma921Expansion`   （＝ 条件① 本身）
-        //       `dailyEmaSarFirstTwo`  ⊊ `dailySarFirstBar`         （＝ 后者 ∩ 9/21扩张 ∩ 成交额递增；09-11 后者改成前两根后才成立，14:xx 两者同批改前四根后照旧）
+        //       （✏️ 这里原有第 4 对 `dailyEmaSarFirstTwo` ⊊ `dailySarFirstBar`，**09-12 1x:xx 已作废**、见下方「作废的一对」
+        //         ⇒ 本清单就是四条，别再照旧注释数成五条）
         //       `monthlyFourBull`      ⊊ `monthlyFourToSixBull`   （**09-12 1x:xx 新增这一对** ＝ 后者的第一支逐字就是前者的
         //         全部判据、两张共用后端同一个 `fourBull` 旗标 ⇒ 差集恒空、是个免费自检点。站长说「新增」不是「合并」
         //         ⇒ 子集那张**没被取代**）
@@ -1191,7 +1196,8 @@ const TAB_GROUPS = [
         //     `dailyEmaSarFirstTwo` / **`dailyTwoToSixBullRsiEma921`** —— 两张都以「日线 9/21 扩张」为条件之一
         //     （共用同一个遍历源 `ema921_expansion_data`），但**两个方向都不包含**（一个再要 SAR 前四根 ∩ 成交额递增、
         //     一个再要连阳 2~6 ∩ RSI≥70）。第三张日线榜 `dailySarFirstBar` 不看 EMA、emaGap 可正可负 —— **别互抄**。
-        //     `dailyEmaSarFirstTwo` ⊊ `dailySarFirstBar`（已计入上面的包含五对）。
+        //     ✏️ **09-12 1x:xx 起 `dailyEmaSarFirstTwo` ⊄ `dailySarFirstBar`**（前者改收到第六根、后者仍前四根）
+        //       ⇒ 三张日线榜现在两两都不包含；上面的包含清单是**四对**、不含日线那对。
         //     ⚠️ 新榜还多一条自己的自检点：行里 `rsi` **恒 ≥ 70**（后端用未 round 的值判 ⇒ 页面上不会出现 69.99）。
         //     ⚠️ 这两根轴 09-12 05:2x 已从排序条上移除（后端行字段 `emaGap` / `weeklyEmaGap` 照常发）⇒ 这两条现在是读付费 JSON 时的对账，不是页面自检点。
         //   · **周线榜六个**（09-11 08:5x 一度九个 → 09-12 06:2x 移除 `weeklyTwoBullExactCloseVolRising` 后八个
@@ -1219,7 +1225,8 @@ const TAB_GROUPS = [
         //     一起移除 ⇒ 站内又一个孪生都没有了（只活了一天）；② `monthlyVolRising` 撤回阳K ⇒「现役唯一完全不看价格
         //     的一张」那句**第三次翻面**（11:0x 写下、13:2x 自己推翻、09-12 又成立）。**同一句一天之内翻两次是常态，别写死。**
         // **各榜轴集已于 2026-07-30 对齐成同一套**（09-04 加「日SAR多头根数」18 轴、09-11 加周 / 月成交额 20 轴、
-        //   **2026-09-12 05:2x 站长移除七根后 13 轴**：周线EMA间距 / 周ADX / 周+DI / 周MACD强弱 / 日波动幅度 / 日EMA间距 / 日量比）。
+        //   **2026-09-12 05:2x 站长移除七根后 13 轴**：周线EMA间距 / 周ADX / 周+DI / 周MACD强弱 / 日波动幅度 / 日EMA间距 / 日量比；
+        //   **同日 09:xx 加「周涨跌幅」⇒ 现 14 轴**。⚠️ 轴数别写死，要数就展开 `cryptoStrategySorts`（含 `...dmiSorts` 两根））。
         label: "加密策略", asset: "加密", tf: "月线",
         tabs: [
             // ⚠️⚠️ **本组第一条 ＝ 站长 2026-09-09 明确要求的「置顶」**（逐字：「…并将该TAB

@@ -44,28 +44,17 @@ jobs:
               print("::error::加密数据已超过 2.5 小时未更新 —— 本机每小时计划任务可能挂了，去看机器！")
               sys.exit(1)
 
-          # A股 独立新鲜度检查：daily cadence（每天 15:05 北京时间收盘后触发、还要等
-          # tushare 发布），用远大于 crypto 的 30 小时阈值（容忍节假日/偶发延迟）；
-          # 字段不存在（该管道还没跑过第一次）时跳过而非报警。
-          # updateTime 是"谁最后写谁生效"，crypto 每小时都会刷新它，光看它无法发现
-          # A股 任务本身挂了。
-          # ⚠️ 2026-08-16 移除了 ("usUpdateTime", "美股", "美股每日计划任务") 那一行
-          # ——站长「移除美股，移除ETF」，美股管道整体退役、计划任务已 Disable，且该字段
-          # 已从公开文件里清掉（后端 RETIRED_KEY_PREFIXES 加了 "us" 前缀）。**留着它不会
-          # 误报**（field not in data 就 continue），但会掩盖"字段其实还在残留"这件事，
-          # 而且下一个人读到会以为美股还在跑。复活美股时把这一行加回来。
-          # ⚠️ 卡密每日备份同期从美股任务搬到了 A股 任务（backup_licenses.py），所以
-          # **A股 这条检查现在同时是"卡密备份还在跑吗"的间接看门狗**——它红了不只是数据陈旧。
-          for field, label, task in [
-              ("ashareUpdateTime", "A股", "A股每日计划任务"),
-          ]:
-              if field not in data:
-                  continue
-              m = age_min(field)
-              print(f"{field}: {data[field]}  (落后 {m:.0f} 分钟)")
-              if m > 30 * 60:
-                  print(f"::error::{label}数据已超过 30 小时未更新 —— {task}可能挂了，去看机器！")
-                  sys.exit(1)
+          # 🔴🔴 **2026-09-12：A股 那条 30 小时检查已移除** —— 站长「A股直接移除所有TAB。我不玩A股了。
+          # 需要恢复的时候我再告诉你。暂时先直接移除整个A股的数据。」⇒ A股 管道整体退役、计划任务已
+          # Disable，且 `ashareUpdateTime` / `ashareDataDate` 已从公开文件里清掉（后端 RETIRED_KEY_PREFIXES
+          # 加了 "ashare" 前缀）。**留着那条循环不会误报**（`field not in data` 就 continue），但会掩盖
+          # "字段其实还在残留"这件事，而且下一个人读到会以为 A股 还在跑 —— 同 2026-08-16 删美股那一行的理由。
+          # 原文一行：`("ashareUpdateTime", "A股", "A股每日计划任务")`，阈值 30 小时；复活 A股 时加回来
+          # （连那段 for 循环一起，见 git）。
+          # ⚠️⚠️ **卡密每日备份（backup_licenses.py）2026-09-12 已从 A股 任务搬到加密那条每小时链**
+          # （按"今天那份还不存在"判断 ⇒ 仍每天一份）⇒ **"卡密备份还在跑吗"的看门狗从此是上面那条
+          # `updateTime` 2.5 小时检查**（同一条链）：它红了不只是加密数据陈旧，卡密备份大概率也停了。
+          # ⚠️ 全站现在只有加密一条数据管道 ⇒ 本步只剩 `updateTime` 一个检查项。
 
           print("OK：数据新鲜。")
           PYEOF

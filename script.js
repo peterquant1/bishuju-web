@@ -930,14 +930,17 @@ const TABS_CONFIG = {
     // ⚠️ TABS_CONFIG 是平查找表、与 TAB_GROUPS 分离，所以这条要手写；TAB_GROUPS 那边
     // 只管导航，不管这里。
     //
-    // A股 三个涨跌幅榜（2026-07-29 站长「A股 也新增：日线级/周线级/月线级涨跌幅，基于收盘的」）：
-    // 与加密三个涨跌幅榜同构，但 ① 走 stockChangeSorts（**4 轴**，无订单流——tushare 无 taker）；
-    // ② 副行价格上下文是 close-to-close 的「昨收/上周收/上月收 X → …Y」（asharePriceCtx，¥ 价），
-    // 不是加密的 K 线实体「开→收」。**CHANGE_PCT_TABS 里也要有这三个 key**（红绿上色 + 不挂命中徽标），别漏。
-    ashareDailyChange: { sorts: ashareDailyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "日成交额", asharePriceCtx("昨收", "收")) },
-    ashareWeeklyChange: { sorts: ashareWeeklyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "周成交额", asharePriceCtx("上周收", "本周收")) },
-    ashareMonthlyChange: { sorts: ashareMonthlyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "月成交额", asharePriceCtx("上月收", "本月收")) },
-    ashareMonthlyWeeklyDaily: { sorts: singleStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    // 🔴🔴 **2026-09-12 10:xx UTC 站长「A股直接移除所有TAB。我不玩A股了。需要恢复的时候我再告诉你。
+    //   暂时先直接移除整个A股的数据。」** ⇒ **A股 整族退役**（同 2026-08-16 移除美股/ETF 那一轮的做法）：
+    //   这里原有四条配置 `ashareDailyChange` / `ashareWeeklyChange` / `ashareMonthlyChange`
+    //   （走 `stockChangeSorts` 4 轴 + `asharePriceCtx` 的 close-to-close 价格上下文）
+    //   + `ashareMonthlyWeeklyDaily`（走 `singleStrategySorts`，判据「周线9/21扩张＋SAR多头」）。
+    //   最后一版在 bishuju-web `ddc693e`；判据存档在后端 `fetch_ashare.py`（**整条管道保留为休眠件**）。
+    // ⚠️ **轴集常量全部保留为零消费者休眠件**（`singleStrategySorts` / `stockChangeSorts` /
+    //   `ashareDailyChangeSorts` 三个工厂产物 / `asharePriceCtx` / `fmtCnyPrice`）—— 复活时直接可用，别删。
+    // ⚠️ 后端同批把 `"ashare"` 装进 `RETIRED_KEY_PREFIXES` ⇒ 公开 JSON / paidMeta / 付费 KV / 本机镜像
+    //   四处的 A股 残留（含标量 `ashareUpdateTime` / `ashareDataDate`）由下一枪自动清干净。
+    //   **复活时必须先把那个前缀拿掉**，否则管道照跑、数据照样进不了站（那是设计不是 bug）。
 
 };
 
@@ -1430,41 +1433,18 @@ const TAB_GROUPS = [
               desc: "最新已收盘的那根月线，处在 EMA9/21 两线扩张之后的存续期里——两条合起来看：一是这个月 EMA9 在 EMA21 上方，两线多头排列还立着；二是从这段排列形成以来，至少出现过一个月两线扩张，也就是 EMA9 与 EMA21 的间距比上一个月更大。换句话说：月线级别的均线结构曾经真正张开过，而且到现在都没有被打破。它不要求这个月还在继续张开——扩张过之后进入横盘、间距慢慢收窄，只要 EMA9 还在 EMA21 上方，就仍然留在榜上；一旦 EMA9 跌回 EMA21 下方，这段存续期就结束了，要等下一次重新站上去才会回来。有一点要先说清楚：只有两条线时，EMA9 刚站上 EMA21 的那个月，间距是从负数变成正数，这本身就算一次扩张，所以本榜在绝大多数时候就是「月线 EMA9 在 EMA21 上方」的名单（回放过去 48 个月，这类标的约九成在本榜上）。差出来的只有一类：EMA21 要攒够 21 根月线才算得出来，如果它第一次算得出来时 EMA9 就已经在上方、之后间距又一直没再变大，那它是怎么站上去的就看不到了，这类标的要等间距再变大一次才会进来（TradingView 上同一个指标看到的也是这样）；按全部月线历史统计，这样被挡在外面的都是上市两三年左右的合约，而且多数还没等到间距再变大，EMA9 就先跌回了 EMA21 下方。这是一张状态清单不是事件清单：回放里上个月的成员这个月还留在榜上的比例中位约九成；按全部月线历史统计，已经结束的存续期中位维持 5 个月左右、四分之一在 13 个月以上。命中数很少、而且跟着大行情走：回放里每月中位 13 个，最多是 2025 年 1 月的 44 个，2022 年底到 2023 年初有两个月一个都没有，空榜不是数据出错；本榜上线时（2026 年 8 月这根月线）只有 6 个。它也不是择时信号：回放里本榜成员下个月收盘比这个月高的比例约 40%，只比同样上市满 22 个月的全部标的（约 38%）略高一点——更适合当成「月线趋势结构完好」的少数派名单，再用表格里的其他轴自己挑。它和站内其他榜没有包含关系：月线上另外几张榜看的是 SAR、K 线阴阳或成交量，不看均线；「周线9/21扩张」要求这一周间距还在变大，「周线9/21/55扩张存续」看的是周线上的三条线，周期和条件都不同。月线数据每月 1 号 00:00（UTC）新月线收盘后才刷新一次，同一个月之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。表格里的日线、周线、月线各轴都不参与筛选，用来在这批标的里再分强弱。上市不足 22 个月的合约算不出 EMA21 这个月和上个月的值，不入榜——这差不多是全市场一半以上的合约；日线数据不足 23 天的，日线那几轴会显示「—」。范围是全部加密 USDT 永续合约。" },
         ],
     },
-    // === A股（2026-07-24 站长定版「A股只保留这个TAB」，2026-07-29 改判据 + 加三个涨跌幅榜）===
-    // ⚠️⚠️ **2026-08-16 起股票系只剩 A股 一个资产**（站长「移除美股，移除ETF」，那两组
-    // 由 singleStrategyGroup 工厂生成、已连工厂一起删）。
-    // A股 的判据 2026-07-29 就与美股/ETF 分家了（当天从工厂里拆出来手写），所以移除那两个
-    // 资产**没动 A股 一个字**。判据两轮迭代：2026-08-16 五条共振 → 单条件「周线 9/21/55
-    // 三线扩张」；**2026-08-19 又改成「周线 9/21 两线扩张 ＋ 周线 SAR 多头」**（2 个条件、
-    // 都在周线，与加密 `weeklyEmaSarBull` 逐字同判据同名），组 tf 保持周线。
-    // ⚠️ **2026-08-19 同一条指令还把轴序改成与加密对齐**（首轴由日线RSI→日成交额，见
-    // singleStrategySorts 定义处）——轴数仍 16、字段集没动，只是重排 + 换首轴默认排序。
-    {
-        // === A股行情：三个涨跌幅榜（2026-07-29 站长「A股 也新增：日线级涨跌幅，周线级涨跌幅，
-        // 月线级涨跌幅。基于收盘的」）===
-        // ⚠️ **口径 close-to-close**（站长明写"基于收盘的"）：日线用交易所官方 pct_chg
-        // （相对昨收、含集合竞价跳空），周/月线用本周收 vs 上周收——与加密的 K 线实体
-        // (close−open)/open 不同（A股 有跳空，股民认的是相对上一根收盘的涨跌）。
-        // ⚠️ **4 轴不是 5 轴**：A股 无「订单流」（tushare 日线无 taker 归边字段）。
-        // ⚠️ 排在「A股策略」之前（行情=先看全市场、再进策略榜筛的入口，同加密组序）。
-        // ⚠️ 组 tf 不下发（本组横跨日/周/月），tf 挂在每个 tab 上；chip 名写周期本身 + full「涨跌幅」。
-        label: "A股行情", asset: "A股",
-        tabs: [
-            { key: "ashareDailyChange", name: "日线", full: "涨跌幅", tf: "日线",
-              desc: "最新交易日的收盘涨跌幅——相对昨天收盘价算（交易所官方口径，含早盘集合竞价的跳空缺口），不是拿开盘价算。没有任何筛选条件，全部沪深 A 股都在里面（当天停牌的除外）：谁涨谁跌一眼看全，是先看清全市场在发生什么、再进策略榜筛的入口。默认按涨幅从高到低，点排序条可以切成日成交额（涨得多是不是也有量）、日线RSI（是不是已经超买）、日CVD强弱（这波是买盘推的还是卖盘砸的）。副行给出「昨收 X → 收 Y」两个价格便于核对。当天停牌的股票挂着的是停牌前的旧涨跌幅、会误导，一律不入榜。" },
-            { key: "ashareWeeklyChange", name: "周线", full: "涨跌幅", tf: "周线",
-              desc: "最新已收盘那一周的收盘涨跌幅——本周收盘价 ÷ 上周收盘价（close-to-close，含跨周的跳空），当周最后一个交易日收盘后定型、整周之内不变，下周才换一批。没有任何筛选条件，全部沪深 A 股。它比日线那张钝得多，正好用来分辨「这几天的涨只是反弹」还是「整周都在往上走」。请注意排序条上的 RSI、CVD强弱、成交额全部是周线口径（成交额是那一根周 K 的成交额，不是 5 日累计也不是日均），不是日线值。要有 2 根已收盘周 K 才入榜；周线 RSI 需 16 根周 K 才算得出来，不够的显示「—」并在排序时沉底。" },
-            { key: "ashareMonthlyChange", name: "月线", full: "涨跌幅", tf: "月线",
-              desc: "最新已收盘那一个月的收盘涨跌幅——本月收盘价 ÷ 上月收盘价（close-to-close，含月初的跳空），当月最后一个交易日收盘后定型、整个月之内不变（那是正确行为，不是数据卡住了）。没有任何筛选条件，全部沪深 A 股。这是站内周期最长的一张 A股 行情榜，看的是「这个月谁真的走出来了」，短线噪音基本被抹平。排序条上的 RSI、CVD强弱、成交额全部是月线口径。要有 2 根已收盘月 K 才入榜（上市当月、还只有一根月 K 的新股暂不入榜）；月线 RSI 需 16 根月 K、约一年半才算得出来，不够的这几根轴显示「—」并沉底。" },
-        ],
-    },
-    // ⚠️ 组 tf 2026-08-16 由「月线」改成「周线」：判据整个搬到了周线（此前月/周/日三级共振，
-    //    tf 跟着最大的那个周期走）。board-head 的「A股 · 周期 · 榜名」读的就是这里。
-    { label: "A股策略", asset: "A股", tf: "周线",
-      tabs: [
-        { key: "ashareMonthlyWeeklyDaily", name: "周线9/21扩张＋SAR多头",
-          desc: "最新已收盘的那根周线要同时满足两条：一是 EMA9 在 EMA21 上方、而且两者的间距比上一周更大（均线正在张开，不是单纯的多头排列），二是这根周线的 Parabolic SAR 站在多头一侧。它在「周线 SAR 站多头」这道方向门槛之上，还要求 EMA9/21 均线结构本身正在加速张开，所以命中数比单看方向少得多，找的是「趋势方向和结构强度双双确认」的股票，而不是「方向朝上但可能还在磨」的一大批。用法上，SAR 保证了方向、EMA 扩张保证了力度，两者叠加天然偏强势。它是一张状态清单不是事件清单：只要这两条还成立，同一只股票可以连着几周在榜上；而且周线要到本周最后一个交易日收盘后才定型，同一周之内反复打开本榜，看到的名单基本不变，这是正确行为不是数据卡住了。需要至少 22 根已收盘周 K（约 5 个月）才算得出 EMA9/21 扩张，所以上市不足约半年的次新股不入榜；当日停牌的也不入榜。范围是全部沪深 A 股。表格里的日线各轴（RSI、成交额、量比、CVD强弱等）不参与筛选，用来在这批股票里再看短期强弱；默认按日成交额从高到低排。" },
-      ] },
+    // 🔴🔴 **2026-09-12 10:xx UTC 站长「A股直接移除所有TAB。我不玩A股了。需要恢复的时候我再告诉你。
+    //   暂时先直接移除整个A股的数据。」⇒ A股 两个组整体删除**（同 2026-08-16 移除美股/ETF 那一轮）：
+    //   原「A股行情」三个涨跌幅榜（`ashareDailyChange` / `ashareWeeklyChange` / `ashareMonthlyChange`，
+    //   **close-to-close 口径**、4 轴无订单流）+「A股策略」一个（`ashareMonthlyWeeklyDaily`
+    //   「周线9/21扩张＋SAR多头」，与加密 `weeklyEmaSarBull` 逐字同判据、显示名也刻意相同）。
+    //   key / name / desc 最后一版在 bishuju-web `ddc693e`；判据存档在后端 `fetch_ashare.py`（休眠件、整条管道保留）。
+    // ⚠️⚠️ **全站从此只有加密一个资产** ⇒ 资产分段控件（`.asset-seg`，rail + drawer 两份）与 A股 新鲜度胶囊
+    //   （`#freshAshare`）同批从 DOM 删掉；`ASSET_KEY` / `ASSET_CN` / `switchAsset` / `isAshareTab` /
+    //   `snapshotBanner` / `volRankBadgeFor` 的 A股 分母等机制**原样保留为休眠件**（`currentAsset` 从此恒为
+    //   crypto ⇒ 那些分支恒不触发、零副作用）。复活 A股 ＝ 把这两个组 + 四条 `TABS_CONFIG` + 三个
+    //   `CHANGE_PCT_TABS` key + 两处 `.asset-seg` + `#freshAshare` 加回来，并把后端 `RETIRED_KEY_PREFIXES`
+    //   里的 `"ashare"` 拿掉（不拿掉的话管道照跑、数据照样进不了站）。
 ];
 
 // tab key → {asset, tf, name, full}。组的 asset/tf 下发到每个 tab；tab 自带的 tf 优先
@@ -1572,8 +1552,9 @@ function tabCount(key) {
 //   ③ 空状态文案走"暂无数据"而不是"0 命中是正常信号"（策略榜才有后一种语义）
 // 加密 3 个 + A股 3 个（2026-07-29）。A股 的三个走 close-to-close，但红绿/非策略语义与加密
 // 一致，同样进这个集合。红绿方向由 CSS 的 [data-asset] 作用域翻（A股 涨红跌绿）。
-const CHANGE_PCT_TABS = new Set(["dailyChange", "weeklyChange", "monthlyChange",
-                                 "ashareDailyChange", "ashareWeeklyChange", "ashareMonthlyChange"]);
+// 🔴 2026-09-12 A股 整族退役 ⇒ 这里原有 `ashareDailyChange` / `ashareWeeklyChange` / `ashareMonthlyChange`
+// 三个 key（复活 A股 时必须一并加回来：它管着红绿上色、空状态文案、不挂命中徽标三件事）。
+const CHANGE_PCT_TABS = new Set(["dailyChange", "weeklyChange", "monthlyChange"]);
 
 // 免费引流层（2026-07-22 站长定：通用行情开放引流，策略筛选付费）。整榜免费的通用
 // 行情榜：涨跌幅 + 成交额 + 振幅 + 资金费率。**必须跟后端 fetch_data.py 的同名
@@ -1741,7 +1722,8 @@ let currentAsset = "crypto";                            // 当前资产（由 ta
 // 各资产记住上次看的榜；这里是"还没看过时"的初值 = 该资产 TAB_GROUPS 里的第一个榜。
 // A股 只有一个策略榜 + 三个涨跌幅榜，初值取策略榜；加密初值取默认落地的橱窗榜
 // （＝ TEASER_TAB，未解锁时它是加密侧唯一有内容的榜，回到加密时不该落在全锁的榜上）。
-const lastTabByAsset = { crypto: "dailyEmaSarFirstTwo", ashare: "ashareMonthlyWeeklyDaily" };
+// 🔴 2026-09-12 A股 整族退役 ⇒ 这里原有 `ashare: "ashareMonthlyWeeklyDaily"`（复活时加回来）。
+const lastTabByAsset = { crypto: "dailyEmaSarFirstTwo" };
 
 function assetOfTab(tab) {
     const m = TAB_META[tab];
@@ -1795,8 +1777,8 @@ function renderNav() {
         // 一律写**标的范围**而不是数量——写 tabCount(某个榜) 会变成"监控 N 只"却是
         // 命中数，是误导（这条规矩定于三个股票系资产各只有 1 个策略榜的年代，现在两个
         // 资产都有全量涨跌幅榜了，但"范围"仍然比"某一个榜的命中数"更准确）。
-        const uni = currentAsset === "ashare" ? "沪深 A 股全市场"
-            : "加密 USDT 永续合约全市场";
+        // 🔴 2026-09-12 A股 整族退役 ⇒ 原来这里按资产三元：A股 写「沪深 A 股全市场」（复活时加回来）。
+        const uni = "加密 USDT 永续合约全市场";
         foot.innerHTML = `<b>${n}</b> 个榜单 · 监控 ${uni}`;
     }
 }
@@ -2239,9 +2221,12 @@ function renderStaleBanner() {
  *  移除一并删除，DOM 与点击处理器都清了。移动端 CSS 只显示非 .is-dim 的那一个 ⇒
  *  **任何时候必须恰好有一个胶囊是亮的**，加资产时别忘了给它一个胶囊或归并到某一侧。 */
 function renderUpdatePill() {
+    // 🔴🔴 2026-09-12 A股 整族退役 ⇒ `#freshAshare` 那个胶囊连 DOM 一起删了，这里的 `elA` 与下方
+    //   「A股胶囊」整段同批删 —— **不删的话 `!elA` 会让整个函数静默 return、加密胶囊从此永不更新**
+    //   （同 2026-08-16 删 `freshUS` 那次踩的坑）。复活 A股 时两处一起加回来，阈值 25.5h / 30h 与
+    //   `ashareDataDate` 的 slice(4,6)/(6,8) 口径见 git（`ddc693e`）。
     const elC = document.getElementById("freshCrypto");
-    const elA = document.getElementById("freshAshare");
-    if (!elC || !elA || !data) return;
+    if (!elC || !data) return;
 
     // --- 加密胶囊 ---
     const tC = parseUpdateTime(data.updateTime);
@@ -2256,30 +2241,16 @@ function renderUpdatePill() {
     document.getElementById("freshCryptoTxt").innerHTML = data.updateTime
         ? ` · <b>${data.updateTime.slice(11, 16)}</b>&nbsp;UTC${nextTxt}` : " · —";
 
-    // --- A股胶囊（收盘日更；ashareDataDate 是 tushare 的 'YYYYMMDD'，**无分隔符**，
-    // slice 位置是 4..6 / 6..8；已移除的美股那个是 ISO 'YYYY-MM-DD'、位置 5..7 / 8..10，
-    // 复活时别把两套 slice 抄混）---
-    const tA = parseUpdateTime(data.ashareUpdateTime);
-    let clsA = "fresh--bad";
-    if (tA) {
-        const ageA = (Date.now() - tA) / 60000;
-        // 每天 07:05 UTC 触发后等 tushare 发布 → 25.5h 内新鲜，30h（与 check-freshness
-        // 同阈值）以上才红
-        clsA = ageA <= 25.5 * 60 ? "fresh--ok" : ageA <= 30 * 60 ? "fresh--warn" : "fresh--bad";
-    }
-    const dd = data.ashareDataDate
-        ? `<b>${data.ashareDataDate.slice(4, 6)}-${data.ashareDataDate.slice(6, 8)}</b> 收盘`
-        : (tA ? `<b>${data.ashareUpdateTime.slice(11, 16)}</b> UTC` : "—");
-    document.getElementById("freshAshareTxt").innerHTML = ` · ${dd} <span class="fresh__next">· 日更</span>`;
-
+    // 状态类（**全站只剩加密一个胶囊 ⇒ 它恒为亮态**；移动端 CSS 只显示非 .is-dim 的那一个，
+    // 任何时候必须恰好有一个亮着 —— 复活 A股 时把 .is-dim 的那套逻辑一起加回来）。
     // 状态类 + 当前资产侧高亮（移动端只显非 dim 的那一个，必须恰好有一个亮着）。
-    elC.className = `fresh ${clsC}${currentAsset === "crypto" ? "" : " is-dim"}`;
-    elA.className = `fresh ${clsA}${currentAsset === "ashare" ? "" : " is-dim"}`;
+    elC.className = `fresh ${clsC}`;
 }
 
 // 各资产的策略 tab 数，pulse "N 榜" 用；按资产从 TAB_GROUPS 算，不硬编码。
 const CRYPTO_STRATEGY_TABS = TAB_GROUPS.filter(g => g.asset === "加密").flatMap(g => g.tabs).filter(t => isStrategyTab(t.key)).length;
-const ASHARE_STRATEGY_TABS = TAB_GROUPS.filter(g => g.asset === "A股").flatMap(g => g.tabs).filter(t => isStrategyTab(t.key)).length;
+// 🔴 2026-09-12 A股 整族退役 ⇒ 原有 `ASHARE_STRATEGY_TABS`（同款一行，asset === "A股"）随 `asharePulseTiles` 一并删除，
+// 同 2026-08-16 删 `US_STRATEGY_TABS` / `ETF_STRATEGY_TABS` 那次；复活时两行一起从 git（`ddc693e`）捞回来。
 
 /** 当前资产的策略 tab 命中总数。用 TAB_META[k].asset 过滤，只统计该资产自己的
  *  策略榜。走 paidMeta（tabCount 的口径）而不是直接数组长度——付费墙生效后
@@ -2397,7 +2368,8 @@ function renderPulse() {
     try { renderMarketOverview(); } catch (e) { console.warn("市场概览渲染失败", e); }
     const el = document.getElementById("pulse");
     if (!el || !data) return;
-    const tiles = currentAsset === "ashare" ? asharePulseTiles() : cryptoPulseTiles();
+    // 🔴 2026-09-12 A股 整族退役 ⇒ 原来按资产二选一（`asharePulseTiles()`），现在只剩加密那一支。
+    const tiles = cryptoPulseTiles();
     if (!tiles) { el.hidden = true; return; }
     el.innerHTML = tiles.join("");
     el.hidden = false;
@@ -2448,7 +2420,7 @@ function cryptoPulseTiles() { return lockedPulseTile("加密", CRYPTO_STRATEGY_T
 // ⚠️ 2026-08-16 随美股/ETF 移除删掉了 `usPulseTiles` / `etfPulseTiles`（以及它们依赖的
 // US_STRATEGY_TABS / ETF_STRATEGY_TABS 两个常量）。更早的、每个资产四格全市场磁贴的
 // 三份实现（含美股 ticker vs 全名的宽度取舍、ETF「涨跌分布」的措辞理由）见 git。
-function asharePulseTiles() { return lockedPulseTile("A股", ASHARE_STRATEGY_TABS); }
+// （`asharePulseTiles` 2026-09-12 随 A股 整族退役删除，见上方 `ASHARE_STRATEGY_TABS` 那条注释。）
 
 /** 首屏骨架行(静态灰条,无动画——GPU 硬约束) */
 function renderSkeleton() {
@@ -2973,13 +2945,15 @@ document.getElementById("hamburger").addEventListener("click", openDrawer);
 document.getElementById("drawerClose").addEventListener("click", closeDrawer);
 document.getElementById("drawerScrim").addEventListener("click", closeDrawer);
 
-// 抽屉体：注入资产分段控件 + 导航容器（renderNav 往 #drawerNav 里填内容）
+// 抽屉体：只注入导航容器（renderNav 往 #drawerNav 里填内容）
+// 🔴🔴 **2026-09-12 A股 整族退役 ⇒ 这里原本还注入一个资产分段控件**（`.asset-seg` 里两个
+//   `.asset-seg__opt`，data-k="crypto" / "ashare"），index.html 的 rail 那一份同批删掉 ——
+//   只剩一个资产时它表达不了任何选择。`.asset-seg` 的 CSS、`switchAsset`、`.asset-seg__opt`
+//   的点击委托全部**保留为休眠件**（点击委托找不到节点 ⇒ 恒不触发），复活 A股 时把两处 DOM 加回来即可。
+// ⚠️ 写注释别把反引号放进这条模板字符串里（会当场截断模板、node --check 报奇怪的语法错）——
+//   本轮就踩了一次，注释因此挪到模板外面。
 document.getElementById("drawerBody").innerHTML = `
-    <div class="asset-seg">
-        <button class="asset-seg__opt is-active" data-k="crypto"><span class="asset-seg__dot"></span>加密</button>
-        <button class="asset-seg__opt" data-k="ashare"><span class="asset-seg__dot"></span>A股</button>
-    </div>
-    <nav class="board-nav" id="drawerNav" style="margin-top:14px"></nav>`;
+    <nav class="board-nav" id="drawerNav"></nav>`;
 
 // === 亮/暗主题切换（token 覆盖,组件零分叉）===
 const LS_THEME = "bishuju_theme";
@@ -3015,7 +2989,8 @@ document.getElementById("snapshotBannerClose").addEventListener("click", () => {
 // ETF(2026-07-21 审计)——随 2026-08-16 移除美股/ETF 一并删除。**日后再出现"某个资产
 // 没有自己的胶囊、复用别人的"这种归并,那句空操作要一起加回来。**
 document.getElementById("freshCrypto").addEventListener("click", () => switchAsset("crypto"));
-document.getElementById("freshAshare").addEventListener("click", () => switchAsset("ashare"));
+// 🔴🔴 2026-09-12 A股 整族退役 ⇒ 原有一行 `#freshAshare` 的点击监听（→ switchAsset("ashare")）必须同批删：
+//   DOM 节点已经不在，留着就是 `null.addEventListener` 当场抛错、后面所有监听器全不绑定。
 
 // 排序选择（排序条 chips + 表头共用）：点不同轴切排序键，点当前轴切升/降
 function selectSortKey(key) {

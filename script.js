@@ -1,47 +1,22 @@
 // === 排序轴 ===
-// 每个 tab 的每一行 payload 统一带 rsi / volume / volumeFormatted / cvdStrength 字段
-// （加密行另带 takerStrength，A股/美股/ETF 行另带 volRatio/emaGap），排序键稳定；
-// 默认轴（sorts[0]）＝该 tab 的主指标，**必须与后端 `value` 取的量一致**，否则首屏值列
-// 显示的是另一根轴的数。
-// ⚠️⚠️ **本段刻意不再写死"某族几轴"**（2026-07-29 审计）：原文停在「股票系五轴 / 加密
-// 四轴 / 涨跌幅六轴」，那是 2026-07-22 的快照，此后加 ADX/DI、砍 DI、加日/周MACD、加日
-// 波动幅度、删周成交额若干轮，全都没跟着改，且还在引用早已移除的 `dailyEma921`/
-// `weeklyStrategy`/涨跌幅榜。**要数轴就去数下面那几个 sorts 常量本身**
-// （现役策略榜轴集**只剩两个**：`cryptoStrategySorts`（加密）/ `singleStrategySorts`（A股）——
-// 2026-07-30 轴数对齐时 `cryptoWeeklyExpansionSorts` 已并入前者、删除）——
-// 这个"注释里写死数字然后发霉"的坑本仓库已经犯到第四次。（✏️ 本段原写「17 轴 / 16 轴」，09-04、
-// 09-11 两次加轴都没跟上，2026-09-11 改成不带数字。）
-// sortField 直接是行上的字段名，getSortedItems 按它比较（null 沉底）。
+// 轴的 key ＝ 行字段名，sortField 直接按它取值比较（null 沉底）。默认轴 sorts[0] 必须与后端 `value` 取的量一致，
+// 否则首屏值列显示的是另一根轴的数。轴数别写进注释，要数就数下面的 sorts 常量。
 //
-// CVD强弱 = 归一化买卖失衡比 ∈ [−1,+1]（后端 calc_cvd_strength）：+1 纯买/吸筹、0 均衡、
-// −1 纯卖/派发。**为什么不排原始 CVD**：原始 CVD 是币本位、随成交量缩放，跨标的排序≈排
-// 成交量，和「成交额」轴重复；除以总成交量归一化后才无量纲、跨标的可比。降序=最坚决净买
-// 入在顶，升序=最坚决派发在顶。带符号显示 +0.58（不用 +58%：和涨跌幅共用「值」列，% 会让
-// 切到 CVD强弱 时的 +0.58 和涨跌幅的 +5% 视觉混淆）。中性不上色（买卖方向靠 +/− 符号，
-// 避开涨跌幅红绿 + A股 data-asset 翻转的纠缠）。null（新股/历史不足）显示「—」，排序沉底。
+// CVD强弱 ＝ 归一化买卖失衡比 ∈ [−1,+1]（后端 calc_cvd_strength）。不排原始 CVD：它随成交量缩放，跨标的排序≈排成交量。
+// 带符号两位小数、不带 %（与涨跌幅共用值列，免得 +0.58 与 +5% 混淆）；中性不上色。
 function fmtCvdVal(x) { return x == null ? "—" : (x >= 0 ? "+" : "") + x.toFixed(2); }
 function fmtRsiVal(x) { return x == null ? "N/A" : x.toFixed(2); }
 function fmtVolVal(v) { return v.volumeFormatted != null ? v.volumeFormatted : "N/A"; }
-// 周 / 月成交额（2026-09-11）：显示串是**另外两个字段**（后端 weeklyVolumeFormatted / monthlyVolumeFormatted）。
-// ⚠️ 别复用 fmtVolVal —— 它写死读 `volumeFormatted`（策略榜里那是**日**成交额），套上去会在「周成交额」
-//    那一列显示日成交额的数字，排序却按周成交额排，不报错、只能肉眼发现。
+// 周 / 月成交额读各自的显示串。⚠️ 别复用 fmtVolVal（写死读日成交额的 volumeFormatted）：
+// 套上去会显示日成交额、却按周 / 月成交额排序，不报错。
 function fmtWeeklyVolVal(v) { return v.weeklyVolumeFormatted != null ? v.weeklyVolumeFormatted : "N/A"; }
 function fmtMonthlyVolVal(v) { return v.monthlyVolumeFormatted != null ? v.monthlyVolumeFormatted : "N/A"; }
-// 全市场成交额名次「TOP N」（2026-09-10 站长「在排序的日成交额里面，显示每个币的成交额是全市场的TOP几」
-// 做了**日**；2026-09-11 站长「排序里面没有周成交额。也要有周成交额。并且有全市场TOP几显示。补充一点，
-// 月成交额和TOP几也要有。」补**周 / 月**）：
-// 后端名次字段 ＝ 该标的最新已收盘那根 K 的成交额在**全市场**（＝ 同周期涨跌幅榜的全部行）里排第几：
-//   日 `volumeRank`（全市场＝dailyChange）· 周 `weeklyVolumeRank`（＝weeklyChange）· 月 `monthlyVolumeRank`（＝monthlyChange）。
-// 只在按对应那根「X成交额」轴排序时出现，挂在值列数字左侧（renderTable 读轴定义上的 `badge`）。
-// ⚠️⚠️ **一个周期一个 key，别合并成一个 volumeRank**：三个涨跌幅榜的行里 `volume` 装的是各自周期的成交额，
-//    若名次也共用 `volumeRank`，同一个 key 在不同榜上就表示不同周期 —— 徽标的 title 会说错周期、
-//    audit F③ 也会被骗。所以周 / 月榜的行上是 weeklyVolumeRank / monthlyVolumeRank（后端注释同一条理由）。
-// ⚠️ 写成工厂而不是三份几乎一样的函数（本项目栽过多次的"近亲常量选错一个不报错"）。
-// ⚠️ 数据驱动：行上没有对应名次字段就什么都不渲染 —— 现在只有**加密**的策略榜 + 三张涨跌幅榜带。
-//    A股 的日 / 周 / 月成交额轴都是共用常量或同形工厂，因此不显示；要加 A股：fetch_ashare.py 的行构造补
-//    三个名次字段 + stockChangeSorts 的成交额那根挂上 badge —— A股 的分母（ashare*Change）下面已经写好了。
-//    ⚠️ A股 全市场 5,000+ 只 ⇒ 名次四位数，641–860px 档值列要重量（加密那边只剩 13.8px 余量）。
-// ⚠️ 只认整数：名次进 innerHTML，同「数据管道来的东西一律不裸拼」那条纪律（见 renderTable）。
+// 全市场成交额名次「TOP N」徽标（写成工厂，别拆成三份近亲函数）：只在按对应「X成交额」轴排序时挂在值列数字左侧
+// （renderTable 读轴定义上的 `badge`）。名次字段：日 volumeRank / 周 weeklyVolumeRank / 月 monthlyVolumeRank，
+// 「全市场」＝ 同周期涨跌幅榜的全部行。
+// ⚠️ 一个周期一个名次 key，别合并成 volumeRank：涨跌幅榜的 `volume` 装的是本周期成交额，共用 key 会让徽标说错周期。
+// 数据驱动：行上没有该整数字段就不渲染（名次进 innerHTML，只认整数）。A股 行不带名次字段 ⇒ ashareUniverseTab 是休眠参数
+// （真给 A股 挂名次时，四位数名次要重测窄屏值列宽度）。
 function volRankBadgeFor(rankKey, tf, universeTab, ashareUniverseTab) {
     return v => {
         const r = v[rankKey];
@@ -54,513 +29,179 @@ function volRankBadgeFor(rankKey, tf, universeTab, ashareUniverseTab) {
 const volRankBadge = volRankBadgeFor("volumeRank", "日", "dailyChange", "ashareDailyChange");
 const weeklyVolRankBadge = volRankBadgeFor("weeklyVolumeRank", "周", "weeklyChange", "ashareWeeklyChange");
 const monthlyVolRankBadge = volRankBadgeFor("monthlyVolumeRank", "月", "monthlyChange", "ashareMonthlyChange");
-// 量比 = 当期成交量/前 5 期均量（无量纲倍数，1.00 = 与近期持平）；EMA间距 = (EMA9−EMA21)/EMA21
-// 的百分比（带符号——它真是百分比，跟 CVD强弱 刻意不带 % 的理由不冲突；涨跌幅榜切到此轴时
-// 副行仍显式带「涨幅 +X%」，不会混淆）。null（历史不足/新股）显示「—」，排序沉底，中性不上色。
+// 量比：无量纲倍数。间距 / 涨跌幅这类百分比量：带符号两位小数 + %。
 function fmtRatioVal(x) { return x == null ? "—" : x.toFixed(2); }
 function fmtGapVal(x) { return x == null ? "—" : (x >= 0 ? "+" : "") + x.toFixed(2) + "%"; }
-// 振幅（免费"振幅榜"）：永远非负的百分比幅度，中性显示不带符号。null 显示「—」沉底。
+// 振幅 / 波动幅度：恒非负的百分比，不带符号。
 function fmtAmpVal(x) { return x == null ? "—" : x.toFixed(2) + "%"; }
-// ADX / +DI / −DI（2026-07-25 站长要求引入的方向性运动系统）：三者都是 0-100 的无符号
-// 指数，**不是百分比也不是倍数**，故不带 % / ×，只保留两位小数（同 TV 显示口径）。
-// null（不足 28 根已收盘 K 的次新标的）显示「—」、排序沉底。
-// ⚠️ DI差（= +DI − −DI）是**带符号**的，走既有的 fmtCvdVal（那个函数本身就是"带符号数字
-// 两位小数"的通用格式化，与 CVD强弱 共用不是巧合；刻意不另造一个同形近亲函数——本项目
-// 多次栽在"两个几乎一样的东西选错一个、不报错只能肉眼发现"上）。
+// ADX / +DI：0–100 的无量纲指数，不带 %（同 TV 显示口径）。
 function fmtDmiVal(x) { return x == null ? "—" : x.toFixed(2); }
-// 日SAR多头根数（2026-09-04）：**整数根数**，不是百分比也不是倍数 ⇒ 不带 % / 正负号，
-// 带「根」量词。null（SAR 空头 或 K 线不足 3 根）显示「—」、升降序两个方向都沉底。
-// ⚠️ 写「根」不写「天」：A股 一根是**交易日**（隔周末/长假），只有加密一根才等于一天。
-// ⚠️ 刻意不复用 fmtDmiVal/fmtAmpVal —— 那两个都 toFixed(2)，整数轴显示成「3.00」是错的。
+// 整数根数（日SAR多头根数）：带「根」不写「天」（A股 一根是交易日）。别复用 toFixed(2) 的格式化，会显示成「3.00」。
 function fmtBarsVal(x) { return x == null ? "—" : x + " 根"; }
 
-// 副行：显示当前排序轴**之外**的其余轴摘要（值列已展示当前轴，副行是快览、不承诺穷尽）。
-// volLabel 区分 成交额/周成交额/月成交额；extra 是可选的价格/回顾上下文（涨跌幅/信号根等）。
-// ⚠️ 轴摘要封顶 SUB_AXES_MAX 段（2026-07-22 深夜审美 PASS 修复）：桌面端 .sub 是
-// white-space:normal，超过 ~5 段会折行、行高 60→76px 节奏破坏——etfChange 当天就已实测
-// 60/76 混排（7 段），日线策略行家族扩到 7-8 轴后必然全员折行。被裁掉的轴不丢功能：
-// 排序条 chip 一键切换后进值列展示。extra（价格上下文）永远保留、不占轴额度。
-// 段落顺序即优先级——weeklyRsi 排在 cvdStrength 后（周线强度是 weeklyStrategy 的锚点
-// 维度；只有该榜的行有这个 key，其他榜不受影响）。移动端 .sub 本就 nowrap 截断，不受此限。
+// 副行：当前排序轴之外的其余轴摘要（快览、不承诺穷尽）；extra 是可选的价格上下文，永远保留、不占轴额度。
+// 轴摘要封顶 SUB_AXES_MAX 段：桌面端 .sub 会折行，段数一多行高就乱；被裁掉的轴切到对应排序 chip 即可在值列看到。
 const SUB_AXES_MAX = 4;
-/** 副行里某个轴的标签：**优先取当前 tab 自己 sorts 里的 label**，取不到才用兜底。
- *  2026-07-24 改成查表式，替掉了原来"副行硬编码一份标签、必须和 AXIS_* 常量手工保持
- *  一致"的写法——那个坑 2026-07-23 真的踩过一次（排序条已改成 RSI/CVD强弱，副行还是
- *  旧的 强度/资金强弱）。这轮给股票系单策略榜的轴加了周期前缀（日线RSI/日CVD强弱/
- *  日量比/日EMA间距），若还是硬编码就会**第二次**踩同一个坑，索性从根上消掉。
- *  对加密各榜零视觉变化：它们 sorts 里的 label 与原硬编码值逐字相同。 */
+/** 副行里某个轴的标签：取当前 tab 自己 sorts 里的 label（别硬编码，否则排序条改名后副行对不上），取不到才用兜底。 */
 function axisLabelFor(key, fallback) {
     const sorts = (TABS_CONFIG[currentTab] || {}).sorts || [];
     const hit = sorts.find(x => x.key === key);
     return hit ? hit.label : fallback;
 }
+// 各段按白名单逐个写、数据驱动：行上有该 key 才渲染（同一个轴常量跨资产共用也不会串）。段落顺序即优先级，
+// 超过 SUB_AXES_MAX 的段默认不显示 ⇒ 加轴时新段放在末尾（默认副行零变化）；每根在用的轴都该有一段，别当多余代码删。
+// ⚠️ 删轴三处同批：轴集 + 这里的对应段 + 用户可见 desc。只删轴不删段时 axisLabelFor 退回兜底标签、段照样渲染
+//    ⇒ 副行冒出排序条上没有的孤儿摘要。
 function axesSub(item, sf, volLabel, extra) {
     const seg = [];
     if (sf !== "rsi") seg.push(`${axisLabelFor("rsi", "RSI")} ${fmtRsiVal(item.rsi)}`);
-    // volLabel 由调用方显式传（同一个 volume 字段在日/周/月榜含义不同，且免费行情榜
-    // 的主轴就是它，不能反查自己）
+    // volLabel 由调用方显式传：同一个 volume 字段在日 / 周 / 月榜含义不同。
     if (sf !== "volume") seg.push(`${volLabel} ${fmtVolVal(item)}`);
     if (sf !== "cvdStrength") seg.push(`${axisLabelFor("cvdStrength", "CVD强弱")} ${fmtCvdVal(item.cvdStrength)}`);
     if ("weeklyRsi" in item && sf !== "weeklyRsi") seg.push(`${axisLabelFor("weeklyRsi", "周线RSI")} ${fmtRsiVal(item.weeklyRsi)}`);
-    // （周成交额那一段 2026-09-11 从这里挪到了下方 SUB_AXES_MAX 截断线之后，理由见那里。）
-    // 🔴 **2026-09-12 05:2x 站长「移除：周线EMA间距，周ADX，周+DI，周MACD强弱，日波动幅度，日EMA间距，日量比」**
-    //   ⇒ 这七根轴从两个轴集里删了，**副行里对应的段必须同批删**：axisLabelFor 取不到轴时会退回兜底标签、
-    //   段落照样渲染 ⇒ 副行冒出排序条上没有的「孤儿摘要」（本文件反复警告过的那个坑）。
-    //   后端行字段（weeklyEmaGap / weeklyAdx / weeklyDiPlus / weeklyMacdStrength / atrPct / emaGap / volRatio）
-    //   **照常产出、没删**（同「删榜不删字段」的既有做法）⇒ 复活 ＝ 轴集加回 + 这里的段加回，零后端改动、零 schema。
-    //   ⚠️ 默认副行第 4 段因此由「周线EMA间距」变成「月线RSI」；前面几段（日线RSI / 日成交额 / 日CVD强弱，按当前排序轴跳过一段）不变。
     if ("monthlyRsi" in item && sf !== "monthlyRsi") seg.push(`${axisLabelFor("monthlyRsi", "月线RSI")} ${fmtRsiVal(item.monthlyRsi)}`);
-    // 订单流（真实 taker 归边比）只有加密行有——tushare/Massive 无归边字段，股票系行上
-    // 没这个 key，数据驱动判断即可，无需 per-tab 配置。与 CVD强弱 背离时（阴线+订单流
-    // 正=借跌吸筹）正是这轴的价值所在。
-    // ⚠️ 2026-07-25 从硬编码「订单流」改成走 axisLabelFor：加密榜的轴现在叫「日订单流」，
-    // 硬编码会让副行与排序条对不上——正是 axisLabelFor 当初要消灭的那个坑（见其注释）。
     if ("takerStrength" in item && sf !== "takerStrength") seg.push(`${axisLabelFor("takerStrength", "订单流")} ${fmtCvdVal(item.takerStrength)}`);
-    // 距前高：只有加密行带（compute_{ashare,us}_daily 未算），数据驱动判断。
-    // （量比 / EMA间距 两段随 2026-09-12 05:2x 移除那七根轴一起删，见上方 🔴；后端字段仍在。）
+    // 距前高：现役行都不带这个 key（休眠段）。
     if ("highDist" in item && sf !== "highDist") seg.push(`${axisLabelFor("highDist", "距前高")} ${fmtGapVal(item.highDist)}`);
-    // ADX/+DI 两轴（2026-07-25 新增四根、2026-07-26 指令⑥ 砍成两根）：数据驱动判断，同上。
-    // ⚠️ −DI / DI差 两段已随轴一起删（后端行 payload 也不再发这两个字段）。
-    // ⚠️ 它们**排在这里 = 排在 SUB_AXES_MAX(4) 的截断线之后**，故当前默认不出现在副行里，
-    // 只在被选为排序轴时进值列展示（被裁掉的轴不丢功能，见 SUB_AXES_MAX 注释）。这是
-    // 刻意的：站长这次要的是"升降序里引入 ADX/DI"，不是重排副行——把 ADX 插到
-    // cvdStrength 之后确实能让它常驻副行，但代价是挤掉加密的「日订单流」/ 股票系的
-    // 「周线RSI」（副行只有 4 段额度）。要换成那种排法，把下面 adx 那行剪到 line 55 之后即可。
     if ("adx" in item && sf !== "adx") seg.push(`${axisLabelFor("adx", "ADX")} ${fmtDmiVal(item.adx)}`);
     if ("diPlus" in item && sf !== "diPlus") seg.push(`${axisLabelFor("diPlus", "+DI")} ${fmtDmiVal(item.diPlus)}`);
-    // 日MACD强弱（2026-07-26 指令⑤）：同样数据驱动、同样排在 SUB_AXES_MAX 截断线之后。
-    // ⚠️ key 是**不带前缀的** `macdStrength`（日线值一律不加前缀，同 adx/diSpread 的既有
-    // 做法），与下面周线那根的 `weeklyMacdStrength` 是两个不同字段，同一行里并存。
     if ("macdStrength" in item && sf !== "macdStrength") seg.push(`${axisLabelFor("macdStrength", "MACD强弱")} ${fmtGapVal(item.macdStrength)}`);
-    // 日涨跌幅（2026-08-12）：同样数据驱动、同样排在 SUB_AXES_MAX 截断线之后 ⇒ 默认不出现
-    // 在副行，只在被选为排序轴时进值列。**六个涨跌幅榜的行没有 changePercent 这个 key**
-    // （那边涨跌幅就是 `value`，由 changeSub 单独处理），所以这一行对它们天然不触发、
-    // 不会让同一个数字在副行里出现两遍。要让它常驻副行就把这行往上剪到 cvdStrength 之后，
-    // 代价是挤掉当前第 4 段（策略榜是「周线RSI」）。
+    // 涨跌幅榜的行不带 changePercent / weeklyChangePercent（那边涨跌幅就是 `value`，由 changeSub 处理）⇒ 不会重复显示。
     if ("changePercent" in item && sf !== "changePercent") seg.push(`${axisLabelFor("changePercent", "涨跌幅")} ${fmtGapVal(item.changePercent)}`);
-    // 周涨跌幅（2026-09-12 站长「排序里面新增一个周线收盘的涨跌幅。」）：同样数据驱动、**同样排在 SUB_AXES_MAX
-    // 截断线之后** ⇒ 默认副行零变化，只在被选为排序轴时进值列。**三个周期的涨跌幅榜行都没有这个 key**
-    // （周涨跌幅榜那边它就是 `value`、由 changeSub 处理）⇒ 天然不触发、同一个数字不会出现两遍。
     if ("weeklyChangePercent" in item && sf !== "weeklyChangePercent") seg.push(`${axisLabelFor("weeklyChangePercent", "周涨跌幅")} ${fmtGapVal(item.weeklyChangePercent)}`);
-    // （周ADX / 周+DI / 周MACD强弱 三段随 2026-09-12 05:2x 移除那七根轴一起删，见上方 🔴；后端字段仍在。）
-    // 日SAR多头根数（2026-09-04）：同样数据驱动、同样排在 SUB_AXES_MAX 截断线之后 ⇒ 默认
-    // 不出现在副行，只在被选为排序轴时进值列。**六个涨跌幅榜的行没有这个 key**，天然不触发。
-    // ⚠️ 顺带记一笔：`atrPct`（日波动幅度）至今**没有**对应的副行段落 —— 那是 2026-07-28
-    // 加它时留下的既有缺口，因为同样在截断线之后所以零视觉影响、一直没人发现。本行是照
-    // 「每根轴都该有一段」的意图补齐的，别把它当多余代码删掉。
     if ("sarBullBars" in item && sf !== "sarBullBars") seg.push(`${axisLabelFor("sarBullBars", "SAR多头根数")} ${fmtBarsVal(item.sarBullBars)}`);
-    // 周成交额 / 月成交额（2026-09-11 站长「排序里面没有周成交额。也要有周成交额。…补充一点，月成交额和TOP几也要有。」）：
-    // 同样数据驱动、**刻意排在 SUB_AXES_MAX 截断线之后** ⇒ 默认不出现在副行、副行观感零变化，只在被选为
-    // 排序轴时进值列（带全市场 TOP N 小标）。站长这次要的是「排序里有」，不是重排副行 —— 周成交额那段原先
-    // （2026-07-25 建、07-28 随轴删除后休眠）写在周线RSI 之后，照原位复活会把默认副行第 4 段「周线EMA间距」
-    // 挤成「周成交额」、全站策略榜一起变，所以挪到这里。要常驻副行就把这两行剪回周线RSI 之后。
-    // **三个涨跌幅榜的行没有这两个 key**（那边成交额就是 `volume`、由 volLabel 那段处理），天然不触发。
-    // ⚠️ 走各自的 fmtWeeklyVolVal / fmtMonthlyVolVal，别用 fmtVolVal（写死读日成交额的显示串）。
+    // 周 / 月成交额用各自的 fmt*VolVal；涨跌幅榜的行没有这两个 key（那边成交额就是 `volume`）。
     if ("weeklyVolume" in item && sf !== "weeklyVolume") seg.push(`${axisLabelFor("weeklyVolume", "周成交额")} ${fmtWeeklyVolVal(item)}`);
     if ("monthlyVolume" in item && sf !== "monthlyVolume") seg.push(`${axisLabelFor("monthlyVolume", "月成交额")} ${fmtMonthlyVolVal(item)}`);
-    // 振幅 只有免费行情榜（涨跌幅/成交额/振幅）的行有——策略榜行没这个 key，数据驱动跳过。
+    // 振幅：现役行都不带这个 key（休眠段）。
     if ("amplitude" in item && sf !== "amplitude") seg.push(`振幅 ${fmtAmpVal(item.amplitude)}`);
     const shown = seg.slice(0, SUB_AXES_MAX);
     if (extra) shown.push(extra);
     return shown.join(" | ");
 }
-// ⚠️ momentumStr 当前**无调用方**（休眠，保留供复活）：它服务已移除的 weeklyRsi 榜
-// （2026-07-22）。只依赖 axesSub，复活那个榜时直接可用。
-// 周线 RSI tab 的动能上下文（rsiPrev→rsiCurr 箭头），并入副行
+// 零消费者保留：周线 RSI 动能上下文（rsiPrev → rsiCurr 箭头），供复活 weeklyRsi 榜时作 axesSub 的 extra。
 function momentumStr(v) {
     if (v.rsiPrev == null || v.rsiCurr == null) return "";
     const a = v.rsiCurr > v.rsiPrev ? "↑" : v.rsiCurr < v.rsiPrev ? "↓" : "→";
     return `动能 ${v.rsiPrev.toFixed(2)} → ${v.rsiCurr.toFixed(2)} ${a}`;
 }
-// 涨跌幅榜副行：排「涨跌幅」轴（sf === "value"）时展示价格上下文，排其他轴时改展示
-// 「涨跌幅 +X%」——涨跌幅是本榜核心数字，值列被别的轴占用时不能让它彻底消失。
-// ⚠️ 价格上下文由调用方以 priceCtx(v) 传入，因为**两套资产口径不同**：
-//   · 加密 = K 线实体，「开 X → 收 Y」（$ 价、fmtMktPrice）——cryptoPriceCtx
-//   · A股  = close-to-close，「昨收/上周收/上月收 X → 收/本周收/本月收 Y」（¥ 价、fmtCnyPrice）——asharePriceCtx
-// **2026-07-29 站长「A股 也新增涨跌幅榜，基于收盘的」时把 priceCtx 参数加了回来**——正是
-// 上一版注释预言的那一步（"日后股票系涨跌幅榜复活时把它加回来、别直接套加密的措辞"）。
-// ⚠️ 判据 `sf === "value"` 与轴 key 绑死（见 cryptoChangeSorts 那处的警告），别改成 changePercent。
+// 涨跌幅榜副行：排涨跌幅轴（sf === "value"）时尾巴是价格上下文，排别的轴时改显示「涨跌幅 +X%」，核心数字不会消失。
+// 价格上下文由调用方传入：两资产口径不同（加密 K 线实体「开 → 收」、A股 close-to-close「前收 → 收」）。
 function changeSub(v, sf, volLabel, priceCtx) {
     const tail = sf === "value" ? priceCtx(v) : `涨跌幅 ${fmtGapVal(v.value)}`;
     return axesSub(v, sf, volLabel, tail);
 }
 // 加密：K 线实体口径「开 X → 收 Y」，美元价。
 const cryptoPriceCtx = v => `开 ${fmtMktPrice(v.open)} → 收 ${fmtMktPrice(v.close)}`;
-// A股：close-to-close，前收/现收标签随周期不同（昨收→收 / 上周收→本周收 / 上月收→本月收），
-// 人民币价。preClose/close 由后端 _change_row 提供（compute 层 round(_,2)，沪深报价精度即 0.01）。
+// A股（休眠件）：close-to-close，前收 / 现收标签随周期不同，人民币价；preClose / close 由后端行提供。
 const asharePriceCtx = (preLabel, curLabel) => v => `${preLabel} ${fmtCnyPrice(v.preClose)} → ${curLabel} ${fmtCnyPrice(v.close)}`;
 
-// 共享 sort-item 定义（key = 行字段名，全 tab 统一）
-// ⚠️ 2026-07-23：随 tab 显示名恢复直白命名（见 TAB_GROUPS 顶部注释），排序轴 label 同批
-// 恢复指标原名（2026-07-21 那轮「强度/资金强弱/买卖失衡/参与度/结构张开」的脱敏标签作废）。
-// **key 仍不动**（key 是行字段名，动了要连累后端 payload 和 getSortedItems）。
-// ⚠️ 2026-07-25：全站四个资产各只剩 1 个榜，**所有 live 轴都在下方「单策略榜专用轴」
-// 那一段**（带周期前缀的 AXIS_D_*）。这里只剩 AXIS_WRSI/AXIS_MRSI 两个仍在用；不带
-// 周期前缀的 AXIS_RSI/AXIS_CVD/AXIS_TAKER/AXIS_VOLRATIO/AXIS_EMAGAP/AXIS_HIGHDIST +
-// axisVol/axisChg 工厂随加密 15 个榜一并删除，复活多榜时从 git 捞。
+// === 轴常量 { key, label, format, hint?, badge? }：key ＝ 行字段名（改 key 要连带后端行字段）===
+// 策略榜行里日线字段不带前缀、周 / 月线字段带 weekly / monthly 前缀，同一行并存 —— 两个周期别共用 key（会互相覆盖）。
+// 标签一律写明周期（日 / 周 / 月）：策略榜的筛选横跨多个周期、行里同时装着各周期的值，光写「RSI」看不出是哪根 K。
 const AXIS_WRSI = { key: "weeklyRsi", label: "周线RSI", format: v => fmtRsiVal(v.weeklyRsi) };
-// 月线RSI（2026-07-24 加，挂三个股票系单策略榜）：那榜的行同时锚定三个周期，日线 RSI
-// 看"谁启动最热"、周线看"大趋势多强"、月线看"最大级别多强"，三个都给才对得上语义。
-// 需 ≥16 根已收盘月 K，次新股 null 沉底。
 const AXIS_MRSI = { key: "monthlyRsi", label: "月线RSI", format: v => fmtRsiVal(v.monthlyRsi) };
-
-// === 股票系单策略榜专用轴：**每个轴都写明周期** ===
-// ⚠️ 这不是啰嗦：那张表的筛选条件横跨月/周/日三个周期，而**行里的值全是日线的**，
-// 光写「成交额」「RSI」根本看不出是哪根 K —— 2026-07-24 站长直接问了「当前A股的成交额
-// 升降序是基于日线还是什么周期的？」，说明这个歧义是真会绊人的。既然同一条排序条上
-// 已经并排站着「周线RSI」「月线RSI」，日线那几个轴就必须自报周期，否则对比时更糊涂。
-// key 全部不动（key 是行字段名，动了要连累后端 payload 与 getSortedItems）。
-// 语义提醒：`volume` 是**最新已收盘那一个交易日的单日成交额**（不是周/月累计、不是
-// 均值），A股 为人民币元、美股/ETF 为 USD，格式化由后端 volumeFormatted 定。
 const AXIS_D_RSI = { key: "rsi", label: "日线RSI", format: v => fmtRsiVal(v.rsi) };
-// `badge`（2026-09-10）：值列数字左侧的全市场名次「TOP N」，见 volRankBadgeFor（周 / 月成交额两根轴 2026-09-11 同款）。
+// 日成交额：最新已收盘那根日 K 的单日成交额（不是累计、不是均值）；badge ＝ 全市场名次「TOP N」，见 volRankBadgeFor。
 const AXIS_D_VOL = { key: "volume", label: "日成交额", format: v => fmtVolVal(v), badge: volRankBadge };
-// 日涨跌幅（2026-08-12 站长「所有升降序也新增一个涨幅升降序」）：最新已收盘那根日 K 的
-// 涨跌幅（加轴时四资产同批，现存加密＋A股 两个）。挂在全部策略榜上（加密各榜 + A股 那个）；六个涨跌幅榜刻意不挂，见下。
-// ⚠️⚠️ **六个涨跌幅榜刻意没加这根轴**：它们的首轴 `value` 本身就是涨跌幅（标签「日/周/月
-// 涨跌幅」），再挂一根就是同一个量出现两次。且那是全市场约 1.7 万行 × 6 个榜，每加一根轴
-// 都要乘行数进付费 KV —— 2026-07-30 站长「只对齐九个策略榜」定的就是这条边界，别越过。
-// ⚠️⚠️ **口径两套，是既有的刻意差异，别"统一"**：加密 ＝ K 线实体 (收−开)/开（永续 7×24
-// 不停盘）；A股 ＝ 相对上一根收盘、含集合竞价跳空（已移除的美股/ETF 当年也走这一套）。
-// 涨跌幅榜历来就这么分。
-// ⚠️ **key 是 `changePercent` 不是 `value`** —— 策略榜的 `value` 是日成交额（加密）/日线RSI
-// （股票系），那才是默认排序量。**连带：按本轴排序时值列不上红绿**（getColorClass 只认
-// CHANGE_PCT_TABS 里的榜 ＋ `sortField === "value"`，见那两处警告），靠 fmtGapVal 的正负号
-// 区分。这是知情取舍：那个 Set 同时管着"上色／不挂命中徽标／空状态语义"三件事，为了上色
-// 去动它风险不对称。
-// ⚠️ hint 只写**口径**，不写"涨幅小的后来涨得多"这类策略断言 —— 同 AXIS_D_ATR 那条纪律
-// （轴负责披露事实，不替用户下判断）。
+// 日涨跌幅：只挂策略榜；涨跌幅榜刻意不挂（首轴 `value` 本身就是涨跌幅，挂了就是同一个量出现两次）。
+// ⚠️ key 是 `changePercent` 不是 `value`（策略榜的 `value` 是日成交额）⇒ 按它排序时值列不上红绿（上色要求 tab 在
+//    CHANGE_PCT_TABS 且 `sortField === "value"`），靠正负号区分，是知情取舍。
+// 两资产口径不同是刻意的（加密 K 线实体、A股 相对前收含跳空），别"统一"。hint 只写口径、不写策略断言。
 const AXIS_D_CHGPCT = { key: "changePercent", label: "日涨跌幅", format: v => fmtGapVal(v.changePercent),
                         hint: "最新已收盘那根日K的涨跌幅。加密＝K线实体(收−开)/开；A股＝相对上一根收盘、含跳空" };
-// ⚠️⚠️ 日CVD强弱 的买卖拆分是**按 K 线形态推断的**（阳线实体归买、影线对半；对齐
-// TradingView 上那个 CVD 指标），**不是真实成交归边**。2026-07-28 那轮排序轴审计实测：
-// 它与「日线RSI」横截面秩相关 **+0.790 且 86/86 天同号**，与真实归边的「日订单流」只有
-// **+0.206**；用价格动能四变量解释它 R²=0.668，用真实归边解释它只有 R²=0.060。
-// ⇒ **它名为资金流、实为价格动能。想看真钱流向请用「日订单流」。**
-// 这个结论**完全不依赖前瞻收益**（纯横截面相关），所以不受行情/样本/幸存者偏差影响。
-// ⚠️ 但**这不是删它的理由**（站长 2026-07-28 明确「不要删」，且它与 日ADX −0.052 /
-// 日量比 −0.036 / 日成交额 +0.128 确实正交）；公式也**不改** —— 五条改造路线（换真实
-// k[9]／正交残差／改 period／改归一化／原样）全试过，无一在同日公平对照下更优，
-// 且换成 k[9] 会让它与 calc_taker_strength 变成逐字相同的函数＝等价于删轴。
-// 详见 CLAUDE.md「2026-07-28 全部排序轴的量化审计」。
+// 日CVD强弱：买卖量按 K 线形态推断（对齐 TV 上那个 CVD 指标），不是真实成交归边，横截面上更接近价格动能；
+// 真钱流向看「日订单流」。别删、也别改公式（换成 k[9] 就与订单流逐字相同，等于删轴）。
 const AXIS_D_CVD = { key: "cvdStrength", label: "日CVD强弱", format: v => fmtCvdVal(v.cvdStrength),
                      hint: "按K线形态推断的买卖失衡，不是真实成交归边；想看真钱流向用「日订单流」" };
-// 🔴 2026-09-12 05:2x 站长「移除：周线EMA间距，周ADX，周+DI，周MACD强弱，日波动幅度，日EMA间距，日量比」⇒ **本轴退回零消费者的保留常量**（后端行字段照常发、没删）；复活 ＝ 轴集里加回 + axesSub 对应段加回，零后端改动。
+// 日量比 ＝ 当期成交量 / 前 5 期均量；日EMA间距 ＝ (EMA9 − EMA21)/EMA21 × 100。两轴已移除、后端行字段照发 ⇒
+// 零消费者保留；复活 ＝ 加回轴集 + axesSub 对应段（下文其余零消费者轴常量同理）。
 const AXIS_D_VOLRATIO = { key: "volRatio", label: "日量比", format: v => fmtRatioVal(v.volRatio) };
-// 🔴 2026-09-12 05:2x 站长「移除：周线EMA间距，周ADX，周+DI，周MACD强弱，日波动幅度，日EMA间距，日量比」⇒ **本轴退回零消费者的保留常量**（后端行字段照常发、没删）；复活 ＝ 轴集里加回 + axesSub 对应段加回，零后端改动。
 const AXIS_D_EMAGAP = { key: "emaGap", label: "日EMA间距", format: v => fmtGapVal(v.emaGap) };
-// 日订单流 = 真实 taker 归边比（币安 K 线自带 k[9]，零额外抓取）。**加密独有**——
-// tushare / Massive 的日线都没有归边字段，股票系那三个榜物理上挂不了这一轴。
-// 它与 CVD强弱 是**互为对照**的两根（一个真实归边、一个形态推断）。
-// ⚠️ 站内曾把「两者背离 = Wyckoff effort-vs-result（阴线+订单流正=借跌吸筹）」当成设计
-// 意图。2026-07-28 审计直接测了这个 2×2，**没有得到支持**（两个"背离"象限并不系统性更好，
-// "双确认"象限反而最差）。⇒ 文案里可以说"两根互为对照"，**别说"背离是信号"**。
-// ⚠️⚠️ **显示的绝对数字会稳定误导**：全市场只有 **7.4%** 的标的这个值为正、中位在
-// **−0.022** 附近 —— 那是**常态**不是"资金在流出"。排序本身只看相对位置、不受影响，
-// 所以只加 hint 说明，**不要动公式**。（榜内比例高些：inDEE 25.4%、周线榜 14.9%。）
+// 日订单流：币安 K 线自带的真实 taker 归边（k[9]），加密独有（股票系日线没有归边字段）。与 CVD强弱 互为对照，
+// 但别在文案里说"两者背离是信号"（审计不支持）。绝对值常态偏负（hint 已说明）；排序只看相对位置，别动公式。
 const AXIS_D_TAKER = { key: "takerStrength", label: "日订单流", format: v => fmtCvdVal(v.takerStrength),
                        hint: "真实成交归边（币安taker数据）。全市场只有约7%为正、常态在−0.02附近，负值是常态不是异常" };
 
-// === 方向性运动系统 ADX / DMI（2026-07-25 站长：「在升降序里面引入 ADX 以及 DI 逻辑」）===
-// 四个资产**同批加同一组四根轴**（后端 calc_adx_dmi 一份实现、四条管道共用，对齐
-// TradingView `ta.dmi(14, 14)`）。**纯排序轴、不参与任何筛选** —— 各榜命中集合与加之前
-// 完全一致，这次改动只是多了几种看同一批标的的方式。
-// ⚠️⚠️ **2026-07-26 站长指令⑥：四根砍成两根，只留 日ADX + 日+DI**（周线端同样只留
-// 周ADX + 周+DI）。**这条推翻了本段原来那句"四根各自回答不同问题、别只留一根"的告诫**
-// ——那是我 2026-07-25 写的建议，站长看过之后明确要求砍。以站长的决定为准，别照着旧
-// 告诫（或旧 commit 里的注释）把它们加回来。
-// ⚠️ 砍掉的代价**比原来写的小得多**（2026-07-28 审计实测修正）：原注释说"DI差 是唯一带符号、
-// 单根即可排多空的，没了只能间接看"——但 **`rho(日+DI, DI差) = +0.930、86/86 天同号**，
-// 正交化后 DI差 的增量分辨力只剩 +0.013 且区间含 0 ⇒ **降序那一侧几乎没有损失，砍对了**。
-// 唯一有实质损失的是**升序端**：按 +DI 升序取 BOTTOM20，其中"其实是空方占优"的平均只有
-// 2.7%（某天到过 50%）；而降序 TOP20 里"其实空方占优"的只有 0.3%。**别据此把它加回来。**
-// **复活极便宜**：前端把两个 AXIS_* 常量加回来（定义见本次删除 commit 的父提交）、后端把
-// build 层四个行 payload 里的 `diMinus`/`diSpread` 两行加回来即可 —— **compute 层一直
-// 照常在算这两个值**（`daily_lookup` 与各 payload dict 里都还在，属保留字段）。
-//
-// 保留的两根各自回答什么：
-//   · 日ADX  —— 趋势"有多强"，**不含方向**（DX 只取 |+DI−−DI| 的绝对值）。ADX 45 的
-//     暴跌和 ADX 45 的主升浪同分。经验档：<20 震荡 / 20-25 萌芽 / >25 趋势确立 /
-//     >40 强趋势（也可能是过热末段）。**降序=最有趋势的，升序=最横盘的**，升序不是废数据。
-//     ⚠️⚠️ **但"升序＝蓄势待突破"这个机制说法是错的**（2026-07-28 审计实测推翻，原注释
-//     写的就是它）：低 ADX 那批之后的**绝对波动更小不是更大**（mean|fwd10| 0.1051
-//     vs >40 档 0.1388；跌超 10% 的概率 21.3% vs 31.0%）—— 它不是在蓄势，只是在那段
-//     跌市里跌得少。升序那头的正确读法是「**最安静的**」，不是「**要爆发的**」。
-//     ⚠️ 另一处作用域：「ADX 不含方向、与动量正交」**只在全市场成立**；榜内会退化成动量
-//     代理（inDEE 内 adx~diPlus 从全市场 −0.089 变成 **+0.526**）。
-//   · 日+DI —— 多方的方向压力（0-100）。配 ADX 一起读：ADX 高且 +DI 高＝多头在推。
-// 标签同样带「日」前缀：加密日线族三个榜的行里装的全是日线值（榜的筛选条件却横跨月/周/日），
-// 这是 2026-07-24 站长问过一次的歧义，新轴一并遵守。
+// === ADX / DMI（后端 calc_adx_dmi，对齐 TV `ta.dmi(14, 14)`）：纯排序轴，不参与任何筛选 ===
+// 只留 日ADX + 日+DI（−DI / DI差 已砍，别自行加回；后端仍在算 diMinus / diSpread，复活只需加行字段与轴）。
+// ADX 只量趋势强度、不含方向：降序＝最有趋势，升序＝最安静（不是"蓄势待突破"，审计已推翻这个读法）。+DI ＝ 多方方向压力。
 const AXIS_D_ADX = { key: "adx", label: "日ADX", format: v => fmtDmiVal(v.adx) };
 const AXIS_D_DIPLUS = { key: "diPlus", label: "日+DI", format: v => fmtDmiVal(v.diPlus) };
-// 两个资产族共用同一个数组常量——避免"两份几乎一样的列表漂移"这个本项目的老坑。
+// 两个资产族共用同一个数组常量，别复制成两份近亲列表。
 const dmiSorts = [AXIS_D_ADX, AXIS_D_DIPLUS];
 
-// === 日MACD强弱（2026-07-26 站长指令⑤，四个资产同批加）===
-// 值 = **(PPO线 + 3×PPO柱)/4** = (4·MACD − 3·Signal)/(4·EMA26) × 100，单位是"占慢线的
-// 百分比"。PPO线 = MACD/EMA26（趋势位置：MACD 在零轴上方多少）、PPO柱 =(MACD−Signal)/EMA26
-// （动能加速：MACD 相对自己的信号线跑出多少）。
-// ⚠️⚠️ **它不是原始 MACD**：原始 MACD 带价格单位，日线上与价格的相关性实测 **r=+0.979**，
-// 直接排序 TOP5 就是全市场价格最高的五个（BTC/ETH/YFI/ZEC/XMR），而它们归一化后只有
-// +0.65%~+2.57%。与全站 CVD 轴一律用归一化 `cvdStrength` 是同一条纪律。
-// ⚠️⚠️ **权重是 3，与下面周MACD强弱的 5 不同，这不是笔误**：日线 bar 更吵，权重到 4× 时
-// 降序 TOP 就开始被"暴跌途中反弹"占据（加密 SIREN 柱 +19.95% 而线 −44.77%；美股 4× 时
-// TOP8 有 3/8、5× 时 6/8 是仙股反弹）。完整取值规则与三个市场的实测数据见后端
-// `calc_macd_strength` 上方的常量注释块 —— **改这根轴前先读那里**。
-// ⚠️ 与「日EMA间距」轴相关性偏高——这是为保住 TOP 干净付的价，已知并接受。
-//   口径要分清（2026-07-28 审计补测）：旧记的 **+0.801(加密) / +0.728(美股) 是单日 Pearson**；
-//   **横截面秩相关 86 日均 +0.870（86/86 天同号）、inDEE 榜内 +0.928、TOP5 重叠 89.8%**。
-//   最直白的一句：**它与"过去 14 日涨幅"秩相关 +0.895** ⇒ 跨标的排序上约等于一根 14 日动能排名。
-// ⚠️ **即便如此也不要降级它**（审计结论）：RSI 在 inDEE 榜内已经饱和（成员 100% >50、
-//   中位落在全市场第 94 百分位、几乎排不动）⇒ **它是加密日线榜上唯一还能读出"有多超伸"
-//   的轴**。按冗余度砍它，砍掉的正是 RSI 本该干却干不了的活。
-// ⚠️⚠️ **2026-07-30 轴数对齐推翻了这条审计结论的一半**：原文写的是「它冗余的对象
-//   `emaGap` **不在加密排序条上**（后端刻意不发那两个榜），加密页面上并不存在可见重复」
-//   —— 对齐时给六个加密策略榜都补上了「日EMA间距」，所以**现在全站九条策略排序条上
-//   「日EMA间距」与「日MACD强弱」全都并排站着**（此前只有股票系三条如此）。
-//   这是站长「以最多的为准」的知情结果：**冗余可见 ≠ 应该砍**（砍任何一根都会让某类读法
-//   消失，而对齐的收益是各榜口径一致）。要重新评估就得先在股票系数据上重测 ——
-//   那个 +0.870/+0.928 是**加密面板**测的，股票系至今零实测，属推断。
-// ⚠️ 与**周MACD强弱**几乎正交（设计意图成立：日线 + 而周线 − ＝「周线崩塌中的日线反弹」）。
-//   ~~r=−0.080~~ **那个具体数字已删**：它是某一天的快照，逐日范围 −0.236 ~ +0.382，
-//   引用单日数字会误导。只保留"几乎正交"这个结论。
-// 需 ≥35 根已收盘日 K（26+9），不足 null 沉底（加密实测 523/528 有值）。
+// === 日MACD强弱 ＝ (PPO线 + 3×PPO柱)/4 ＝ (4·MACD − 3·Signal)/(4·EMA26) × 100（占慢线的百分比）===
+// ⚠️ 不是原始 MACD：原始值带价格单位，跨标的排序≈排价格（同 CVD 轴一律归一化）。权重 3 与周线版的 5 不同也不是笔误
+//    （日线更吵）—— 取值依据见后端 calc_macd_strength 上方常量块，改前先读。
+// 与近期涨幅动能高度相关，已知并接受，别拿冗余度砍它。
 const AXIS_D_MACD = { key: "macdStrength", label: "日MACD强弱",
                       format: v => fmtGapVal(v.macdStrength) };
 
-// === 日波动幅度（2026-07-28 新增，四个资产同批加）===
-// 值 = **ATR(14) / 最新已收盘价 × 100** ——"这东西平均一天晃价格的百分之几"。
-// ⚠️⚠️⚠️ **这是全站唯一一根【风险披露】轴，不是选股轴。desc / 任何对外文案都绝不能写
-// "低波动会跑赢"。** 2026-07-28 那轮排序轴审计实测：它那点"预测力"全部来自「跌市里低波动
-// 少跌」——每日区分力与当日大盘收益相关 +0.536，跌日 −0.131 而涨日只有 +0.007，前后半段
-// 还衰减 4 倍 ⇒ 是 beta 不是 alpha，换一段涨市大概率反过来。
-// **为什么要加它**：加密那 10 根轴全落在「趋势—动能—规模」一族（相关矩阵实测有效维度只有
-// 约 5.5 个，第一主轴就占 34.7%），**完全没有"风险"这个坐标**；而榜内同一天的波动率
-// p5→p95 差约 4 倍 —— 那决定仓位和止损宽度，不决定谁涨。
-// 升序 = 同样上榜里最好拿的（仓位大的人用）；降序 = 最投机、搏弹性。**两端语义都干净。**
-// ⚠️ 排的是 atrPct 不是 ATR：ATR 带价格量纲，跨标的直接排 ≈ 排价格（同 CVD 轴那条纪律）。
-// ⚠️ 选 ATR 口径而不是"年化已实现波动率"：后者的年化因子加密 √365 / 股票 √252，会变成
-// **同名轴两套公式**（本项目明令警惕的坑）；atrPct 是纯比值，四个资产同一个公式。
-// 格式化复用 `fmtAmpVal`（非负两位小数 + %）——**别用 fmtGapVal**（那个带符号，而 ATR 恒非负）。
-// 需 ≥15 根已收盘日 K（比 日ADX 的 28 根宽 ⇒ 不新增覆盖损失）。
-// 🔴 2026-09-12 05:2x 站长「移除：周线EMA间距，周ADX，周+DI，周MACD强弱，日波动幅度，日EMA间距，日量比」⇒ **本轴退回零消费者的保留常量**（后端行字段照常发、没删）；复活 ＝ 轴集里加回 + axesSub 对应段加回，零后端改动。
+// === 日波动幅度 ＝ ATR(14) / 最新已收盘价 × 100（零消费者保留，复活方式同上）===
+// ⚠️ 风险披露轴、不是选股轴：文案里绝不写"低波动会跑赢"（审计显示那只是跌市 beta）。排 atrPct 不排 ATR（ATR 带价格量纲）；
+//    恒非负 ⇒ 用 fmtAmpVal、别用带符号的 fmtGapVal。
 const AXIS_D_ATR = { key: "atrPct", label: "日波动幅度", format: v => fmtAmpVal(v.atrPct),
                      hint: "平均每天晃价格的百分之几（ATR14）。用来判断仓位和止损宽度，不是用来判断谁会涨" };
 
-// === 日SAR多头根数（2026-09-04 站长「想看日线SAR翻多后的新鲜度」，两个资产同批加）===
-// 值 = **这轮日线 SAR 多头已经跑了几根已收盘 K 线，翻多那一根本身记 1**。
-// SAR 空头 ⇒ null（"多头的根数"在空头段没有定义）⇒ 升降序两个方向都沉底 ⇒
-// **升序头部＝刚翻多（最新鲜）、降序头部＝这轮多头跑得最久**，两端都有语义。
-//
-// ⚠️⚠️ **为什么值得加**：2026-07-28 那轮排序轴审计实测，现有 17 根轴的相关矩阵**有效维度
-// 只有约 5.5 个、第一主轴就占 34.7%**，全部落在「趋势—动能—规模—风险」这四类**此刻的
-// 横截面读数**上 —— **没有任何一根回答"这个状态持续了多久"**。这是站内第一个**时间/
-// 状态年龄**坐标，按构造就近乎正交，不是又一个 EMA 间距的变体。
-// 它还把每张状态型榜变成择时榜：以前只有 `dailyEmaSarFlip` 那一张纯事件榜（＝本轴恒 ==1；
-// **它 2026-09-09 已与 `dailyEmaSarSecond` 合并成 `dailyEmaSarFirstTwo`，本轴在那个榜上恒 ∈ {1,2}**；
-// ✏️ 2026-09-11 14:xx 那张与 `dailySarFirstBar` 同批改「前四根」⇒ 两榜上都恒 ∈ {1,2,3,4}），
-// 现在任何一张榜都能问"这批里哪些是日线最近三根才刚翻多的"。
-//
-// ⚠️⚠️ **这是全站第一根整数轴，平局是常态不是例外**（另 17 根都是连续浮点，两个标的撞到
-// 小数点后 6 位几乎不可能，所以站内至今没定过平局规则）。实测量级：全市场 525 个合约里
-// 「值==1」一天大约个位数到十几个（2026-07-30 那天 5 个、08-11 那天 14 个），过了各榜筛选
-// 之后通常只剩 0–5 行 ⇒ 不会糊。**平局的处理见 `getSortedItems` 里那条显式 tie-break。**
-//
-// ⚠️ 标签写「根数」不写「新鲜度」：数字越大越**不**新鲜，标签叫新鲜度会被反着读。
-// "新鲜度"这层意思放进 hint。
+// === 日SAR多头根数：这轮日线 SAR 多头已跑了几根已收盘 K（翻多那根记 1）；SAR 空头为 null，升降序都沉底 ===
+// 升序头部＝刚翻多，降序头部＝这轮多头跑得最久。标签写「根数」不写「新鲜度」（数字越大越不新鲜，会被反着读）。
+// ⚠️ 全站唯一的整数轴，平局是常态 ⇒ getSortedItems 里有显式 tie-break（平局恒按 value 降序、不跟随升降序），别当无用代码删。
 const AXIS_D_SARBARS = { key: "sarBullBars", label: "日SAR多头根数",
                          format: v => fmtBarsVal(v.sarBullBars),
                          hint: "日线SAR翻多至今第几根K线（翻多那根算第1根）。升序＝刚翻多最新鲜，降序＝这轮多头跑最久；SAR 空头显示「—」" };
 
-// === 周线版 ADX / DMI（2026-07-25 晚站长指令⑩「加周线级别就行」）===
-// 与上面那组**同一套算法、同一个后端 calc_adx_dmi**（对齐 TV `ta.dmi(14,14)`），只是喂进去
-// 的是最新已收盘**周 K**。字段名一律带 `weekly` 前缀 —— **绝不能与日线那组共用 key**，
-// 同一行里两组值并存，key 撞车会互相覆盖。
-// 为什么值得单开一组：日线ADX 回答"最近这两三周方向坚不坚决"，周线ADX 回答"大级别趋势
-// 成没成形"，两者**经常背离**——日线刚张开但周线ADX 只有 12，就是震荡市里的一次反弹。
-// 实测反例：BTC 周线 ADX 31.2 但 −DI 27.4 > +DI 13.1（周线下跌趋势已确立）。
-// 需 ≥28 根已收盘周 K（加密实测 484/528 有值，次新标的 null 沉底）。
-// ⚠️ 2026-07-26 指令⑥：与日线端同批砍，**只留 周ADX + 周+DI**（周−DI / 周DI差 已移除，
-// 复活办法与代价见上面日线那组的注释块）。
-// 🔴 2026-09-12 05:2x 站长「移除：周线EMA间距，周ADX，周+DI，周MACD强弱，日波动幅度，日EMA间距，日量比」⇒ **本轴退回零消费者的保留常量**（后端行字段照常发、没删）；复活 ＝ 轴集里加回 + axesSub 对应段加回，零后端改动。
+// === 周ADX / 周+DI（同一个 calc_adx_dmi，喂最新已收盘周 K）：零消费者保留，复活时连同 weeklyDmiSorts 加回轴集 ===
 const AXIS_W_ADX = { key: "weeklyAdx", label: "周ADX", format: v => fmtDmiVal(v.weeklyAdx) };
 const AXIS_W_DIPLUS = { key: "weeklyDiPlus", label: "周+DI", format: v => fmtDmiVal(v.weeklyDiPlus) };
-// 🔴 2026-09-12 05:2x 起**零消费者**（周ADX / 周+DI 两根轴被站长移除）：常量保留，复活那两根轴时一并回来。
 const weeklyDmiSorts = [AXIS_W_ADX, AXIS_W_DIPLUS];
 
-// === 周MACD强弱（2026-07-26 站长指令④，四个资产同批加）===
-// 值 = **(PPO线 + 5×PPO柱)/6** = (6·MACD − 5·Signal)/(6·EMA26) × 100，单位是"占慢线的
-// 百分比"。（⚠️ 2026-07-26 修：这里原先写的是 `PPO线 + PPO柱 = (2·MACD − Signal)/EMA26`
-// ——那是**被冗余度实测否掉的等权第一稿**，从未上线，注释漏改了。以本行为准。）
-// ⚠️⚠️ **它不是原始 MACD**：原始 MACD 带价格单位，跨标的排序≈排价格（实测按原始值排
-// TOP1 是 BTCDOM，只因它价格 5547，归一化后其实只有 +3.70%）。这与全站 CVD 轴一律用
-// 归一化 `cvdStrength` 是同一条纪律。完整设计理由、四象限语义、5 这个权重的实测依据，
-// 见后端 `calc_macd_strength` 的 docstring 与其上方常量块 —— **改这根轴前先读那里**。
-// 读法：>0 表示 MACD 在零轴上方（周线趋势向上），数值越大＝位置越高且动能还在加速；
-// <0 反之。**升序那头不是废数据**：最负的一端是"下跌且还在加速"，回避/做空名单直接可用。
-// 需 ≥35 根已收盘周 K（26+9），不足 null 沉底（加密实测 469/528 有值）。
-// 用 fmtGapVal（带符号两位小数 + %）：它确实是个百分比量，与 EMA间距 同类，
-// 刻意不复用 fmtDmiVal（那个不带 % —— ADX/DI 是 0-100 的无量纲读数，不是百分比）。
-// 🔴 2026-09-12 05:2x 站长「移除：周线EMA间距，周ADX，周+DI，周MACD强弱，日波动幅度，日EMA间距，日量比」⇒ **本轴退回零消费者的保留常量**（后端行字段照常发、没删）；复活 ＝ 轴集里加回 + axesSub 对应段加回，零后端改动。
+// === 周MACD强弱 ＝ (PPO线 + 5×PPO柱)/6（权重依据见后端 calc_macd_strength）：零消费者保留，复活方式同上 ===
+// 百分比量 ⇒ 用 fmtGapVal（别用不带 % 的 fmtDmiVal）。
 const AXIS_W_MACD = { key: "weeklyMacdStrength", label: "周MACD强弱",
                       format: v => fmtGapVal(v.weeklyMacdStrength) };
 
-// === 周成交额 / 月成交额 / 周线EMA间距 ===
-// 周成交额与周线EMA间距是 2026-07-25 晚指令⑪（「也要有周成交额，周RSI等数据」）为 `weeklyExpansionDailyCvd`
-// 建的，那个榜 2026-07-26 晚被移除；周线EMA间距**照常保留**——2026-07-30 轴数对齐后它同时在加密与 A股
-// 两个轴集里（行构造分别是后端唯一的 `_strategy_row` 与 A股 那份，`_wk_expansion_row` 已并入前者）。
-//
-// ⚠️⚠️ **`AXIS_W_VOL`（周成交额）2026-07-28 移除、2026-09-11 站长明确要回来**：
-//   站长「排序里面没有周成交额。也要有周成交额。并且有全市场TOP几显示。补充一点，月成交额和TOP几也要有。」
-//   ⇒ 周成交额复活、**月成交额是新轴**（站内此前从没有过），两根都挂全市场名次小标（见 volRankBadgeFor）。
-//   07-28 砍它的理由是真的（**与「日成交额」横截面秩相关 +0.826、86/86 天同号**，两根大体回答同一个问题
-//   "这合约装不装得下我的仓位"），这次是站长知情要回来 —— **别再拿那个 +0.826 去删它**；
-//   月成交额与日成交额的冗余度大概率更高（没单独测），同理别拿冗余度去砍。
-// 口径（两根一样，只差周期）：**最新已收盘那一根周 / 月 K 的成交额**（加密 USDT，后端缓存字段 closedVolume；
-//   A股 元），与周 / 月涨跌幅榜同 symbol 那行的「周 / 月成交额」是同一个数 —— **不是近 7 / 30 天滚动累计、
-//   也不是日均**；周线一周只换一次、月线一个月只换一次（hint 写给用户了）。
-// 位置：各自插在**周线块 / 月线块的首位**（与日线块首位是「日成交额」对称，每个周期块都以成交额打头，
-//   找起来一眼对得上）。代价是周线块、月线块既有各轴往后挪一位 —— 与 09-04 把「日SAR多头根数」追加在日线块
-//   末尾时让周/月线块整体后挪一位是同一个量级。
-// ⚠️ 加这两根轴**前后端必须一起做**：`axesSub` 是数据驱动的（`"weeklyVolume" in item` 就渲染一段），
-//   只加轴 = 永远全 null 的幽灵轴，只加字段 = 副行留下没有对应 chip 的孤儿摘要。
-// ⚠️ 显示串走 fmtWeeklyVolVal / fmtMonthlyVolVal（各读各的 *VolumeFormatted），**别写 fmtVolVal**。
+// === 周 / 月成交额：最新已收盘那一根周 / 月 K 的成交额（与周 / 月涨跌幅榜同 symbol 那行的 volume 同一个数），不是滚动累计 ===
+// 各挂本周期的全市场名次徽标。与日成交额高度相关是已知的，别拿冗余度删它们。
 const AXIS_W_VOL = { key: "weeklyVolume", label: "周成交额", format: v => fmtWeeklyVolVal(v), badge: weeklyVolRankBadge,
                      hint: "最新已收盘那一根周K的成交额（不是近7天滚动累计），一周只更新一次" };
 const AXIS_M_VOL = { key: "monthlyVolume", label: "月成交额", format: v => fmtMonthlyVolVal(v), badge: monthlyVolRankBadge,
                      hint: "最新已收盘那一根月K的成交额（不是近30天滚动累计），一个月只更新一次" };
-// === 周涨跌幅（2026-09-12 09:xx UTC 站长「排序里面新增一个周线收盘的涨跌幅。」）===
-// 口径：**最新已收盘那一根周 K 的涨跌幅**，与「周涨跌幅」榜同 symbol 那行的数字**是同一个数**
-// （后端行字段 `weeklyChangePercent` 直接取周线缓存里现成的 `changePercent`，同一份 compute 产出、
-// 绝不另算一遍 —— 这是全站防"两份实现漂移"的既有纪律，也是一条免费对账点：dry run 实测 1091 行 0 处不符）。
-// ⚠️⚠️ **两套口径是既有的刻意差异，别"统一"**（同 AXIS_D_CHGPCT 那段）：加密 ＝ K 线实体 (收−开)/开；
-//   A股 ＝ 相对上一根收盘、含跳空。
-// ⚠️ 站长没点资产 ⇒ **两资产同批加**（`cryptoStrategySorts` + `singleStrategySorts`）；A股 侧周线表本来就有
-//   `changePercent`（周线重采样时算的）⇒ 有值、不是幽灵轴，与「日订单流」那种数据源硬边界完全两回事。
-// ⚠️⚠️ **六个涨跌幅榜刻意不挂这根**：周涨跌幅榜的首轴 `value` 本身就是它，再挂一根就是同一个量出现两次；
-//   边界同 AXIS_D_CHGPCT（2026-07-30 定的"只对齐全部策略榜"）。策略榜行才带 `weeklyChangePercent` 这个 key。
-// ⚠️ 位置：周线块里排在「周成交额」之后、「周线RSI」之前 —— 与日线块 成交额→涨跌幅→RSI 的次序对称。
-// ⚠️ hint 只写口径，不写"涨得多的下周还涨"这类策略断言（同 AXIS_D_CHGPCT / AXIS_D_ATR 的纪律）。
+// 周涨跌幅：最新已收盘那一根周 K 的涨跌幅，与周涨跌幅榜同 symbol 那行的 `value` 是同一个数（后端取同一份缓存字段、别另算）。
+// 其余同 AXIS_D_CHGPCT：只挂策略榜、两资产口径不同别统一、hint 只写口径。
 const AXIS_W_CHGPCT = { key: "weeklyChangePercent", label: "周涨跌幅", format: v => fmtGapVal(v.weeklyChangePercent),
                         hint: "最新已收盘那一根周K的涨跌幅，一周只更新一次。加密＝K线实体(收−开)/开；A股＝相对上周收盘" };
-// 周线EMA间距 =（周线EMA9 − 周线EMA21）/周线EMA21 ×100。（建轴时的语义依据：当时那个榜的
-// 筛选条件就是周线两线扩张；那个榜已移除，此轴现随轴数对齐成为全部策略榜的通用周线轴。）
-// ⚠️ 不保证为正 ⇒ 间距可以是负的。两端是什么形态：降序＝周线结构已经跑开的；
-// 升序＝EMA9 还在 EMA21 下方或刚要交叉的最早期一档。
-// ⚠️⚠️ **别断言哪一端"更强"或"更该买"**（2026-07-28 审计）：这根轴在那 8 个月里的"正向"
-// 几乎全是跌市 beta —— 每日分辨力与当日大盘收益相关 **−0.823**，**21 个上涨日里 0 天为正**。
-// 换一段涨市大概率反过来。只描述两端是什么形态，不要写哪端会赢。
-// （本常量 2026-07-25 晚随「移除加密所有TAB」删过一次，现按同名同义复活。）
-// 🔴 2026-09-12 05:2x 站长「移除：周线EMA间距，周ADX，周+DI，周MACD强弱，日波动幅度，日EMA间距，日量比」⇒ **本轴退回零消费者的保留常量**（后端行字段照常发、没删）；复活 ＝ 轴集里加回 + axesSub 对应段加回，零后端改动。
+// 周线EMA间距 ＝ (周EMA9 − 周EMA21)/周EMA21 × 100，可正可负；零消费者保留，复活方式同上。
+// 文案里别断言哪一端更强（审计显示方向性只是跌市 beta）。
 const AXIS_W_EMAGAP = { key: "weeklyEmaGap", label: "周线EMA间距", format: v => fmtGapVal(v.weeklyEmaGap) };
 
-// A股 策略榜的轴集，**轴序与加密的 cryptoStrategySorts 完全对齐、只少一根「日订单流」**：
-// 日成交额·日涨跌幅·日线RSI·日CVD强弱·〔加密这里是日订单流，A股 没有〕·日量比·日EMA间距·
-// 日ADX·日+DI·日MACD强弱·日波动幅度·日SAR多头根数 + 周成交额·周线RSI·周线EMA间距·周ADX·周+DI·
-// 周MACD强弱 + 月成交额·月线RSI。
-// ⚠️ 2026-09-11 起 A股 的周 / 月成交额**只有轴、没有 TOP N 小标**：A股 行不带名次字段（A股 的「日成交额」
-// 09-10 起也一样没有）⇒ 共用的 AXIS_W_VOL / AXIS_M_VOL 挂着 badge 也不渲染（数据驱动）。hint 因此只写口径、不提名次。
-// ⚠️⚠️ **2026-08-19 站长「升降序和加密那边对齐」把轴序整体改成加密那套**（此前 A股 自成
-// 一序、首轴是日线RSI）：把加密的 17 轴去掉它独有的「日订单流」就得到这 16 轴，逐根一一
-// 对应。**首轴由「日线RSI」改成「日成交额」** ⇒ **后端 `_strategy_row` 的 `value` 必须
-// 同步取日成交额**（build_ashare_rankings 里已改），两处只改一处 = 首屏值列的数与表头
-// 标签对不上（不报错、只能肉眼发现）。
-// ⚠️⚠️ **那根「日订单流」永远补不上**：tushare（A股）的日线**没有 taker 逐笔归边字段**
-// —— 数据源硬边界，不是遗漏。2026-07-30「以最多的为准」那轮卡的就是这一根，**别再想办法
-// 凑齐**：硬凑要么造一根语义不同的轴、要么发一根永远全 null 的幽灵轴，两条都比"少一根"更糟。
-// 轴数履历：11 → 14 → 16（2026-07-30 对齐）→ 16（2026-08-19 只重排不增减）→ 17
-// （2026-09-04 +日SAR多头根数）→ 19（2026-09-11 +周成交额、+月成交额）→ **12（2026-09-12 05:2x 站长
-// 「移除：周线EMA间距，周ADX，周+DI，周MACD强弱，日波动幅度，日EMA间距，日量比」—— 与加密同批删；
-// A股 这套本来就没有「日订单流」，所以是 19 − 7）**。
-// ⚠️ 本轴 A股 侧**有值、不是幽灵轴**：tushare 日线的 OHLC 足够算 SAR（`compute_ashare_daily`
-// 早就在算日线 SAR）——与「日订单流」那种数据源硬边界完全是两回事，别混为一谈。
+// A股 策略榜轴集（休眠件）：与 cryptoStrategySorts 逐根对齐、只少「日订单流」（tushare 日线无 taker 归边，数据源硬边界）——
+// 别并进加密那套、也别硬凑（会成永远全 null 的幽灵轴）；首轴日成交额须与 fetch_ashare.py 行构造的 `value` 一致。
 const singleStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD,
                              ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
                              AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI,
                              AXIS_M_VOL, AXIS_MRSI];
-// 加密**全部策略榜共用**的轴集，**13 根**（**2026-09-12 05:2x 站长「移除：周线EMA间距，周ADX，周+DI，
-// 周MACD强弱，日波动幅度，日EMA间距，日量比」⇒ 20 − 7 ＝ 13**；此前一路堆到 20 根：2026-07-30 对齐 ＋
-// 08-12 日涨跌幅 ＋ 09-04 日SAR多头根数 ＋ 09-11 周/月成交额）：日线 9 根（日成交额·日涨跌幅·日线RSI·
-// 日CVD强弱·日订单流·日ADX·日+DI·日MACD强弱·日SAR多头根数）+ 周线 2 根（周成交额·周线RSI）
-// + 月线 2 根（月成交额·月线RSI）。
-// ⚠️⚠️ **自 2026-09-12 起与后端 `_strategy_row` 不再一一对应**：被删那七根的行字段（volRatio / emaGap /
-// atrPct / weeklyEmaGap / weeklyAdx / weeklyDiPlus / weeklyMacdStrength）**后端照常发、刻意没删**
-// （同「删榜不删字段」）⇒ `audit_consistency.py` A 项会把它们列成「行上未挂轴的字段」，**那是预期内的提示、
-// 不是失败**（该项只对「轴有、行里没字段」报错）。复活任一根 ＝ 这里加回 ＋ axesSub 对应段加回，零后端改动。
-// 三根「X成交额」轴各挂本周期的全市场名次小标（volRankBadgeFor）。
-// 前四根是**站长两次逐字点名的同一组**：「支持成交额，RSI，CVD，订单流。四种升降序。」
-// ——顺序照他写的，**首轴即默认排序**，必须与后端 `value` 取的量（日成交额）一致，否则
-// 首屏值列显示的是另一根轴的数。**别把新轴插到最前。**
-//
-// ⚠️⚠️ **对齐前这里是两个常量**：日线族四个榜 11 轴、周线族两个榜 13 轴
-// （`cryptoWeeklyExpansionSorts`，差 周线RSI + 周线EMA间距 两根）。对齐时后端给日线族的行
-// 补上了那两根、给两族都补上了 日量比/日EMA间距/月线RSI 三根 ⇒ 字段集完全相同 ⇒ 那个常量
-// **已删除、并进本常量**。**别再拆回两个**：两个"几乎一样的轴常量"正是本项目栽过多次的
-// 那个坑（选错一个不报错、只能肉眼发现）。要让某个榜少一根轴，先想清楚它凭什么少。
-//
-// ⚠️ 轴标签带「日/周/月」前缀是**必要的**：这些榜的筛选条件横跨月/周/日三个周期，而
-// 行里同时装着三个周期的值（2026-07-24 站长就为股票系那张同形的表问过"成交额是基于日线
-// 还是什么周期"）。纯日线的榜本可省前缀，但共用一个常量比再造一套「只差标签」的近亲常量
-// 安全得多 —— 理由同上一段。
-//
-// ⚠️ **加轴必须后端先补字段**（`_strategy_row` 加 key），只在这里加轴＝永远全 null 的
-// 幽灵轴；只在后端加字段不加轴＝副行冒出没有对应 chip 的孤儿摘要（`axesSub` 是数据驱动的）。
-// **两处必须一起改，而且一改就是【全部加密策略榜】一起变。**
-// ⚠️ 别在这类注释里写死榜数（本文件已经烂过多轮）——要数就去数下面 TAB_GROUPS 的条目。
-//
-// ⚠️ 轴数是**注释里最容易发霉的一类数字**（指令④⑤⑥ 连着三次改轴时本文件、fetch_data.py
-// 的注释、两个周线榜的 desc 全部停在旧值；加 `atrPct` 那轮又漏；移除三个周线榜那轮 docstring
-// 停在已不存在的编号 —— 同一个坑四次）。**改轴时把数字一起改，或者干脆别在注释里写数字。**
-// 履历：4 →（指令⑩ +ADX/DI）12 →（指令④⑤ +周/日MACD）14 →（指令⑥ 砍 DI 到两根）10
-// →（2026-07-28 +日波动幅度）11 →（2026-07-30 轴数对齐 +5 根）16 →（2026-08-12
-// 站长「所有升降序也新增一个涨幅升降序」+日涨跌幅）17 →（2026-09-04 站长「日线SAR
-// 翻多后的新鲜度」+日SAR多头根数）18 →（**2026-09-11 站长「排序里面没有周成交额…月成交额和TOP几也要有」
-// +周成交额、+月成交额**）**20**。
-// ⚠️ 排序条在 1280 视口早已是多行（10 轴 ≈812px 就卡满了 877px 容器的单行上限）。桌面
-// flex-wrap 换行、移动端横滑，两种都不裁切 —— 每次加轴都要在 1280/768/375 三档实测一遍。
-// ⚠️ 「日涨跌幅」插在「日成交额」之后（同属"行情量"，技术指标排在其后），**首轴没动**。
-// ⚠️ 「日SAR多头根数」追加在**日线块末尾**（周线块之前），保住「日→周→月」的周期递进，
-// 且既有 17 根的相对位置一个没动 —— 插中间会让用户已经形成的 chip 肌肉记忆整体位移。
-// ⚠️ 「周成交额」「月成交额」（2026-09-11）插在**周线块 / 月线块首位**（与日线块首位的「日成交额」对称），
-// 「日→周→月」递进照旧、既有各轴相对顺序一个没动；理由见 AXIS_W_VOL 上方注释。**首轴仍是日成交额。**
+// 加密全部策略榜共用的轴集（行统一由后端 `_strategy_row` 产出）。别拆成几份近亲常量：选错一个不报错、只能肉眼发现。
+// ⚠️ 首轴即默认排序，必须与后端 `value`（日成交额）一致 ⇒ 别把新轴插到最前。按「日 → 周 → 月」分块，新轴加在所属周期块内、
+//    别打乱既有 chip 的相对位置；排序条桌面端换行、移动端横滑，加轴后在 1280 / 768 / 375 三档实测。
+// 加轴要后端 `_strategy_row` 先补字段（只加轴＝永远全 null 的幽灵轴），并同批加 axesSub 段；一改就是全部加密策略榜一起变。
+// 已移除的轴后端行字段照发 ⇒ audit A 项把它们列成「行上未挂轴的字段」是预期提示，不是失败。
 const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
                              ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
                              AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI,
                              AXIS_M_VOL, AXIS_MRSI];
 
-/** 三个涨跌幅榜（2026-07-29 站长「新增TAB：日线级涨跌幅，周线级涨跌幅，月线级涨跌幅」）
- *  的 **五轴**：涨跌幅 · 成交额 · RSI · CVD强弱 · 订单流。
- *
- *  ⚠️⚠️ **这是工厂不是三份常量，是刻意的。** 三个榜的轴只差周期前缀，若写成
- *  AXIS_D_CHG / AXIS_W_CHG / AXIS_M_CHG… 九个近亲常量，就正中本项目栽过多次的那个坑
- *  （"两个几乎一样的常量选错一个、不报错只能肉眼发现"）。同 singleStrategyGroup 的思路。
- *
- *  ⚠️⚠️ **五个 key 全是通用 key**（value / volume / rsi / cvdStrength / takerStrength），
- *  三个榜共用同一批 key —— **后端按各榜自己的周期填值**（周线榜的 `rsi` 装的是周线 RSI、
- *  月线榜装月线 RSI）。这与其余策略榜相反（那些榜通用 key 一律是日线值、周线值另带
- *  `weekly` 前缀）。副行标签走 axisLabelFor 从**当前榜自己的 sorts** 反查，所以页面上
- *  显示的是「周线RSI」而不是「日线RSI」，标签与数值对得上。
- *  也正因为用的是通用 key：`axesSub` 里 rsi / volume / cvdStrength / takerStrength
- *  四段本来就都在 ⇒ **这三个榜零新增 axesSub 代码**。
- *
- *  ⚠️⚠️ **涨跌幅轴的 key 必须是 `value`，别"更语义化"地改成 changePercent** ——
- *  renderTable 里红绿上色的判据写死了 `sortField === "value"`（切到 RSI/成交额 时值列
- *  展示的是那个指标，红绿会误导 ⇒ 一律 neutral）。改了 key 红绿会**静默失效**。
- *  同理 getColorClass 还要求这三个 tab key 在 CHANGE_PCT_TABS 里，两处缺一不可。
- *
- *  ⚠️ 为什么只有五轴、不像策略榜那样再带 ADX/+DI/MACD/波动幅度：① 站长这次一个字没提
- *  排序，五轴正是站内涨跌幅榜的历史形态（＝站长两次逐字点名的「成交额，RSI，CVD，订单流」
- *  四根 ＋ 涨跌幅本身）；② **月线端后端根本没产 ADX/MACD**，硬加就是全 null 幽灵轴，
- *  三个榜还会不对称；③ 这是**全市场 ~528 行 × 3 个榜**，每加一根轴都要乘 ~1584 行进付费 KV。
- *  要加轴：后端 `_change_row` 先补字段（日线端 daily_lookup 全都有、周线端 rsi_data 有
- *  adx/diPlus/macdStrength、月线端没有），再在这里加 —— 别只在这里加。
- *
- *  tf = 周期前缀（"日"/"周"/"月"）；rsiLabel 单列，因为站内写法是「日线RSI」不是「日RSI」。 */
+/** 涨跌幅榜的轴集工厂：tf ＝ 周期前缀（"日" / "周" / "月"），rsiLabel 单列（站内写「日线RSI」不写「日RSI」）。
+ *  写成工厂而不是一堆近亲常量（选错一个不报错）。
+ *  key 全是通用 key：后端按各榜自己的周期填值（周线榜的 `rsi` 是周线 RSI），与策略榜"通用 key ＝ 日线值"相反；
+ *  副行标签靠 axisLabelFor 从当前榜 sorts 反查，所以标签与数值对得上，axesSub 也不用为这几个榜加段。
+ *  ⚠️ 涨跌幅轴的 key 必须是 `value`，别"语义化"改成 changePercent：renderTable 的红绿上色写死 `sortField === "value"`，
+ *     另需 tab key 在 CHANGE_PCT_TABS 里，缺一红绿静默失效。
+ *  加轴要后端 `_change_row` 先补字段（全市场行 × 每个榜都进付费 KV，别随手加）；月线端后端没有 ADX / MACD，硬加就是全 null 的幽灵轴。 */
 const cryptoChangeSorts = (tf, rsiLabel) => [
     { key: "value",         label: `${tf}涨跌幅`,  format: v => fmtGapVal(v.value) },
-    // badge 按周期挂各自的全市场名次（2026-09-10 只挂「日」；2026-09-11 站长补周 / 月成交额 TOP N 后三个榜都挂）：
-    // 本工厂的 `volume` 在周 / 月线榜装的是周 / 月成交额 ⇒ 读的名次 key 也必须是 weeklyVolumeRank / monthlyVolumeRank，
-    // **别统一读 volumeRank**（那是日成交额名次，只在日线榜上有）。策略榜的「周 / 月成交额」轴共用同一个徽标函数。
+    // badge 按周期读各自的名次 key：周 / 月线榜的 `volume` 是周 / 月成交额 ⇒ 读 weeklyVolumeRank / monthlyVolumeRank，
+    // 别统一读 volumeRank（日成交额名次，只在日线榜上有）。
     { key: "volume",        label: `${tf}成交额`,  format: v => fmtVolVal(v),
       badge: tf === "日" ? volRankBadge : tf === "周" ? weeklyVolRankBadge : tf === "月" ? monthlyVolRankBadge : undefined },
     { key: "rsi",           label: rsiLabel,       format: v => fmtRsiVal(v.rsi) },
@@ -569,13 +210,8 @@ const cryptoChangeSorts = (tf, rsiLabel) => [
     { key: "takerStrength", label: `${tf}订单流`,  format: v => fmtCvdVal(v.takerStrength),
       hint: "真实成交归边（币安taker数据）。全市场只有约7%为正、常态在−0.02附近，负值是常态不是异常" },
 ];
-// 股票系（A股/美股/ETF）涨跌幅榜的**四轴**——比加密少一根「订单流」：tushare/Massive 的
-// 日线都没有 taker 逐笔归边字段（数据源硬边界，同 singleStrategySorts 不含 AXIS_D_TAKER）。
-// ⚠️⚠️ 必须是**独立的第二个工厂、不能给 cryptoChangeSorts 加个 withTaker 开关**：
-//   audit_consistency.py 的 A 项靠正则**静态**抽取工厂定义体里的 key 来校验"轴↔行字段"，
-//   看不懂运行时的条件裁剪——一个带 takerStrength 字面量的工厂体会让它以为 A股 行缺
-//   takerStrength 字段而误报。两个工厂各自把自己的轴写全，正是这道静态守卫要求的。
-// ⚠️ CVD hint 也与加密不同：这里没有「订单流」那根轴可指，不能照抄那句"想看真钱流向用订单流"。
+// A股 涨跌幅榜轴集工厂（休眠件）：比加密少「订单流」（tushare 日线无归边字段），CVD hint 因此也不同。
+// ⚠️ 必须是独立的第二个工厂、别给 cryptoChangeSorts 加开关：audit A 项靠正则静态抽取工厂体里的 key，看不懂运行时裁剪。
 const stockChangeSorts = (tf, rsiLabel) => [
     { key: "value",       label: `${tf}涨跌幅`,  format: v => fmtGapVal(v.value) },
     { key: "volume",      label: `${tf}成交额`,  format: v => fmtVolVal(v) },
@@ -589,513 +225,58 @@ const monthlyChangeSorts = cryptoChangeSorts("月", "月线RSI");
 const ashareDailyChangeSorts = stockChangeSorts("日", "日线RSI");
 const ashareWeeklyChangeSorts = stockChangeSorts("周", "周线RSI");
 const ashareMonthlyChangeSorts = stockChangeSorts("月", "月线RSI");
-// （已删的轴与工厂，复活时从 git 捞：股票系 sortsRsiFirst/sortsVolFirst/sortsChange/
-//  stockTurnoverSorts/stockAmpSorts〔2026-07-24〕；加密 cryptoRsiFirst/cryptoVolFirst/
-//  cryptoChange/cryptoTurnoverSorts/cryptoAmpSorts/cryptoFundingSorts 与 AXIS_AMPLITUDE/
-//  AXIS_FUNDING/axisVol/axisChg〔2026-07-25 随加密 15 个榜移除〕；
-//  cryptoSingleStrategySorts / cryptoWeeklyDailySorts / cryptoWeeklySarDailySorts 与
-//  AXIS_D_HIGHDIST（距前高，只有 get_daily_indicators 算）/ AXIS_W_EMAGAP（周线EMA间距）
-//  〔2026-07-25 晚随「移除加密所有TAB」〕。复活那三个榜时这两个轴要一起捞回来——它们的
-//  **末轴刻意各不相同**（有月线条件→月线RSI；有周线 EMA 条件→周线EMA间距；周线端只有
-//  布尔 SAR→不设末轴），别为了"看起来统一"合并成一个常量。）
 
+// 每个 tab 一条 { sorts, subFormat }。按 key 取的平查找表（顺序无意义）；导航 / 显示名 / desc / rail 顺序在 TAB_GROUPS，
+// 增删榜两处都要改。
 const TABS_CONFIG = {
-    // === 加密涨跌幅：三个榜（2026-07-29 站长「新增TAB：日线级涨跌幅，周线级涨跌幅，
-    // 月线级涨跌幅」）===
-    // **无筛选、全市场入榜**。轴集走 cryptoChangeSorts 工厂（五轴，
-    // 完整设计说明见那里）。
-    // ⚠️ 三处必须同时到位，缺一个都不报错但会静默坏掉：
-    //   ① 这里的 sorts（首轴 = value = 涨跌幅，与后端 `value` 取的量一致）
-    //   ② `CHANGE_PCT_TABS` 里要有这三个 key（否则值列的红绿上色恒 neutral）
-    //   ③ subFormat 传的 volLabel 要写对周期（副行的成交额标签，axesSub 不会自己反查它）
-    // ⚠️ subFormat 走 changeSub 而不是直接 axesSub：它多一段"价格上下文 / 涨跌幅"的尾巴，
-    // 保证切到别的排序轴时涨跌幅这个核心数字不会从行里彻底消失。
+    // === 加密涨跌幅榜（无筛选、全市场入榜）===
+    // ⚠️ 三处缺一不报错但会静默坏：① sorts 首轴 key ＝ `value`；② tab key 进 CHANGE_PCT_TABS（行情榜 / 策略榜的唯一分界，
+    //    缺了值列恒不上红绿）；③ subFormat 的 volLabel 写对周期（axesSub 不会自己反查成交额标签）。
     dailyChange: { sorts: dailyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "日成交额", cryptoPriceCtx) },
     weeklyChange: { sorts: weeklyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "周成交额", cryptoPriceCtx) },
-    // ⚠️ 月线榜的数值每月 1 号 00:00 UTC 才变一次（后端走月线缓存）——整月不动是正确行为，
-    // 不是缓存卡住了。日线榜每小时随日 K 变，周线榜每周一变。
     monthlyChange: { sorts: monthlyChangeSorts, subFormat: (v, sf) => changeSub(v, sf, "月成交额", cryptoPriceCtx) },
 
-    // === 加密策略榜（**数量以下面的条目为准，别在这行写死一个会发霉的数字** —— 它已经
-    // 烂过多轮：写着"七个"时实际先后是 11 / 13 / 8 个。完整增删履历见 CLAUDE.md 顶部的
-    // 日期区块，被移除各榜的判据存档见后端 build_rankings 的原位注释）===
-    // **轴集只有一族**：全部共用 **cryptoStrategySorts**，行全部走后端唯一的
-    // `_strategy_row`（2026-07-30 站长「能否对齐轴数？以最多的为准」；对齐前是两族：日线族
-    // 11 轴、周线族 13 轴的 cryptoWeeklyExpansionSorts。之后 2026-09-04 加「日SAR多头根数」、2026-09-11 加
-    // 「周成交额」「月成交额」—— 根数去数常量本身，这行原先写死的「18 轴」就是这么发霉的）。
-    // 各榜行 payload 逐字同构，**差别只在筛选条件**。首轴统一 = 日成交额降序。
-    // ⚠️ 新榜一律**追加在末尾**；移除中间的榜时要把后面的**重新编号**（2026-07-30 移除旧
-    // ④⑤⑥ 把旧⑦⑧⑨ 重编成 ④⑤⑥；2026-08-09 移除旧③ 把旧④~⑨ 重编成 ③~⑧；
-    // **2026-08-11 再移除当时的 ③`dailySarSecondBar`，旧④~⑧ 又重编成 ③~⑦**；
-    // **2026-08-12 站长一次移除三个（旧②`dailyEmaExpansion`、旧⑤`monthlyWeeklySar`、
-    // 旧⑩`weeklyEma921Expansion`），旧③④⑥⑦⑧⑨ 重编成 ②③④⑤⑥⑦**；
-    // **2026-08-16 又一次移除三个（旧②`weeklySarSecondBar`、旧⑤`dailyFourEmaExpansion`、
-    // 旧⑦`dailyTripleEmaSarBearish`），旧①③④⑥⑧ 重编成 ①②③④⑤**）——
-    // ①~⑤ 是 rail 位置，CLAUDE.md/后端 docstring/本文件多处按它互相引用，别留编号缺口。
-    // ⚠️ 本轮已把块内**指代榜**的圆圈数字尽量改成 key 引用（就是上面那条纪律），只有块
-    // 标题还留着编号；注释里剩下的 ①②③ 多是**条件/列举序号**，别拿去当榜号替换。
-    // ⚠️⚠️ **本段的榜号 2026-08-11 才补齐过一次**：上一轮重编号只改了一部分，导致这里
-    // 一度出现两个 ⑧、且 ⑤~⑦ 全部指错人（不报错、只能肉眼发现）。**删中段榜之后务必
-    // 把这一整段的编号从头数一遍**，别只改被删榜附近那几行。
-    // ⚠️ **引用某个榜优先写 key、别写榜号。**
-    // ⚠️ 四线族曾经有过三个榜（`dailyFourEmaAligned` 只看排列、2026-07-28 移除；
-    // `dailyFourEmaPersist`「扩张存续」、2026-08-09 移除；`dailyFourEmaExpansion`
-    // 「最新一根正在扩张」、**2026-08-16 站长移除**）——**现在一个都不剩**。判据都存档在后端。
-    // ⚠️ 「排列」≠「扩张」：站内「扩张」一词专指**间距在变大**，两个词别混用（复活任一
-    // 四线榜时这条用词规矩仍然管着它的 name）。
-    // ⚠️ `dailySarSecondBar`「日线SAR多头第二根」**2026-08-11 站长移除**、
-    // `weeklySarSecondBar`「周线SAR多头首根」**2026-08-16 站长移除**（判据都存档在后端
-    // build_rankings；复活 = 后端重建列表 + 这里与 TAB_GROUPS 各加回一条）。
-    // ⇒ 历轮移除后现在是下面这套 ①~⑤。
-    // ② **周线 EMA9/21 扩张 且 SAR 多头（2 个条件，都在周线）** —— 2026-07-30 站长新增。
-    // 就是同日移除的「周线SAR多头」槽位的第二版判据（2026-07-26 指令③），但**是新榜**（key
-    // 全新）：站长要"扩张 + SAR"两条都要。命中比"纯周线 SAR 多头"少得多。
-    // ⚠️ 周线榜历轮增删：08-16 一度只剩本榜 → 同日 + `weeklyTripleEma`/`weeklySarBearish`
-    // → 08-18 + `weeklyTwoBullExact` → 08-19 + `weeklySarUptrend` → 09-06 + `weeklyEmaSarBearish`
-    // → 09-09 01:15 + `weeklyEma921Expansion`（七个）⇒ **09-09 15:3x 站长一次移除三个周线榜
-    // （`weeklySarBearish` / `weeklyTwoBullExact` / `weeklyEmaSarBearish`）后现为【四个】**：
-    // 本榜 · `weeklyTripleEma` · `weeklySarUptrend` · `weeklyEma921Expansion`（⚠️ 09-10 01:3x + `weeklyEmaSarFirstTwo`
-    // 变五个，**09-10 12:1x 再 + `weeklySixBull` / `weeklyFourBull` / `weeklyFiveBear` 变【八个】**，**13:3x 站长移除 `weeklyTripleEma` 后【七个】**；
-    // ⚠️ 09-11 16:3x + `weeklyTripleEmaPersist` 变【八个】、**09-12 08:5x 把周线四连阳与六连阳合并成 `weeklyFourToSixBull` 后【七个】**、1x:xx 移除 `weeklyFiveBear` 后【六个】、**09-13 `weeklyTripleEmaPersist` 并进跨日线 / 周线的
-    // `dailyOrWeeklyTripleEmaPersist` 后【五个】**）。
-    // ⚠️⚠️ **本榜 2026-08-19 起 ⊊ ⑨`weeklySarUptrend`（纯周线SAR多头全集）** —— 本榜 ＝ ⑨ ∩
-    //   9/21扩张。此前它曾 ⊊ `weeklyEma921Expansion`（2026-08-12 移除对家、包含关系随之消失），
-    //   连同同日移除 `monthlyWeeklySar` 带走的另一对 ⇒ 08-12～08-19 站内是"零对"。**那句"没有
-    //   任何一对结构性包含"自 ⑨ 上线起作废**（①②⑦ 各 ⊊ ⑨ 三对 → 09-06 加 ⑫ 变六对 →
-    //   09-09 01:15 加 `weeklyEma921Expansion` 变九对 → 09-09 15:3x 一次移除五个榜后只剩
-    //   三对 ⇒ **2026-09-10 新增 `weeklyEmaSarFirstTwo` 后回到【六对】**）。本榜在其中占
-    //   **三个位置**：⊊ `weeklySarUptrend`、⊊ `weeklyEma921Expansion`，**同时它自己被
-    //   `weeklyEmaSarFirstTwo` 严格包含**（那个榜 ＝ 本榜 ∩ SAR前两根；✏️ 09-11 14:xx 起 ∩ SAR前四根，包含照旧）。
-    //   ⚠️⚠️ ⇒ **本榜既是"子"也是"父" ⇒ 站内两条传递包含链因此回归**：
-    //     `weeklyEmaSarFirstTwo` ⊊ 本榜 ⊊ `weeklySarUptrend` / `weeklyEma921Expansion`。
-    //     09-09 15:3x 那句「唯一的两条传递包含链已消失、包含回到只有一层」**只成立了九个
-    //     小时就作废**——在案通用教训「『站内已经没有 X 了』下一条指令就可能把 X 加回来」
-    //     的第六次应验，也是最快的一次。**别假设每个榜只有一条向上的边、也别假设只有一层。**
-    // ✏️⚠️ **2026-09-11 起上面「本榜 ⊊ `weeklySarUptrend`」作废**：那张追加了「周线 RSI ≥ 50」、本榜不看 RSI
-    //   （上线当天 XANUSDT 就在本榜、周线 RSI 49.993884）⇒ 本榜向上只剩一条边（⊊ `weeklyEma921Expansion`），
-    //   传递链只剩一条：`weeklyEmaSarFirstTwo` ⊊ 本榜 ⊊ `weeklyEma921Expansion`；站内包含七对 → 五对。
-    // 行 payload 走后端唯一的 `_strategy_row` ⇒ **cryptoStrategySorts**（全族共用；
-    // 建榜时是 13 轴的 cryptoWeeklyExpansionSorts，2026-07-30 轴数对齐后并入）。
-    // ⚠️ 显示名写「9/21扩张」不写「两线扩张」：后者是 (9/21 ∪ 9/26) 并集的专称，本榜是严格 9/21。
+    // === 加密策略榜：全部共用 cryptoStrategySorts、副行 axesSub(…, "日成交额")，行由后端 `_strategy_row` 产出，各榜只差筛选条件 ===
+    // 轴是描述值、不是判据镜像：改判据不动轴，也别按判据增删轴。⚠️ 尤其别为布尔判据（SAR 方向 / 连阳 / 扩张 / RSI 门槛 /
+    //    哪一支命中）加轴 —— 布尔值排不了序、后端也不发 ⇒ 幽灵轴。
+    // 改判据时 key 不动 ⇒ 不少 key 已名不副实，以 TAB_GROUPS 的 name 为准。新 key 别以后端 RETIRED_KEY_PREFIXES 里的前缀开头
+    // （如 weeklyDaily），否则后端自愈会静默删掉整张榜。
+    // 已移除的榜：判据存档在后端 build_rankings 原位；复活 ＝ 这里加回一行 + TAB_GROUPS 加回条目 + 后端重建列表。
     weeklyEmaSarBull: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    // ③ 【已移除】`dailyTripleEmaCvd`「日线9/21扩张＋CVD递增」—— 2026-09-09 站长「移除：
-    //   日线9/21扩张＋CVD递增」（纯移除、无替代）。判据存档在后端 `build_rankings` 原位。
-    // ⚠️⚠️ **它曾是橱窗 `TEASER_TAB`** ⇒ 移除时橱窗已搬到 `dailyEmaSarFirstTwo`
-    //   （后端常量 + 本文件 `TEASER_TAB` + `currentTab` + `lastTabByAsset.crypto` +
-    //   `switchAsset` 的 fallback 五处同改）。选榜依据是四个候选的空榜率回放，见后端存档块。
-    // ⚠️ 连带作废：**`emaGap` 恒正的日线榜由三个变两个**（当时是 `dailyEmaSarFirstTwo` /
-    //   `dailyEmaSarBearish`）⇒ ⚠️ **同日 15:3x 移除 `dailyEmaSarBearish` 后只剩【一个】
-    //   `dailyEmaSarFirstTwo`**（它也是站内唯一的日线榜）。那一轮的互斥/包含对数未受影响，
-    //   但 15:3x 那一轮把它们从三对/九对砍到了一对/三对。
-
-    // ➕ 2026-09-10 站长追加条件③「且成交额递增」（逐字：「日线9/21扩张＋SAR多头前两根，这个TAB
-    //   的逻辑再加上：且成交额递增。」）⇒ **3 个条件**，下面 09-09 那段讲的"2 个条件"按 3 个读。
-    //   ③ ＝ 最新已收盘日 K 的 **USDT 成交额 > 前一天**（后端 `turnoverRising`，k[7]，就是表格
-    //   「日成交额」那一列的数）—— ⚠️ 不是币本位成交量（`volRising`，k[5]），站长说的是「成交额」。
-    //   key 不动（它还是橱窗 + 默认落地榜）；轴一根没加（「日成交额」轴早就在 18 根里 ——
-    //   **条件量方向〔涨没涨〕、轴量水平〔多大〕**，不重复）。
-    // ⚠️⚠️ 连带：① 与 `weeklyEmaSarFirstTwo` **不再是同判据异周期孪生**（那个仍 2 个条件）；
-    //   ② 橱窗地板被打穿 —— 90 天回放 3/90 天为空（改动前 0/90），空的那天新访客落地榜是空榜，
-    //   换不换橱窗待站长拍板（数字与备选见后端 `TEASER_TAB` 上方）。
-    //   原三个自检点（emaGap 恒正 / sarBullBars 恒 ∈ {1,2} / 命中＝首根＋第二根）照旧成立。
-    // ① 日线9/21扩张＋SAR多头前两根 —— 2026-09-09 站长把 ④`dailyEmaSarFlip`「首根」与
-    //   ⑪`dailyEmaSarSecond`「第二根」**合并**而成，并要求置顶 ⇒ 它现在是加密策略组第一个
-    //   （逐字：「日线9/21扩张＋SAR多头第二根和日线9/21扩张＋SAR多头首根合并为一个TAB。
-    //   并将该TAB置顶。也就是说，日线EMA9/21扩张，SAR多头首根和SAR多头第二根K线都行。」）。
-    // —— **2 个条件，都在日线**：① EMA9/21 扩张（严格 9/21）② 这一轮日线 SAR 多头的
-    //   **头两根之一**（首根 ＝ 倒1多头 ∧ 倒2空头；第二根 ＝ 倒1多头 ∧ 倒2多头 ∧ 倒3空头）。
-    //   后端 ＝ `ema921_expansion_data` ∩（`daily_sar_flip_data` ∪ `sarSecondBar` 旗标），
-    //   **两个判据源都留着** —— 别化简成 `sarBullBars in (1,2)`（理由见后端注释：那会让两个
-    //   旗标双双退回零消费者，并丢掉与「日SAR多头根数」轴的跨实现对账）。
-    // ⚠️⚠️ **连带作废：④∩⑪ 那对结构性互斥随本次合并消失** ⇒ 站内结构性互斥 live 对由四对
-    //   变三对（⑦∩⑧ · ⑫∩⑧ · ⑬∩⑭）⇒ ⚠️ **09-09 15:3x 一次移除五个榜后只剩【一对】**：
-    //   `monthlyFourBull` ∩ `monthlyFiveBear`（前两对的对家 `weeklySarBearish` /
-    //   `weeklyTwoBullExact` / `weeklyEmaSarBearish` 同批下线）。
-    //   ⚠️ 那三对的**榜号本轮整体位移了**（本榜置顶 + 删掉两格），凡按榜号引用的旧注释一律
-    //   去查 key、别信号。「首根与第二根互斥」这个事实本身没变，只是降级成**同一个榜内部
-    //   两个分支**之间 ⇒ **两分支不重复计数**：命中 ＝ 首根那批 ＋ 第二根那批（上线当天 10 + 22 = 32）。
-    // ⚠️ **命中天然小、0 个正常**，但**相邻两日交集不再恒空** —— 合并前 ④ 是 Jaccard 恒 0
-    //   （今天的首根明天必不是首根），本榜里今天的首根明天会变成第二根、仍在榜上，能连着
-    //   待两天，第三天才必然掉出。**别照 ④ 的旧注释以为还恒空。**
-    // ⚠️ **别因为判据里有 SAR 就加 SAR 轴**（布尔值排不了序、后端没发圆点价 ⇒ 幽灵轴）；
-    //   也别因为有 EMA 就加 emaGap 轴 —— 它早就在那套轴里。
-    // 💡 两个免费自检点：行里 `emaGap` **恒为正**（9/21 扩张蕴含 EMA9>EMA21）；每行
-    //   `sarBullBars` **恒 ∈ {1, 2}**（跨实现对账）。⚠️ emaGap 恒正的日线榜由四个变三个
-    //   （④⑪ 合成一个）⇒ **09-09 当日稍后 `dailyTripleEmaCvd`(15:2x) 与 `dailyEmaSarBearish`
-    //   (15:3x) 相继移除 ⇒ 只剩【本榜一个】**，本榜也是站内唯一的日线榜。
-    //   （⚠️ 2026-09-10 当日第 9 条新增 `dailySarFirstBar`「日线SAR多头首根」后本榜**不再是唯一的日线榜**；emaGap 恒正仍只有本榜。）
-    //   （⚠️ 2026-09-11 那张改成「日线SAR多头前两根」后 **本榜 ⊊ 那张**〔本榜 ＝ 那张 ∩ 9/21扩张 ∩ 成交额递增〕。）
-    // ✏️ **2026-09-11 14:xx UTC 站长「…SAR多头前4根…涉及到SAR多头前2根的都改为SAR多头前4根」** ⇒ 条件② 改**前四根**（key 不动）：
-    //   后端 ＝ `ema921_expansion_data` ∩（`daily_sar_flip_data` ∪ `sarSecondBar` ∪ `sarThirdBar` ∪ `sarFourthBar`）∩ `turnoverRising`。
-    //   ⇒ 上面「sarBullBars 恒 ∈ {1, 2}」「命中＝首根＋第二根」「能连着待两天、第三天必然掉出」「别化简成 `sarBullBars in (1,2)`」
-    //   一律按「∈ {1,2,3,4}」「四支之和」「最多连着四天、第五天必掉出」「别化简成 `sarBullBars <= 4`」读；emaGap 恒正照旧。
-    // ✏️✏️✏️ **2026-09-12 1x:xx 本榜第三次改判据「SAR多头前七根」、并删掉 CVD 那道门（3 条件 → 2 条件）**
-    //   ⇒ 下面各段一律按「∈ {1..7}」「七支之和」「最多连着七天、第八天必掉出」读；
-    //   「⊆ CVD递增全集」**作废且无替代**；⊄ `dailySarFirstBar` 照旧（那张始终前四根）。
-    // ✏️✏️ **2026-09-12 1x:xx 本榜再改「SAR多头前六根＋CVD递增」** ⇒ 上面两段一律再按「∈ {1..6}」「六支之和」
-    //   「最多连着六天、第七天必掉出」「别化简成 `sarBullBars <= 6`」读；emaGap 恒正仍照旧，但 **⊊ `dailySarFirstBar`
-    //   已作废**（那张仍是前四根、站长这次只点了本榜）⇒ 两张互相都不包含。详见 TAB_GROUPS 里本榜那条。
-    // 🔴 【已移除】`dailyEmaSarFirstTwo`（2026-09-12 站长「移除：日线9/21扩张＋SAR多头前七根」）——
-    //   它曾是橱窗 + 默认落地榜，橱窗已搬到 `dailyTwoToSixBullRsiEma921`（本文件四处 + 后端常量）。
-    //   复活 ＝ 这里加回一行（`cryptoStrategySorts`）+ TAB_GROUPS 加回条目 + 后端重建列表。
-
-    // ✏️ **2026-09-10 12:1x UTC 站长追加条件②「且收盘价反包所有空头SAR」⇒ 2 个条件、都在月线**
-    //   （key 不动；name 改「月线SAR多头首根＋收盘价反包所有空头SAR」）：收盘价要站上最近一轮空头 SAR
-    //   段**全部**圆点（后端 `lastBearSarMax`，＝那一段的第一个、也是最高的那个圆点；新增字段 ⇒
-    //   MONTHLY_CACHE_SCHEMA 13→14）。上线当天旧判据 16 → 新判据 3；48 个月回放保留率约 21%。
-    //   ⇒ 下面「唯一的纯 SAR 首根榜」那句**自此作废**（它不再是纯 SAR 首根），事件型 / 月内恒定两条照旧。
-    //   （⚠️ 同日第 9 条新增日线版 `dailySarFirstBar`〔纯 SAR 首根、1 个条件〕⇒ 站内又有纯 SAR 首根榜了，但**不是**本榜的孪生：本榜 2 个条件。）
-    //   （⚠️ 09-11 那张改成「前两根」⇒ 站内又一个纯 SAR 首根榜都没有了。）
-    // ⑤ **月线 SAR 多头首根（1 个条件，纯月线）** —— 2026-08-13 站长「新增一个TAB，逻辑是：
-    //   最新已收盘月线的SAR是首个SAR多头。」（没点资产 ⇒ 加密）：倒1（最新已收盘月 K）多头
-    //   且 倒2 空头 ⇒ 这个月刚刚由空翻多。
-    // ⚠️ 建榜时与「周线SAR多头首根」是**真正的同判据异周期对**——**那个榜 2026-08-16 已
-    //   移除** ⇒ 本榜现在是**站内唯一的纯 SAR 首根榜**。⚠️ "事件型 SAR 榜共两个"那句
-    //   （本榜 + 日线首根那个）**2026-09-09 13:4x 起要改着读**：那个日线榜已并入
-    //   `dailyEmaSarFirstTwo`（首根 ∪ 第二根），不再是纯粹的"首根"事件榜。
-    // ⚠️ **月内成员恒定**：判据全在月线、月线走缓存 ⇒ 每月 1 号 00:00 UTC 才换一批，
-    //   月内看到成员纹丝不动是正确行为（周线榜"周内恒定"的月线版）。
-    // ⚠️ **事件型**：相邻两月成员交集恒为空（判据保证）；36 个月回放 min 0 / 中位 8 /
-    //   max 42、2/36 个月为 0 ⇒ 命中天然不大、空榜正常。
-    // ⚠️ **别因为判据是 SAR 就加 SAR 轴**（布尔值排不了序、后端没发圆点价 ⇒ 幽灵轴，在案先例）。
     monthlySarFirstBar: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-
-    // （已移除）周线9/21/55扩张 `weeklyTripleEma` —— 2026-08-16 复活 → **2026-09-10 13:3x 站长
-    // 「移除：周线9/21/55扩张」**（纯移除、无替代；判据存档见后端 build_rankings 原位）。
-
-    // ⑨ 周线SAR多头（2026-08-19 站长「最新已收盘的周线是SAR多头即可」）—— **1 个条件，
-    //   全在周线**：`sarUptrend is True`。就是站内"周线 SAR 多头"**全集**（= ⑦ 去掉阴K =
-    //   ② 去掉 9/21扩张）。纯 build 层、轴集照旧、与本族其余各榜共用同一个 sorts 对象。
-    // ⚠️⚠️ 建榜时（2026-08-19）**本榜一次引入三对结构性严格包含**：`monthlyWeeklyDaily`、
-    //   `weeklyEmaSarBull`、`weeklySarBearish` 都以「周线 SAR 多头」为条件之一 ⇒ 三者全 ⊊ 本榜
-    //   （那是「『站内已经没有 X 了』下一条指令就把 X 加回来」的第三次应验）。
-    //   ⚠️ **2026-09-09 15:3x 起三对里只剩一对**：`weeklyEmaSarBull` ⊊ 本榜 —— 另两个对家
-    //   （`monthlyWeeklyDaily` / `weeklySarBearish`）被站长同批移除。
-    // ⚠️ 严格子集但**不该取代**：量级差一个数量级、语义各异、站长说"新增"⇒ 并列是对的。
-    // ⚠️ 行里 `weeklyEmaGap` **可正可负**（本榜不看 EMA）—— 别照 `weeklyEmaSarBull` /
-    //   `weeklyEma921Expansion` / `weeklyEmaSarFirstTwo` 那几个"恒为正"的抄（`weeklyTripleEma` 09-10 13:3x 已移除）。
-    // ⚠️ **别为 SAR 加轴**（布尔值排不了序）；门槛 ≥3 根周 K（现在是站内最低的一档）。
-    // ✏️ **2026-09-11 站长「周线SAR多头这个TAB的逻辑改为：周线SAR多头且周线RSI大于等于50」** ⇒ 2 个条件、都在周线
-    //   （name「周线SAR多头＋RSI≥50」，⚠️ key 不动 ⇒ 已不是「周线 SAR 多头」全集）。上面按新判据读：
-    //   · 「只剩一对 `weeklyEmaSarBull` ⊊ 本榜」**也作废**（9/21 扩张不蕴含 RSI≥50）⇒ 本榜现在**不参与任何包含/互斥对**。
-    //   · 门槛由 ≥3 根抬到 **≥16 根**已收盘周 K；每行 周线RSI 恒 ≥ 50（自检点）；周线EMA间距 仍可正可负。
-    //   · 轴一根没加（行里本来就有 周线RSI 轴 `weeklyRsi`）；**别为 RSI≥50 加布尔轴**。
     weeklySarUptrend: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-
-    // === ⑬ 月线四连阳 / ⑭ 月线五连阴（2026-09-06 站长同一条消息连发两条；没点资产 ⇒ 加密）===
-    // 判据各 1 个条件、都在月线，且是**恰好**不是至少：
-    //   ⑬ 倒1..倒4 全阳 且倒5 非阳（门槛 ≥5 根已收盘月 K，后端 fourBull 旗标——2026-07-25
-    //     起闲置的保留字段本次转正；key 与那时移除的同名榜判据逐字相同 ⇒ 复用旧 key）
-    //   ⑭ 倒1..倒5 全阴 且倒6 非阴（门槛 ≥6 根，后端 fiveBear 是**新增字段** ⇒ 那边
-    //     MONTHLY_CACHE_SCHEMA 已 11→12，不 bump 会命中恒 0 到下月 1 号）
-    // ⚠️⚠️ 两榜**结构性互斥**：⑬ 要倒1 为阳、⑭ 要倒1 为阴，同一根 K 不可能兼具 ⇒ 交集恒为空
-    //   （判据保证；48 个月回放 0/48 有交集）。站内互斥 live 对当时由三对变四对：⑦∩⑧、
-    //   ④∩⑪、⑫∩⑧（继承自 ⑦∩⑧）、⑬∩⑭（本轮，独立新事实不是继承）。⚠️ 2026-09-09 ④⑪
-    //   合并后 ④∩⑪ 消失 ⇒ 三对；**同日 15:3x 一次移除五个榜（含 ⑦⑧⑫ 三个对家）⇒ 站内
-    //   结构性互斥 live 对只剩【这一对】** —— 本榜与 `monthlyFiveBear`，别的都没了（⚠️ **2026-09-10 12:1x 起【四对】**：
-    //   新增的三个周线连阳/连阴榜两两互斥，见 `weeklySixBull` 那组；**当日第 6 条再加 `monthlyTwoBullExact` 与本榜 / `monthlyFiveBear` 各一对 ⇒【六对】；第 7 条再加 `monthlyBullAfterThreeBear` 与本榜 / `monthlyFiveBear` / `monthlyTwoBullExact` 各一对 ⇒【九对】**；
-    //   ⚠️ **09-11 08:1x 那几张月线榜与日线两连阳一次移除 ⇒ 互斥回到【四对】：本榜 ∩ `monthlyFiveBear` + 三对周线**；
-    //   ⚠️⚠️ **09-12 08:5x 周线四连阳与六连阳合并成 `weeklyFourToSixBull` ⇒ 互斥【两对】**：本榜 ∩ `monthlyFiveBear` +
-    //   `weeklyFourToSixBull` ∩ `weeklyFiveBear`（原来周线那三对里，「六连阳 ∩ 四连阳」降级成合并榜内部两支的关系、
-    //   另两条并成一条））。
-    // ⚠️⚠️ **`monthlyFiveBear` 是站内第一个纯粹筛「正在下跌」的榜**：当时另有三个要求阴K
-    //   的榜（`weeklySarBearish` / `dailyEmaSarBearish` / `weeklyEmaSarBearish`）**都另要求
-    //   SAR 多头或 EMA 扩张**（问的是"强势里在回踩"），而它一个多头条件都没有。
-    //   ⚠️ **2026-09-09 15:3x 那三个阴K 榜被一次性全部移除** ⇒ 它一度是站内唯一涉及"连续
-    //   收阴"的榜（⚠️ **2026-09-10 12:1x 起多了周线版 `weeklyFiveBear`**）；读法与其余各榜相反
-    //   （超跌/空头确认/回避名单三种，desc 里没替用户选）。
-    //   **别照抄别的榜的措辞去改它的 desc。**
-    // ⚠️ 两榜都是**纯 K 线形态、零指标**（同类此前还有 `weeklyTwoBullExact`，
-    //   2026-09-09 15:3x 移除 ⇒ 这一类一度只剩本组这两个；⚠️ **2026-09-10 12:1x 起加周线三个、共五个**；
-    //   ⚠️ **09-12 08:5x 周线四连阳与六连阳合并成一张后【四个】**：本组两个 + `weeklyFourToSixBull` / `weeklyFiveBear`）。
-    // ⚠️ 事件型 + 月内恒定：相邻两月成员交集恒为空；月线走缓存 ⇒ 月内成员纹丝不动是正确行为。
-    // ⚠️ **⑬ 上线当天命中 0（空榜）**，是判据 + 行情使然：当天连阳分档 {3:13, 5:2, 6:1}——
-    //   恰好没有 4 那一档。48 个月回放 8/48 个月为 0，六分之一的月份空榜是常态，别当 bug 查。
-    // ⚠️ 别为"连阳/连阴"加轴（布尔值排不了序）；轴集照旧、与本族其余各榜共用同一个 sorts 对象。
-    // 🔴 **2026-09-12 1x:xx 站长「移除：周线五连阴。月线五连阴。」** ⇒ 上面那一长段里凡讲 `monthlyFiveBear`
-    //   （以及周线版 `weeklyFiveBear`）的，从这一刻起都是**已移除榜的历史说明**：两条 `TABS_CONFIG` 一起删掉，
-    //   后端 `fiveBear` 两个字段退回零消费者保留字段（照常产出、schema 不退回）。
-    //   ⇒ 连带：互斥 live 对**两对 → 【一对】**（`monthlyFourBull ∩ monthlyFiveBear` 与
-    //   `weeklyFourToSixBull ∩ weeklyFiveBear` 的对家双双下线，只剩 `monthlySarBearish ∩ monthlySarFirstBar`）；
-    //   **站内不再有任何「连续收阴」的榜**（⚠️ 全称否定句，已被下一条指令推翻过九次，别写进代码）。
-    // ➕ **同一条消息站长「新增：月线四到六连阳。」** ⇒ 新榜 `monthlyFourToSixBull`（配置在本文件末尾那组的最后一条，
-    //   rail 也追加在末尾）。⚠️⚠️ 站长说「新增」不是「合并」⇒ **`monthlyFourBull` 原样留着**，
-    //   两张并列 ⇒ 新增一对**严格包含**：`monthlyFourBull` ⊊ `monthlyFourToSixBull`（两者共用后端同一个
-    //   `fourBull` 旗标 —— 与 08:5x 周线那次「改为合并、原两张下线」不是同一种指令，别照那次把它删了）。
     monthlyFourBull: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    // ⭕ 2026-09-09 复活：周线 EMA9/21 扩张（**单条件** —— 站长「即可」＝只有这一个门）。
-    // 轴集照旧、与本族其余各榜共用同一个 sorts 对象；**别为「扩张」加 emaGap 轴**（它早就在那套轴里）。
-    // ⚠️ 本榜是 `weeklyEmaSarBull` / `weeklyEmaSarFirstTwo` 的**母集**（两对结构性严格包含）
-    //    —— `weeklyEmaSarBearish` 2026-09-09 15:3x 移除、`weeklyTripleEma` 2026-09-10 13:3x 移除。
-    // ⚠️ `weeklyTripleEma` ⊊ 本榜 那对曾是**免费的跨实现对账**（后端 `emaExpansion`〔三线〕与
-    //    `ema921Expansion` 是两份独立实现）；它移除后对账点暂无消费者，后端两段仍别合并。
     weeklyEma921Expansion: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-
-    // ⭕ 2026-09-10 新增：周线 EMA9/21 扩张 ＋ 周线 SAR 多头的**前两根之一**（首根 ∪ 第二根）。
-    // 轴集照旧、与本族其余各榜共用同一个 sorts 对象；别为 SAR 加轴（布尔值排不了序），
-    // 也别因为有 EMA 就加 emaGap 轴（「周线EMA间距」早就在那套轴里）。
-    // ⚠️⚠️ **本榜是站内最严的周线榜，一次引入三对结构性严格包含**：它同时 ⊊
-    //   `weeklyEmaSarBull` / `weeklyEma921Expansion` / `weeklySarUptrend`
-    //   ⇒ 站内包含对由三对变【六对】，且 **`weeklyEmaSarBull` 本就 ⊊ 后两者 ⇒ 两条
-    //   传递包含链回归**（2026-09-09 15:3x 刚写下的「包含关系回到只有一层」当场作废，
-    //   只成立了不到一天）。**读关系图时别再假设包含只有一层。**
-    //   ✏️ **2026-09-11 起「⊊ `weeklySarUptrend`」作废**（那张追加周线 RSI≥50、本榜不看 RSI）⇒ 本榜向上两条边、
-    //   传递链只剩 本榜 ⊊ `weeklyEmaSarBull` ⊊ `weeklyEma921Expansion` 一条；desc 里「这三张榜」已同步改成两张 + 一句说明。
-    // ⚠️⚠️ **与日线版 `dailyEmaSarFirstTwo` 曾是同判据异周期孪生、但两个方向都不包含**
-    //   （周期不同：日线刚翻多与周线刚翻多互不蕴含，实测交集 0）。
-    //   ⚠️ **同日（09-10）稍后日线那个追加了「成交额递增」⇒ 不再同判据**（日线 3 条、本榜 2 条）；
-    //   本榜判据一个字没动，下面那条「别照抄 sarBullBars」照旧成立。
-    // ⚠️⚠️ **别照抄孪生兄弟那条「`sarBullBars` 恒 ∈ {1,2}」的自检点** —— 那根轴量的是
-    //   **日线** SAR 多头根数，与本榜的周线判据毫无关系；本榜行里它可以是任意值或 null
-    //   （实测值域 {1,7,8,10,22,26,null}）。这是本榜最容易被顺手抄错的一处。
-    // ✏️ **2026-09-11 14:xx UTC 站长「涉及到SAR多头前2根的都改为SAR多头前4根」** ⇒ 条件② 改**前四根**（首根 ∪ 第二根 ∪ 第三根 ∪ 第四根；
-    //   后端新增周线字段 `sarThirdBar` / `sarFourthBar`，WEEKLY_CACHE_SCHEMA 22→23）；key 不动。包含两对照旧；事件型「最多连着两周」→ 四周。
-    //   日线版孪生兄弟那条自检点现在是「恒 ∈ {1,2,3,4}」—— **本榜仍然绝对不适用**（那根轴量的是日线）。
     weeklyEmaSarFirstTwo: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-
-    // ➕ 2026-09-10 12:1x UTC 站长同一条消息连发三条：「周线6连阳」「周线4连阳」「周线5连阴」（没点资产 ⇒ 加密）。
-    //   ＝ `monthlyFourBull` / `monthlyFiveBear` 的**周线版**，纯 K 线形态、零指标。
-    // ⚠️⚠️ **恰好不是至少**（站长没写"恰好"，按站内全部 N 连阳/连阴榜的既有口径）：六连阳要倒7 非阳、
-    //   四连阳要倒5 非阳、五连阴要倒6 非阴（「非阳」/「非阴」含平盘）；门槛各比根数多一根（≥7 / ≥5 / ≥6）。
-    // ⚠️⚠️ 三榜**两两结构性互斥**（判据保证）⇒ 站内互斥 live 对由一对变【四对】（加 `monthlyFourBull` ∩ `monthlyFiveBear`）。
-    // ⚠️ 事件型：相邻两周成员交集恒空；周线走缓存 ⇒ 周内成员纹丝不动（desc 里写给用户了）。
-    // ⚠️ 别为"连阳/连阴"加轴（布尔值排不了序）；轴集照旧、与本族其余各榜共用同一个 sorts 对象。
-    // 🔗 **2026-09-12 08:5x UTC 站长「周线连阳的TAB，改为：4，5，6合并。也就是说4,5,6连阳都合并到一个TAB。」**
-    //   ⇒ `weeklySixBull`「周线六连阳」+ `weeklyFourBull`「周线四连阳」两条配置**合并成下面这一条**
-    //   `weeklyFourToSixBull`「周线四到六连阳」（＝恰好4 ∪ 恰好5 ∪ 恰好6；**"恰好 5"那一档是这次新进来的**，
-    //   后端新增周线字段 `fiveBull` ⇒ WEEKLY_CACHE_SCHEMA 24→25）。两个旧 key 退役。
-    // ⚠️⚠️ **上界没拆**：仍是「恰好」⇒ 7 连阳、8 连阳不在榜上；合并只是把 4、5、6 三档并起来。
-    // ⚠️⚠️ 连带作废两条：① 互斥 live 对**四对 → 两对**（「六连阳 ∩ 四连阳」降级成同一个榜内部两支的关系，
-    //   原来两条与五连阴的互斥并成一条）；② **「相邻两周成员交集恒空」对合并榜不再成立** ⇒ 它是
-    //   「最多连着三周」（第 4 根 → 第 5 根 → 第 6 根都在榜上，第四周必掉出；60 周回放实测连庄分布 {1,2,3}）。
-    //   ⚠️ `weeklyFiveBear` 那张**仍然**恒空（单档"恰好第 5 根"）—— 别把这条抄过去。
-    // 🔴 **2026-09-12 1x:xx 站长「移除：周线五连阴。月线五连阴。」** ⇒ `weeklyFiveBear` 这条配置删掉；
-    //   上面那句「⚠️ `weeklyFiveBear` 那张仍然恒空」从此**没有消费者**（合并榜本来就不恒空）——
-    //   别把"相邻两周交集恒空"顺手抄到合并榜上。本榜 ∩ 它那一对互斥随对家一起作废。
     weeklyFourToSixBull: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-
-    // 🔴 **2026-09-11 08:1x 站长「移除：月线两连阳，月线三连阴后首阳，月线两连阳＋成交量递增，日线两连阳」**（纯移除、无替代）：
-    //   `monthlyTwoBullExact` / `monthlyBullAfterThreeBear` / `monthlyTwoBullExactVolRising`（09-10 建）与 `dailyTwoBullExact`
-    //   （09-11 06:4x 建）四条配置已删。判据存档在后端 build_rankings 原位；后端旗标 `twoBullExact`（月 / 日）、`bullAfterThreeBear`、
-    //   月线 `volRising` 照常产出（零消费者保留字段，schema 不动）⇒ 复活 ＝ 后端 build 一段 + 这里与 TAB_GROUPS 各加回一条
-    //   （四条的 key / name / desc 最后一版在 bishuju-web `f653c6a`）。
-    //   连带：包含 五对 → 四对、互斥 十三对 → 四对、月线榜 6 → 3、日线榜 4 → 3、纯 K 线形态 9 → 6。
-
-    // ➕ 2026-09-10（当日第 9 条）站长「新增一个TAB，逻辑是最新已收盘日线是sar多头首根K线。」（没点资产 ⇒ 加密）。
-    //   1 个条件、全在日线：倒1 SAR 多头 且 倒2 空头 ＝ 后端新增日线旗标 `sarFirstBar`（日线不走缓存 ⇒ 零 schema）。
-    // ⚠️⚠️ **不带任何 EMA / 成交额条件** —— 与 `dailyEmaSarFirstTwo` 两个方向都不包含（那张的首根那批 ⊆ 本榜、
-    //   第二根那批 ∩ 本榜 ＝ ∅）⇒ 不计入包含 / 互斥对数。后端判据源绝不能换成自带 9/21 门的 `daily_sar_flip_data`。
-    // 💡 自检点：每行 `sarBullBars` 恒 == 1（跨实现对账）；⚠️ 行里 `emaGap` **可正可负**，别照 `dailyEmaSarFirstTwo` 抄「恒为正」。
-    // ⚠️ 事件型：相邻两日成员交集恒空。别为 SAR 加轴（布尔值排不了序）；轴集照旧、与本族共用同一个 sorts 对象。
-    // ✏️ **2026-09-11 01:0x UTC 站长「日线SAR多头首根，这个TAB的逻辑改为：日线SAR多头首根+第二根。」** ⇒ 判据改成**前两根**
-    //   （首根 ∪ 第二根，后端 `sarFirstBar` ∪ `sarSecondBar`）；name 改「日线SAR多头前两根」；⚠️ **key 不动 ⇒ `FirstBar` 已名不副实**。
-    //   ⇒ 上面几行按新判据读：**`dailyEmaSarFirstTwo` ⊊ 本榜**（包含由六对变【七对】，「两个方向都不包含」作废）；
-    //   每行 `sarBullBars` 恒 ∈ {1, 2}；**相邻两日交集不再恒空**（最多连着两天；连着三天交集恒空）。
-    // ✏️ **2026-09-11 14:xx UTC 站长「涉及到SAR多头前2根的都改为SAR多头前4根」** ⇒ 判据再改**前四根**（后端 `sarFirstBar` ∪ `sarSecondBar` ∪
-    //   `sarThirdBar` ∪ `sarFourthBar`）；name「日线SAR多头前四根」；key 仍不动。⇒ 每行 `sarBullBars` 恒 ∈ {1,2,3,4}；最多连着四天、
-    //   **连着五天交集恒空**；`dailyEmaSarFirstTwo` ⊊ 本榜照旧（两者同批改）。
-    // 🔴 **2026-09-12 1x:xx 起上面凡提到 `dailyEmaSarFirstTwo` 的关系一律作废**：那张先改「前六根」而本榜没跟着改
-    //   （包含就此断掉），同日站长「移除：日线9/21扩张＋SAR多头前七根」把它整个移除 ⇒ 连对家都没了。
-    //   ⇒ **本榜现在不参与任何包含 / 互斥**；`sarBullBars` 恒 ∈ {1,2,3,4} 与「最多连着四天」照旧（本榜判据从未跟着改）。
-    //   ⚠️ 「行里 `emaGap` 可正可负」也照旧 —— 现在唯一「恒为正」的是 `dailyTwoToSixBullRsiEma921`，**别互抄**。
-    //   desc 里那句"站内另有一张日线9/21扩张＋SAR多头前七根…"已同批删掉（用户看不到的榜不该出现在文案里）。
     dailySarFirstBar: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    // 🔴 2026-09-12 站长「移除两个TAB：周线两连阳＋价涨量增。日线两连阳＋价涨量增。」（纯移除、无替代）：
-    //   这里原有 `dailyFourBull`「日线两连阳＋价涨量增」（09-11 06:0x 建「日线四连阳」、08:5x 改判据、key 一直没动）与
-    //   `weeklyTwoBullExactCloseVolRising`「周线两连阳＋价涨量增」（09-11 08:5x 建）两条，都是
-    //   `{ sorts: cryptoStrategySorts, subFormat: axesSub(..., "日成交额") }`（复活即照抄，轴集没分叉过）。
-    //   ⚠️ 两张是同判据异周期孪生、一起走 ⇒ **站内又没有孪生了**（09-11 08:5x 刚回归、只活了一天）。
-    //   ⚠️ 互斥八对 → 五对（周线那三对随榜走）；同一条消息里 `monthlyVolRising` 撤回阳K 再带走一对 ⇒ **四对**。
-    //   ⚠️ 日线榜 3 → 2、周线榜 9 → 8、加密策略榜 17 → 15。后端判据存档在 build_rankings 原位。
-    //   （`dailyTwoBullExact`「日线两连阳」2026-09-11 06:4x 建、同日 08:1x 移除，见上方 🔴 那段。）
-    // ➕ 2026-09-11 11:0x UTC 站长「新增一个TAB，逻辑是最新已收盘月线的成交量递增。」（没点资产 ⇒ 加密）。
-    //   1 个条件、全在月线：最新已收盘月 K 的成交量 k[5] > 上一根 ＝ 后端月线字段 `volRising`（09-10 就在缓存里 ⇒ 零 schema）。
-    // ✏️ 2026-09-11 13:2x 一度追加「且必须是月线阳K」（名「月线成交量递增＋阳K」）；**2026-09-12 站长「月线成交量递增＋阳K
-    //   的逻辑改为：月线成交量递增即可。」⇒ 阳K 撤回、判据回到建榜时那一条**，key 从头到尾没动、sorts 一根没动。
-    // ⚠️ 不看价格方向（放量上涨、放量下跌都在榜上）；**与各榜无包含 / 互斥 / 孪生**（13:2x ~ 09-12 期间与 `monthlyFiveBear`
-    //   的那对互斥随阳K 一起作废）；不计入纯 K 线形态（它数的是成交量）。
-    // ⚠️ 它又是现役唯一完全不看价格的一张 —— 全称句，11:0x 写过、13:2x 被推翻、09-12 又回来，别当永久前提。
-    // ⚠️ 既不是事件型也不是状态型（逐月比较型）：下个月约三分之一的成员还在；月线走缓存 ⇒ 月内成员纹丝不动。命中很宽（撤回当天 303）。
-    // ⚠️ 族里没有「月成交量增幅」轴 ⇒ 本榜排不了「放大了多少」（回复里提了、没做）。别单为本榜分叉 sorts。
-    //   ✏️ 2026-09-11 全族加了「月成交额」（最新已收盘月 K 的 USDT 成交额 + 全市场 TOP N）⇒ 能按月成交额的「水平」排了，增幅仍没有。
     monthlyVolRising: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    // ➕ 2026-09-11 16:3x UTC 站长「新增一个TAB，逻辑是：周线是EMA9/21/55三线扩张的存续期间。」（没点资产 ⇒ 加密）。追加在末尾（⑯）。
-    //   1 个条件、全在周线：最新已收盘周 K 仍 EMA9>21>55，且这段排列里出现过一次两档间距同时变大的三线扩张 ＝ 后端新周线字段
-    //   `emaExpansionPersist`（WEEKLY_CACHE_SCHEMA 23→24）；「扩张存续期间」沿用 07-28 站长给四线版（已移除的「日线9/21/55/200扩张存续」）下的定义。
-    // ⚠️⚠️ 不是 09-10 移除的 `weeklyTripleEma`「周线9/21/55扩张」（最新一根在扩张）的复活 ⇒ 全新 key；旧榜判据 ⊊ 本榜。
-    // ⚠️ 与各现役榜无包含 / 互斥 / 孪生；状态型；行里周线EMA间距恒为正（排列蕴含 EMA9 在 EMA21 上方）。别为「扩张 / 存续」加轴；轴集照旧。
-    //   （↑ 以上是原周线榜 `weeklyTripleEmaPersist` 的建榜注释；2026-09-13 起它并进下面这一条。）
-    // 🔗 **2026-09-13 站长「新增一个TAB，逻辑：最新已收盘日线是EMA9/21/55三线扩张后的存续期间。和周线榜合并为一个。」**
-    //   「合并」当场问过站长 ＝ **并集**（日线或周线任一处于存续期）⇒ 旧 key `weeklyTripleEmaPersist` 退役、开新 key
-    //   `dailyOrWeeklyTripleEmaPersist`（判据不同 ⇒ 不复用旧 key；⚠️ **别起成 `weeklyDaily…` 开头**：后端 RETIRED_KEY_PREFIXES 有这个前缀）。
-    //   后端：日线那一支是新增的 `daily_lookup` 旗标（零 schema）、周线那一支是既有周线字段 `emaExpansionPersist`（schema 仍 25）。
-    // ⚠️ 轴集照旧、一根没加；**别为「是哪一支命中的」加轴**（布尔值排不了序）⇒ 表格上看不出某行是日线还是周线带进来的（desc 如实写了）。
-    // ⚠️ 行里 emaGap / weeklyEmaGap **至少一个 ≥ 0**，单看任何一列都不再恒为正（上线当天 emaGap<0 的 4 行、weeklyEmaGap<0 的 203 行）。
     dailyOrWeeklyTripleEmaPersist: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    // ➕ 2026-09-11 17:5x UTC 站长「新增一个TAB，逻辑是：月线EMA9/21扩张存续期间。」（没点资产 ⇒ 加密）。追加在末尾（⑰）。
-    //   1 个条件、全在月线：最新已收盘月 K 仍 EMA9>21，且这段排列里出现过一根 9/21 间距比上一根大的月 K ＝ 后端新月线字段
-    //   `ema921ExpansionPersist`（MONTHLY_CACHE_SCHEMA 17→18）；「扩张存续期间」同上一条、只换周期与线数。
-    // ⚠️⚠️ 两线版里 EMA9 刚站上 EMA21 的那一根（间距由负转正）本身就是扩张 ⇒ 实际 ≈「月线 EMA9 在 EMA21 上方」，只在窗口边界（第 21 根月 K 时已排列、之后没再张开过）分叉。
-    // ⚠️ 与各现役榜无包含 / 互斥 / 孪生；状态型；月线走缓存 ⇒ 月内恒定。行里没有月线 EMA 间距列 ⇒ 没有「恒为正」的自检列（周线EMA间距可正可负）。别为本榜加轴；轴集照旧。
     monthlyEma921Persist: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    // ➕ 2026-09-12 09:xx UTC 站长「另外新增一个TAB，逻辑是：最新收盘的月线SAR是空头就行。」（没点资产 ⇒ 加密）
-    //   建榜，判据 ＝ 月线SAR空头（后端 `m["sarUptrend"] is False`）、显示名「月线SAR空头」。
-    // ✏️✏️ **2026-09-13 UTC 站长改判据**：「月线SAR空头改为：最新已收盘月线的收盘价大于最近一轮月线SAR空头趋势的
-    //   第二根K线的最低价。」⇒ 1 个条件、全在月线：后端 `m["close"] > m["lastBearSarSecondLow"]`
-    //   （**既有月线字段**〔09-08 建、09-09~09-13 零消费者保留〕⇒ 零 compute / 零抓取 / 零 schema）。
-    //   显示名改「**月线突破SAR空头第二根低点**」（逐字沿用 09-08~09-09 在站一天的 `monthlyBreakBearSecondLow`
-    //   —— 判据与那张逐字相同；⚠️ 那个旧 key 仍退役、没复用）。**key 不动 ⇒ `SarBearish` 已名不副实。**
-    //   轴集照旧、轴一根没加。
-    // ⚠️ 型别由**状态型**变【**门槛型**】：参照线只在 SAR 换段时才变、收盘价每月一变 ⇒ 成员在线上下进出
-    //   （跨月延续中位 84.0%、在榜段中位 2 个月；旧判据 95.5% / 8 个月）。月线走缓存 ⇒ 月内纹丝不动。
-    // ⚠️⚠️ **与 `monthlySarFirstBar` 那对互斥随判据作废**（新判据不问 SAR 方向）⇒ 站内互斥 live 对 一对 → 【零对】；
-    //   反方向"差一点就是包含"**但有实测反例**（空头段只有 1 根月 K 时没有"第 2 根" ⇒ 当天 CAPUSDT、
-    //   48 个月里 14 个月有这类）⇒ **不算包含对、别当自检点**。
-    // 📊 改判据当天 **469 → 120**（94 个 SAR 仍空头 / 18 个退化档〔参照根＝最新那根 ⇒ 必然命中，站长 09-08 拍板保留〕/
-    //    另有 16 个因参照价 None 不入榜）—— **120 / 18 / 94 与 09-09 移除那张时的存档逐个相同**＝ 免费对账；
-    //    48 个月回放 min 14 / 中位 **96** / max 184 / **0 个月为空**、中位占可判标的 27.6%（旧判据中位 160、约九成）。
     monthlySarBearish: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-
-    // ➕ **2026-09-12 1x:xx UTC 站长「新增：月线四到六连阳。」**（没点资产 ⇒ 加密）建榜、追加在 rail 末尾，
-    //   当时判据 ＝ 连阳根数 ∈ {4,5,6}、显示名「月线四到六连阳」（口径逐字照 08:5x 建的周线版、只换周期）。
-    // ✏️✏️ **2026-09-13 UTC 站长改判据**：「月线四到六连阳改为：月线2到7连阳。」⇒ 1 个条件、全在月线：
-    //   连阳根数 **∈ {2,3,4,5,6,7}** ＝ 后端六支**恰好**旗标之并 `twoBullExact`（既有、本轮**第二次转正**）∪
-    //   **`threeBull`** ∪ `fourBull`（既有）∪ `fiveBull`（既有）∪ `sixBull`（既有）∪ **`sevenBull`**
-    //   （加粗两个是本轮新增 ⇒ **MONTHLY_CACHE_SCHEMA 19→20**）；六支两两互斥 ⇒ 命中 ＝ 六批之和。
-    //   显示名改「**月线二到七连阳**」；**key 不动 ⇒ `FourToSix` 已名不副实**。
-    // ⚠️⚠️ **纯放宽**（{4,5,6} ⊂ {2..7}）⇒ 旧成员一个不掉（48/48 个月回放「旧 ⊆ 新」恒成立）。
-    // ⚠️⚠️ **两端仍都卡死**（「恰好」不是「至少」）：只连涨 1 个月的不入榜、**8 连阳及以上也不入榜**
-    //   —— 只是把左端点 4→2、右端点 6→7，界一个都没拆（旧注释写「7 连阳及以上」的按 **8** 读）。
-    // ⚠️⚠️ **09-13 起与周线版 `weeklyFourToSixBull` 不再同口径**（站长只点了月线那张、那张仍 4~6）
-    //   ⇒ 两张**不是同判据异周期孪生**、两个方向都不包含。
-    // ⚠️⚠️ **`monthlyFourBull` ⊊ 本榜照旧成立**（共用同一个 `fourBull` 旗标）⇒ 站内包含 live 对仍**四对**；
-    //   站长当初说「新增」不是「合并」⇒ 那张**没被取代**、两张并列。
-    // ⚠️ 事件型但**相邻两月交集不恒空** ⇒ ✏️ **09-13 起「最多连着六个月」**（第 2 根 → … → 第 7 根，
-    //   第七个月必掉出；放宽前是三个月）。⚠️ `monthlyFourBull`（单档）**仍然**恒空 —— 别互抄。
-    // ⚠️ 与 `monthlySarBearish`（09-13 起＝收盘价 vs 空头段第 2 根低点）/ `monthlyVolRising` /
-    //   `monthlyEma921Persist` / `monthlySarFirstBar` 都不包含不互斥（改判据当天实测交集 38 / 80 / 4 / 3
-    //   —— ⚠️ 后两个"恰好全在榜内"是 n 太小的巧合，别当包含）。
-    // ⚠️ 别为"连阳"加轴（布尔值排不了序）；轴集照旧、与本族其余各榜共用同一个 sorts 对象。
-    // 📊 改判据当天 **3 → 151**（恰好2 **136** / 恰好3 12 / 恰好4 0 / 恰好5 2 / 恰好6 1 / 恰好7 0；全市场连阳分档
-    //    {0:113, 1:259, 2:136, 3:13, 5:2, 6:1}）⇒ **九成命中是"刚满两个月"那一档**，desc 如实写了；
-    //    48 个月回放 min 0 / p25 4 / 中位 **17.5** / p75 42 / max **151**（＝当天）/ **1 个月为空**
-    //    （旧判据 中位 1 / max 68 / **13 个月为空**）；跨月延续中位 36.2%、Jaccard 0.19；
-    //    已结束在榜段分布 {1:545, 2:182, 3:91, 4:26, 5:17, 6:13} —— **>6 个月 0 个**，与判据对上；
-    //    成员下个月收阳 **40.6%**（n=1471）vs 全体 37.0%（n=12637）—— 样本比放宽前（n=238）厚实得多，
-    //    仍撑不起一个结论，desc 如实写了。
     monthlyFourToSixBull: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-
-    // ➕ **2026-09-12 1x:xx UTC 站长「新增一个TAB，逻辑是；日线2-6连阳，且日线RSI大于等于70，且EMA9/21扩张。」**
-    //   （没点资产 ⇒ 加密）。追加在 rail 末尾。**3 个条件、全在日线**：
-    //   ① 连阳根数 ∈ {2,3,4,5,6}〔✏️ **同日稍后上界改 7**，见下方〕＝ 后端五支**恰好**旗标之并（`twoBullExact` / **`threeBull`** / `fourBull` /
-    //      **`fiveBull`** / **`sixBull`**；加粗的三个本轮新增，`twoBullExact` / `fourBull` 两个保留字段转正）；
-    //   ② 日线 RSI(14) ≥ 70 ＝ 新旗标 `rsiGe70`（后端**用未 round 的值判**，别在 build 层比 round(_,6) 的 `rsi`）；
-    //   ③ 日线 EMA9/21 扩张 ＝ 遍历源 `ema921_expansion_data` 的成员资格（同 `dailyEmaSarFirstTwo` 的条件①）。
-    //   **日线不走缓存 ⇒ 零 schema、零函数签名改动。**
-    // ✏️✏️ **2026-09-12（同日第三次动它）站长「日线二到六连阳＋RSI≥70＋9/21扩张，逻辑改日线二到七连阳＋
-    //   RSI≥70＋9/21扩张」** ⇒ **只动条件① 的上界（6 → 7）**，条件②③ 一个字没动；后端新增日线旗标 `sevenBull`
-    //   （恰好7、≥8 根；日线不走缓存 ⇒ **零 schema**）⇒ 条件① 现为**六支**恰好旗标之并、命中 ＝ 六批之和。
-    //   name 跟着改；⚠️ **key 不动 ⇒ `TwoToSix` 名不副实**（它是橱窗兼落地榜，改 key 连动六处）。
-    //   **纯放宽**（回放 360/360 天旧 ⊆ 新）：改判据当天 **4 → 6**（新增的两个正好是恰好 7 连阳那档）。
-    // ⚠️⚠️ **「2-7」两端仍都卡死**：1 连阳不入榜、**8 连阳及以上**也不入榜（恰好不是至少，同两张"四到六连阳"的既有口径）
-    //   —— 改判据只把右端点挪了一格，**没有拆界**。
-    // ⚠️ 与 `dailySarFirstBar` **两个方向都不包含**、**不参与任何互斥**。⚠️ 站内没有「日线9/21扩张」全集榜
-    //   （只有周线版）⇒ 别照周线那套关系图抄出一对包含来。
-    // 🔴 **2026-09-12 1x:xx（同日稍后）站长「置顶：日线二到六连阳＋RSI≥70＋9/21扩张」** ⇒ 本榜移到加密策略组第一位，
-    //   并接手同批被移除的 `dailyEmaSarFirstTwo` 留下的**橱窗 `TEASER_TAB`** 与**默认落地榜**（建榜时写的「与它两个方向
-    //   都不包含」随之失去对家）。⚠️ 本榜是站内唯一「`emaGap` 恒为正」的榜了。
-    //   ⚠️⚠️ 本榜 360 天回放 **13 天为空**（改判据前 14 天）⇒ 那几天橱窗 0 行、后端 audit D 项报错
-    //   （站长知情拍板的取舍，见后端 TEASER_TAB 上方）。⚠️ **放宽上界几乎不能解决空榜**：恰好 7 那档 360 天
-    //   只有 95 人次（全部 2483 的 3.8%）—— 别再指望靠放宽连阳档数降空榜率。
-    // ⚠️ 事件型：**最多连着六天**（第 2 根 → 3 → … → 第 7 根，第七天必掉出；360 天回放连庄分布实测最大就是 6；
-    //   ✏️ 改判据前是「最多连着五天」）。
-    // ⚠️ 别为"连阳"加轴（布尔值排不了序）；RSI 与 EMA 间距两根行字段本来就在（⚠️「日EMA间距」轴 09-12 05:2x 已移除，
-    //   行字段 `emaGap` 照常发 ⇒ 「本榜 emaGap 恒为正」现在是读付费 JSON 时的对账、不是页面自检点）。
-    // 📊 上线当天 **4**（LSK / RAYSOL / SOMI / VTHO；分档 恰好2 **1** / 恰好3 **1** / 恰好4 **2** / 恰好5 0 / 恰好6 0；
-    //    当天 9/21 扩张全集 55、其中 RSI≥70 的 10 个，本榜是那 10 个里连阳落在 2~6 的 4 个）。
-    // 📊 360 天回放：min 0 / p25 2 / 中位 **4** / p75 8 / max **152** / **14 天为空**；
-    //    分档人次 恰好2 745 / 恰好3 693 / 恰好4 445 / 恰好5 330 / 恰好6 175；跨日延续中位 33.3%、Jaccard 20%；
-    //    连庄分布 {1:928, 2:351, 3:134, 4:64, 5:20}（**>5 天 0 个**，与判据吻合）。
-    // ⚠️⚠️ **回放里它略微跑输大盘**：成员次日收盘更高 **40.8%**（n=2388）vs 全体 **45.5%**（n=173634）——
-    //    连涨 + RSI 超买 + 均线张开正是短线最热的时刻，次日回落概率比平均更高。**desc 里如实写了、明说不是买入信号**，
-    //    别在文案里把它包装成"追涨榜"。
+    // 橱窗兼默认落地榜：改这个 key 要连动 TEASER_TAB 等前后端多处（见 TEASER_TAB）。
     dailyTwoToSixBullRsiEma921: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
-    // === A股：唯一的单策略榜（2026-07-24 站长定版，2026-07-29 / 2026-08-16 两次改判据）===
-    // ⚠️ 判据 2026-08-16 换成「周线 EMA9/21/55 三线扩张」**单条件**（此前是月/周/日 5 条件），
-    // 但**轴集一根没动**（仍 singleStrategySorts 16 轴）：后端行字段集逐字未变。
-    // 改判据不等于改轴——别因为名字里只剩周线就去砍日线那几根轴（它们是描述值不是条件镜像）。
-    // ⚠️⚠️ **2026-08-16 站长「移除美股，移除ETF」** ⇒ `usMonthlyWeeklyDaily` /
-    // `etfMonthlyWeeklyDaily` 两条已删除，连同下方 TAB_GROUPS 的 singleStrategyGroup
-    // 工厂、资产分段控件那两个按钮、美股新鲜度胶囊、isUsTab/isEtfTab、收盘快照横幅的
-    // us/etf 文案、style.css 的 --asset-us/--asset-etf 两组 token。
-    // **复活清单见后端 fetch_us.py 顶部 docstring**（只改前端不够，后端退役前缀不拿掉
-    // 数据照跑也进不了站）。
-    // ⇒ `singleStrategySorts`（每个轴都写明周期；写这句时是「16 轴：日线十根 + 周线五根 + 月线RSI」，之后 09-04、09-11 又加过轴 —— 要数去数常量本身）
-    // 现在只剩 A股 这一个消费者。**别顺手把它并进 cryptoStrategySorts**：股票系
-    // 永远少一根「日订单流」（tushare 日线无 taker 归边字段，数据源硬边界），并了就是
-    // 一根永远全 null 的幽灵轴。副行的成交额标签同样写「日成交额」。
-    // ⚠️ TABS_CONFIG 是平查找表、与 TAB_GROUPS 分离，所以这条要手写；TAB_GROUPS 那边
-    // 只管导航，不管这里。
-    //
-    // 🔴🔴 **2026-09-12 10:xx UTC 站长「A股直接移除所有TAB。我不玩A股了。需要恢复的时候我再告诉你。
-    //   暂时先直接移除整个A股的数据。」** ⇒ **A股 整族退役**（同 2026-08-16 移除美股/ETF 那一轮的做法）：
-    //   这里原有四条配置 `ashareDailyChange` / `ashareWeeklyChange` / `ashareMonthlyChange`
-    //   （走 `stockChangeSorts` 4 轴 + `asharePriceCtx` 的 close-to-close 价格上下文）
-    //   + `ashareMonthlyWeeklyDaily`（走 `singleStrategySorts`，判据「周线9/21扩张＋SAR多头」）。
-    //   最后一版在 bishuju-web `ddc693e`；判据存档在后端 `fetch_ashare.py`（**整条管道保留为休眠件**）。
-    // ⚠️ **轴集常量全部保留为零消费者休眠件**（`singleStrategySorts` / `stockChangeSorts` /
-    //   `ashareDailyChangeSorts` 三个工厂产物 / `asharePriceCtx` / `fmtCnyPrice`）—— 复活时直接可用，别删。
-    // ⚠️ 后端同批把 `"ashare"` 装进 `RETIRED_KEY_PREFIXES` ⇒ 公开 JSON / paidMeta / 付费 KV / 本机镜像
-    //   四处的 A股 残留（含标量 `ashareUpdateTime` / `ashareDataDate`）由下一枪自动清干净。
-    //   **复活时必须先把那个前缀拿掉**，否则管道照跑、数据照样进不了站（那是设计不是 bug）。
-
+    // A股 / 美股 / ETF 的配置已随资产整族退役删除（复活清单见 fetch_ashare.py / fetch_us.py 顶部；后端 RETIRED_KEY_PREFIXES
+    // 不拿掉对应前缀，数据照跑也进不了站）。A股 用到的轴集 / 价格上下文常量保留为休眠件。
 };
 
-// 分组导航。每组带 asset（资产类别）、tf（周期）：驱动组标签、chip 上的周期角标、
-// 以及表格上方的「资产 · 周期 · 策略」标识栏——让用户任何时候都能一眼看出当前榜单
-// 是加密还是 A股、日线周线还是月线（2026-07-16 用户反馈"分不清周期"后加）。
-// tf 放在组上（组内所有 tab 同周期）；涨跌幅组是例外（横跨日/周/月），tf 放在 tab 上。
-// full = 标识栏用的完整名（涨跌幅组的 chip 名是"昨天/周线/月线"=周期本身，标识栏里
-// 周期已由 tf 角标表达，名字统一显示"涨跌幅"不重复）。data-tab key 不变。
-
-// ⚠️⚠️ **`singleStrategyGroup(assetCN, p, universe)` 工厂已于 2026-08-16 删除**
-// （站长「移除美股，移除ETF」）：它当时只服务美股/ETF 两个资产、生成
-// `${p}MonthlyWeeklyDaily` 那个「月线SAR × 周线SAR＋扩张 × 日线扩张＋CVD」的组，
-// 两个资产一走它就成了零调用方。A股 2026-07-29 单独改判据时已从它里面拆出去手写，
-// 所以删它**不影响 A股**。复活美股/ETF 时从 git 捞这个工厂（本次移除 commit 的父提交），
-// 它写死的口径对那两个资产仍然成立。
-// ⚠️ 连带：`audit_consistency.py` 与 `make_og.py` 里都有一段
-// `re.search(r'key: \`\$\{p\}(\w+)\`')` 专门展开这个工厂——现在正则匹配不到、那段自动
-// no-op，两个脚本改走"只数手写字面量"的路径，**是预期行为不是解析瞎了**。
+// 分组导航：rail、周期角标、表格上方「资产 · 周期 · 策略」标识栏与说明行的唯一数据源，数组顺序 ＝ rail 顺序（TAB_META 由它派生）。
+// 增删榜两处都要配：这里（name / desc，desc 必填）＋ TABS_CONFIG（排序轴集、副行格式）。
+// ⚠️ 条目保持 `{ key: …, name: …` 写在同一行：audit_consistency.py 与 make_og.py 用正则在全文（含注释）里数榜。
+// 组上的 tf 只是 tab 没写 tf 时的兜底（t.tf || g.tf）；tf 取值要在 TF_SHORT 里有缩写（跨周期写组合值如「日线/周线」），
+//   查不到时 rail 徽标静默消失。full ＝ 标识栏用的完整名，缺省用 name。
+// 命名：name 写「怎么算」，条件用 ＋ / × 连接（都表示同时满足，并集写「或」）；根数用汉字（四连阳、前四根），
+//   指标参数照写（9/21、RSI≥70）；「扩张」专指间距在变大（只是排好了写「排列」），「两线扩张」专指 9/21 ∪ 9/26 并集
+//   （只看 9/21 写「9/21扩张」）。desc 用白话讲这张榜在找什么行情。
+// key：改判据时 key 不动、只改 name / desc（不少 key 已名不副实，别按 key 推判据）；新榜的判据与某个退役 key
+//   逐字相同才复用它（先确认公开 JSON / paidMeta / 付费镜像里没有残留），否则开新 key。
 
 const TAB_GROUPS = [
-    // ⚠️⚠️ 2026-07-23 三次命名：站长要求「把所有 TAB 的命名恢复到自己一眼就能理解的
-    // 名字」——显示名重新写明筛选条件（两线/三线/四线扩张、SAR、CVD…），2026-07-21
-    // 深夜那版「脱敏、禁用指标词」的规矩就此作废。历史：PR #121 写全条件版 → PR #124
-    // 脱敏版 → 本次恢复直白版（站长知情决定：付费墙照旧锁"榜单内容"，但筛选规则
-    // 重新对页面访客可见）。
-    // 命名约定：name 写"怎么算"（条件用 ＋/× 连接，宽→严梯度用条件个数表达）；
-    // desc 保持白话讲"这榜在找什么行情"，两层互补。
-    //
-    // ⚠️ **内部 key 一律不动**（`dailyEma921` 等）：改 key 会连累三条抓取管道 + 公开
-    // JSON + 缓存 schema——key 与显示名是两回事，历史上因此定过"key 固定、只改显示名"
-    // 的规矩（*MonthlyStrategy / weeklyStrategy 先例），继续有效。
     {
-        // === 加密行情：三个涨跌幅榜（2026-07-29 站长「新增TAB：日线级涨跌幅，周线级涨跌幅，
-        // 月线级涨跌幅」）===
-        // ⚠️ **资产范围是推断的（站长没写资产）**，判据留在这里以便日后复盘：按 CLAUDE.md
-        // 记了四次的先例「新增TAB 不点资产 ＝ 加密」做加密（2026-07-26 指令② / 2026-07-28
-        // 的 dailyFourEmaPersist / dailyBreakWeeklyBearSar / weeklyBreakBearSar 四例）。
-        // **这条与「加排序轴不点资产 ＝ 四资产同批加」不是同一条规矩，别混。** 扩到四个
-        // 资产是纯 build 层的事（股票系三条管道的 compute 早就产出各周期涨跌幅）。
-        //
-        // ⚠️ **排在策略组之前**：它们无筛选、是"先看全市场在涨什么、再进策略榜筛"的入口，
-        // 也是站内历史上一贯的排法（当年 crypto 的组序是 行情 → 日线策略 → 周线策略 → 月线策略）。
-        // ⚠️ **组的 tf 不下发**：本组横跨日/周/月，tf 挂在每个 tab 上（房规，见 TAB_META
-        // 的注释）。chip 名就写周期本身（日线/周线/月线）+ full 统一写「涨跌幅」——组标签
-        // 已经说了"涨跌幅"、tf 角标已经说了周期，chip 再写「日线级涨跌幅」是三重重复，
-        // 而 rail 只有 148px 可用宽。站长口中的"日线级涨跌幅"＝ 本组标签 + 本 chip。
+        // 本组横跨日 / 周 / 月 ⇒ tf 挂在每个 tab 上；name 只写周期（rail 很窄），full 统一写「涨跌幅」（标识栏里周期已由 tf 表达）。
+        // 行情榜 / 策略榜之分只看 CHANGE_PCT_TABS、不看分组 ⇒ 新增涨跌幅榜要同时加进去。
         label: "加密行情", asset: "加密",
         tabs: [
             { key: "dailyChange", name: "日线", full: "涨跌幅", tf: "日线",
@@ -1107,615 +288,47 @@ const TAB_GROUPS = [
         ],
     },
     {
-        // 加密策略榜：**六个**（数量以下面 tabs 数组的条目为准，别在注释里维护一个会发霉
-        // 的流水账——完整增删履历在 CLAUDE.md 顶部的日期区块，被移除各榜的显示名/desc/判据
-        // 存档见 git 历史与后端 build_rankings docstring 末尾）。
-        // ⚠️ **刻意不套 singleStrategyGroup 工厂**：那个工厂的 name/desc 写死的是股票系
-        // 的 5 个条件（月线SAR + 周线SAR + 周线扩张 + 日线扩张 + CVD），与这些榜都不
-        // 一样。硬套会让页面上的规则说明与后端实际筛选严重不符。
-        // 组 tf 取第一个 tab 的周期（月线），其余 tab 各自覆盖。**排法：同周期的放一起 +
-        // 新榜追加在末尾**（① 月×周×日 → ② 周线扩张＋SAR → ③ 日线三线＋CVD →
-        // ④ 日线9/21扩张＋SAR首根 → ⑤ 月线SAR首根 → ⑥ 周线9/21/55扩张 → ⑦ 周线阴K＋SAR
-        // 多头；追加在末尾是为了不让整套编号位移，所以 ⑤ 虽是月线榜不挪去 ① 旁边、⑥⑦ 虽是
-        // 周线榜也不挪去 ② 旁边）。
-        // ⚠️⚠️ **移除中间的榜必须把后面的重新编号**：2026-07-30 移除三个周线 SAR 榜后把旧
-        // ⑦⑧⑨ 重编成 ④⑤⑥；2026-08-09 移除旧③「四线扩张存续」后把旧④~⑨ 重编成 ③~⑧；
-        // 2026-08-11 移除旧③「日线SAR多头第二根」后又把旧④~⑨ 重编成 ③~⑧；
-        // 2026-08-12 站长一次移除三个（旧②`dailyEmaExpansion`、旧⑤`monthlyWeeklySar`、
-        // 旧⑩`weeklyEma921Expansion`），旧③④⑥⑦⑧⑨ 重编成 ②③④⑤⑥⑦；
-        // **2026-08-16 又一次移除三个（旧②`weeklySarSecondBar`、旧⑤`dailyFourEmaExpansion`、
-        // 旧⑦`dailyTripleEmaSarBearish`），旧①③④⑥⑧ 重编成 ①②③④⑤**；同日稍后追加
-        // `weeklyTripleEma` 成 ⑥、再稍后追加 `weeklySarBearish` 成 ⑦（都追加在末尾 ⇒ 既有
-        // 编号未动）；**2026-08-18 追加 `weeklyTwoBullExact` 成 ⑧**（同样追加在末尾 ⇒ 既有编号未动）。
-        // ①~⑧ 是 rail 位置编号，后端 docstring / CLAUDE.md / 本文件多处按它互相引用，别留缺口。
-        // ⚠️ 引用某个榜时**优先写 key、别写榜号** —— 榜号会随增删位移，本项目已经因此烂过两轮。
-        // ⚠️⚠️ **以下按"类型"归纳现状，一律写 key 不写榜号** —— 本段此前整段按 ①②③… 写，
-        //   而 2026-09-09 一天之内榜号整体位移了四次、当日 15:3x 又一次移除五个榜，
-        //   那套编号已全部作废。**引用某个榜优先写 key。**
-        //
-        // 【现状分类】（🔗 **2026-09-13 站长「新增一个TAB，逻辑：最新已收盘日线是EMA9/21/55三线扩张后的存续期间。和周线榜合并为一个。」**
-        //   ⇒ `weeklyTripleEmaPersist` 并进 `dailyOrWeeklyTripleEmaPersist`「日线或周线9/21/55扩张存续」（「合并」当场问过站长 ＝ 并集）；
-        //   一减一加 ⇒ 榜数不变（仍 17）、rail 位置不变；周线榜 6 → 5、另有 1 个跨日线 / 周线的榜；`weeklyEmaGap` 恒为正的周线榜 4 → 3；
-        //   状态型名单里那一条换成合并榜；包含 / 互斥对数都没变。
-        //   同日更早 ✏️✏️ **2026-09-13 UTC 站长一条消息改两张月线榜的判据**：「月线四到六连阳改为：月线2到7连阳。」
-        //   ＋「月线SAR空头改为：最新已收盘月线的收盘价大于最近一轮月线SAR空头趋势的第二根K线的最低价。」
-        //   ⇒ 两张都是**改判据 ⇒ key 不动、rail 位置不动、榜数不变（仍 17）**；显示名改「月线二到七连阳」/
-        //   「月线突破SAR空头第二根低点」。连带：**互斥 一对 → 【零对】**（后一张不再问 SAR 方向 ⇒ 与
-        //   `monthlySarFirstBar` 那对作废）、包含仍**四对**、纯 K 线形态仍三个、`monthlySarBearish` 的型别
-        //   由「状态型」变【门槛型】；后端 MONTHLY_CACHE_SCHEMA 19→20（前一张要 threeBull / sevenBull 两个新字段）。
-        //   以下为 09-12 及更早的履历 ——
-        //   **2026-09-12 1x:xx（当日最后一条）站长「移除：日线9/21扩张＋SAR多头前七根。置顶：日线二到六连阳＋
-        //   RSI≥70＋9/21扩张」⇒ 移除 `dailyEmaSarFirstTwo`、把 `dailyTwoToSixBullRsiEma921` 提到本组第一位并接手橱窗
-        //   ⇒ 日线榜 3 → 2、加密策略榜 15 → 14、全站 18 → 17；包含仍四对、互斥仍一对（被移除那张一对都没带走）**；
-        //   同日更早新增 `dailyTwoToSixBullRsiEma921`〔日线榜 2 → 3、策略榜 14 → 15、全站 17 → 18〕；同日更早：移除 `weeklyFiveBear` / `monthlyFiveBear` 两张五连阴 ＋ 新增
-        //   `monthlyFourToSixBull`「月线四到六连阳」之后**；同日更早：09:xx 新增 `monthlySarBearish`、08:5x 合并周线 4/5/6 连阳、
-        //   06:2x 移除 `dailyFourBull` / `weeklyTwoBullExactCloseVolRising` 两张「两连阳＋价涨量增」
-        //   ＋ `monthlyVolRising` 撤回阳K 之后**；再往前：09-11 17:5x 新增 `monthlyEma921Persist`、16:3x 新增 `weeklyTripleEmaPersist`、11:0x 新增 `monthlyVolRising`）
-        //   · 事件型（成员换得快）：**`weeklyEmaSarFirstTwo`（周线 SAR 翻多**前四根**＋9/21 扩张，**最多连着四周**）**
-        //     ✏️ 09-11 14:xx 站长「涉及到SAR多头前2根的都改为SAR多头前4根」⇒ 它与下面 `dailySarFirstBar` 由前两根同批改前四根（key 都没动）。
-        //     ✏️ **09-12 1x:xx 日线那张 `dailyEmaSarFirstTwo`（曾是本类里「最多连着七天」的那个）随站长指令整个移除** ⇒
-        //       日线端的事件型只剩 `dailySarFirstBar` 与 `dailyTwoToSixBullRsiEma921`。
-        //     · `monthlySarFirstBar`（月线 SAR 翻多首根**＋收盘价反包所有空头SAR**〔09-10 12:1x 追加〕，相邻两月交集恒空）
-        //     · `monthlyFourBull`（月线恰好 4 连阳；单档 ⇒ 相邻两月交集**恒空**）
-        //     · **`monthlyFourToSixBull`（09-12 1x:xx 建榜时是「月线恰好 4/5/6 连阳」；✏️✏️ **09-13 站长改判据
-        //       「月线四到六连阳改为：月线2到7连阳。」⇒ 现为月线恰好 **2~7** 连阳六档合一**，key 里的 `FourToSix`
-        //       因此名不副实）—— ⚠️ **它不恒空**：2→3→…→7 六个月都在榜上、✏️ **最多连着六个月**（放宽前三个月），
-        //       第七个月必掉出（48 个月回放已结束段分布 {1:545,2:182,3:91,4:26,5:17,6:13}、**>6 个月 0 个**、
-        //       跨月延续中位 36%）。⚠️ `monthlyFourBull` ⊊ 它（共用后端 `fourBull` 旗标）照旧成立。
-        //       ⚠️⚠️ **09-13 起它与 `weeklyFourToSixBull` 不再同判据**（站长只点了月线那张）—— 别再照"孪生"读。**
-        //     · **`dailyTwoToSixBullRsiEma921`（日线恰好 **2~7** 连阳 ∩ RSI≥70 ∩ 9/21 扩张，09-12 1x:xx 建榜、
-        //       同日置顶 + 接手橱窗、同日再把上界由 6 放宽到 **7**〔key 里的 `TwoToSix` 因此名不副实〕）
-        //       ⇒ **最多连着六天**（第 2 根 → 3 → … → 第 7 根都在榜上，第七天必掉出；360 天回放连庄分布
-        //       {1:928, 2:348, 3:138, 4:72, 5:23, 6:7}，**>6 天 0 个**）；跨日延续中位 38%、中位每天只有 4 个、13/360 天为空。
-        //       ⚠️ **放宽上界几乎没降空榜率（14 → 13 天）**：恰好 7 那档 360 天只有 95 人次（全部 2483 的 3.8%）。
-        //       ⚠️⚠️ **回放里它仍略微跑输大盘**（次日收盘更高 41.0% vs 全体 45.4%；放宽前 40.8% vs 45.5%）—— 连涨＋超买＋均线张开正是短线最热的时刻，
-        //       desc 里明说不是买入信号、给了"观察名单 / 反向筛回调"两种读法，**别改成追涨话术**。**
-        //     · **`dailySarFirstBar`（日线 SAR 多头前四根：09-10 第 9 条新增时是首根、09-11 01:0x 改成前两根、14:xx 再改前四根；不带 EMA 门、最多连着四天）**
-        //     · **`weeklyFourToSixBull`（周线恰好 4 / 5 / 6 连阳三档合一，09-12 由「四连阳」＋「六连阳」合并而来、
-        //       并新进来"恰好 5"那一档）—— ⚠️ **它不恒空**：4→5→6 三周都在榜上、**最多连着三周**，第四周必掉出
-        //       （60 周回放连庄分布实测 {1,2,3}、跨周延续中位 40%）**
-        //     🔴 **09-12 1x:xx 移除**：`weeklyFiveBear`「周线恰好 5 连阴」与 `monthlyFiveBear`「月线恰好 5 连阴」
-        //       两条原在这一类（站长「移除：周线五连阴。月线五连阴。」，移除前最后命中 3 / 2）。
-        //       ⇒ **"相邻两周/两月交集恒空"这句现在只对 `monthlyFourBull` / `monthlySarFirstBar` 这种单档榜成立**，
-        //       两张"四到六连阳"合并榜都**不恒空** —— 别互抄。
-        //       ⇒ **站内不再有任何「连续收阴」的榜**（⚠️ 全称否定句，已被推翻过九次，别当永久前提）。
-        //     🔴 09-12 移除：`dailyFourBull`「日线两连阳＋价涨量增」与 `weeklyTwoBullExactCloseVolRising`「周线两连阳＋价涨量增」
-        //       两条原在这一类。它们是站内当时唯一一对**同判据异周期孪生**，一起走 ⇒ **孪生又一个都没有了**
-        //       （09-11 08:5x 刚回归、只活了一天 —— 全称句两个方向都会翻，别写死）。
-        //     ✏️ 09-11 08:1x 移除的四个也都在这一类：`monthlyTwoBullExact` / `monthlyBullAfterThreeBear` /
-        //       `monthlyTwoBullExactVolRising` / `dailyTwoBullExact`（判据存档在后端 build_rankings 原位）。
-        //     ⚠️ 前两个**曾是**同判据异周期孪生（09-10 01:3x 建周线那个时判据逐字搬周期），
-        //       **同日 09:4x 日线那个追加「成交额递增」后不再同判据**（日线 3 条、周线 2 条）。
-        //       两个方向都不包含（日线刚翻多与周线刚翻多互不蕴含）这一点没变。
-        //   · 状态型（不破就一直在榜上）：`weeklySarUptrend`（周线 SAR 多头 ∩ 周线 RSI≥50 —— ✏️ 09-11 追加 RSI 条件后
-        //       **不再是 SAR 多头全集**）
-        //     · `weeklyEma921Expansion`（周线 9/21 扩张全集）· `weeklyEmaSarBull`（周线 SAR 多头 ∩ 9/21 扩张；✏️ 09-11 起
-        //       **不再等于前两者的交集** —— 前一张多了 RSI≥50）
-        //     （`weeklyTripleEma`「周线9/21/55扩张」2026-09-10 13:3x 移除前也在这一类）
-        //     · **`dailyOrWeeklyTripleEmaPersist`（日线或周线三线扩张存续，并集 —— 09-13 由 09-11 16:3x 建的 `weeklyTripleEmaPersist`
-        //       〔跨周延续回放中位 100%〕并进日线那一支而来；跨日延续回放中位 96.8%、已结束在榜段中位 14 天；
-        //       日线那一支每天换 ⇒ 同一 UTC 日内不动，**不再是周内不动**）**
-        //     · **`monthlyEma921Persist`（月线 9/21 扩张存续：仍 EMA9>21 且这段排列扩张过，09-11 17:5x 新增；两线版 ≈「月线 EMA9 在 EMA21 上方」、只差窗口边界；跨月延续回放中位 91%）**
-        //     🔴 **`monthlySarBearish` 09-13 起不在这一类了**：站长改判据（⇒ 收盘价 > 最近一轮空头段第 2 根的低点）
-        //       ⇒ 它由**状态型**变【**门槛型**】，见下面单独那一类。（旧判据的性质：站内命中最多的策略榜、
-        //       上线当天 469/524 占九成、48 个月中位 303.5、跨月延续 95.5%、在榜段中位 8 个月 —— **已随判据作废，别再引用**。）
-        //   · **门槛型（既不是事件型也不是状态型，2026-09-13 起）**：`monthlySarBearish`（最新已收盘月线收盘价 >
-        //     最近一轮月线 SAR 空头段**第 2 根**的最低价 —— 09-12 09:xx 建榜时判据是「月线SAR空头」、09-13 站长改判据；
-        //     后端复用 09-08 就在缓存里的 `lastBearSarSecondLow` ⇒ 零 schema，判据与 09-08~09-09 在站一天的
-        //     `monthlyBreakBearSecondLow` 逐字相同）—— 参照线只在 SAR **换段**时才变、收盘价每月一变
-        //     ⇒ 成员在那条水平线上下进出：跨月延续中位 **84.0%**、已结束在榜段中位 **2 个月**（旧判据 95.5% / 8 个月）。
-        //     ⚠️ 它**不再问 SAR 的方向** ⇒ 与 `monthlySarFirstBar` 那对互斥作废（互斥 live 对归零）；
-        //     ⚠️ 退化档刻意保留：参照根恰好是最新那根时必然命中（改判据当天 18/120，站长 09-08 拍板）。
-        //     📊 当天 469 → **120**；48 个月回放 min 14 / 中位 **96** / max 184 / **0 个月为空**、中位占可判标的 27.6%。
-        //   · **逐月比较型（既不是事件型也不是状态型）**：`monthlyVolRising`（月线成交量 > 上个月，09-11 11:0x 新增；
-        //     13:2x ~ 09-12 期间还要求该月收阳，**09-12 站长撤回阳K、判据回到建榜时那一条**）——
-        //     每月拿新一根和上一根比 ⇒ 相邻两月交集**不**恒空（回放约三分之一的成员下个月还在），也不会「不破就一直在」。
-        //     ⚠️ 11:0x 写的「现役榜里唯一**完全不看价格**的一张」13:2x 被自己推翻（追加阳K）、**09-12 撤回阳K 后又成立了** ——
-        //       同一句全称句一天之内翻了两次，别把它当永久前提写进代码。
-        //   · 纯 K 线形态、零指标（**仍三个**；09-12 1x:xx 移除两张五连阴 ＋ 新增一张月线合并榜之后，
-        //     ✏️ 09-13 `monthlyFourToSixBull` 改判据为「2到7连阳」**本类数目未变**）：
-        //     `monthlyFourBull` / `weeklyFourToSixBull` / **`monthlyFourToSixBull`**
-        //     （09-11 06:4x 一度九个；08:1x 移除月线两连阳 / 三连阴后首阳与日线两连阳后六个；
-        //     08:5x `dailyFourBull` 改成两连阳＋价涨量增 ⇒ 看成交量、移出这一类 ⇒ 五个，同时新增的周线版同理不计入；
-        //     09-12 06:2x 移除那两张时本类没变、**同日 08:5x 把周线四连阳与六连阳合并成一张 ⇒ 四个**；
-        //     `monthlyVolRising` 只数成交量，从头到尾不计入）
-        //
-        // 【结构性关系 —— **2026-09-13 起：包含【四对】、互斥【零对】**（✏️ 09-13 `monthlySarBearish` 改判据
-        //   ⇒ 它与 `monthlySarFirstBar` 那最后一对互斥作废 ⇒ **站内一对结构性互斥都不剩了**；包含一对没动）。
-        //   ⚠️⚠️ 这是**全称否定句**（"站内没有任何互斥对"），本仓库同类句子已被下一条指令推翻过九次
-        //   —— 别拿它去简化代码。以下为 09-12 及更早的履历 ——
-        //   **2026-09-12 1x:xx 起**（包含 四对 → 五对〔新增 `monthlyFourBull` ⊊ `monthlyFourToSixBull`〕
-        //   → **同日稍后又 −1 ⇒【四对】**〔橱窗榜改「前六根」而 `dailySarFirstBar` 仍前四根、那对断了〕；
-        //   互斥 八对 → 四对〔06:2x〕→ 两对〔08:5x 合并 4/5/6 连阳〕→ 三对〔09:xx 新增 `monthlySarBearish`〕
-        //   → **一对**〔1x:xx 两张五连阴一次移除，带走前两对的对家〕）】
-        //   · **包含：四对**（九对 → 09-09 15:3x 三对 → 09-10 新增 `weeklyEmaSarFirstTwo` 一次带来三对，回到六对
-        //     → 13:3x 移除 `weeklyTripleEma` 带走一对 ⇒ 五对 → 第 8 条新增 `monthlyTwoBullExactVolRising` 带来一对 ⇒ 六对
-        //     → 09-11 `dailySarFirstBar` 改成前两根带来一对 ⇒ 七对 → 09-11 `weeklySarUptrend` 追加周线 RSI≥50 带走两对 ⇒ 五对
-        //     → **09-11 08:1x 移除月线两连阳 / 两连阳＋成交量递增，带走 `monthlyTwoBullExactVolRising ⊊ monthlyTwoBullExact` ⇒ 四对**）
-        //       `weeklyEmaSarBull`      ⊊ `weeklyEma921Expansion`   （＝ 后者 ∩ 周线SAR多头）
-        //       `weeklyEmaSarFirstTwo`  ⊊ `weeklyEmaSarBull`        （＝ 后者 ∩ SAR前四根；09-11 14:xx 前是前两根，包含不受影响）
-        //       `weeklyEmaSarFirstTwo`  ⊊ `weeklyEma921Expansion`   （＝ 条件① 本身）
-        //       （✏️ 这里原有第 4 对 `dailyEmaSarFirstTwo` ⊊ `dailySarFirstBar`，**09-12 1x:xx 先因改判据作废、
-        //         同日稍后那张榜整个移除** ⇒ 连对家都没了；本清单就是四条，别再照旧注释数成五条）
-        //       `monthlyFourBull`      ⊊ `monthlyFourToSixBull`   （**09-12 1x:xx 新增这一对** ＝ 后者的第一支逐字就是前者的
-        //         全部判据、两张共用后端同一个 `fourBull` 旗标 ⇒ 差集恒空、是个免费自检点。站长说「新增」不是「合并」
-        //         ⇒ 子集那张**没被取代**）
-        //     ✏️ **09-11 作废的两对**：`weeklyEmaSarBull` ⊊ `weeklySarUptrend`、`weeklyEmaSarFirstTwo` ⊊ `weeklySarUptrend`
-        //       —— 9/21 扩张不蕴含 RSI≥50（上线当天 XANUSDT 在 `weeklyEmaSarBull`、周线 RSI 49.993884）。
-        //     ⚠️⚠️ **传递包含链只剩一条**：`weeklyEmaSarFirstTwo` ⊊ `weeklyEmaSarBull` ⊊ `weeklyEma921Expansion`
-        //       （09-10 起的两条里，经 `weeklySarUptrend` 那条 09-11 断了）。09-09 15:3x 那句「传递链已消失、
-        //       包含回到只有一层」仍然是错的 —— **别假设包含只有一层**；`weeklyEmaSarBull` 仍既是子也是父。
-        //     ⚠️ 移除的那对 `weeklyTripleEma ⊊ weeklyEma921Expansion` 曾是**免费的跨实现对账**：后端
-        //       `emaExpansion`（三线）与 `ema921Expansion` 是两份独立实现 —— 对账点暂无消费者，
-        //       但**别把那两段合并成一份**（复活三线榜时它立刻回来）。
-        //   · **互斥：一对**（三对 → 一对 → 09-10 12:1x 新增三个周线连阳/连阴榜后四对 → 月线两连阳 / 三连阴后首阳 /
-        //     两连阳＋成交量递增、09-11 日线两连阳陆续把它加到十三对 → 09-11 08:1x 这四个榜一次移除、带走九对 ⇒ 四对
-        //     → 09-11 08:5x 新增 `weeklyTwoBullExactCloseVolRising` 与三个周线连阳/连阴榜各互斥 ⇒ 七对
-        //     → 09-11 13:2x `monthlyVolRising` 追加「月线阳K」⇒ 与 `monthlyFiveBear` 互斥 ⇒ 八对
-        //     → 09-12 06:2x 移除周线那张（带走三对）＋ `monthlyVolRising` 撤回阳K（带走月线那对）⇒ 四对
-        //     → 09-12 08:5x 合并 4/5/6 连阳 ⇒ 两对 → 09:xx 新增 `monthlySarBearish` ⇒ 三对
-        //     → 1x:xx 站长「移除：周线五连阴。月线五连阴。」⇒ 前两对的对家双双下线 ⇒ 一对
-        //     → ✏️🔴 **09-13 `monthlySarBearish` 改判据 ⇒ 最后那一对也没了 ⇒ 【零对】**）：
-        //       ✏️🔴 **`monthlySarBearish` ∩ `monthlySarFirstBar` 2026-09-13 作废**（09-12 09:xx 建立：一个要
-        //         `sarUptrend is False`、一个要 `is True` ⇒ 判据保证、当时实测 0）—— **站长把前一张的判据改成
-        //         「收盘价 > 最近一轮空头段第 2 根的低点」、它不再问 SAR 方向** ⇒ 这一对没了、**互斥清单空了**。
-        //         ⚠️ 反方向"差一点就是包含"（那张的参照价 `lastBearSarMax` 恒 ≥ 这条线）**但有实测反例**：
-        //         空头段只有 1 根月 K 时本榜参照价为 None（当天 CAPUSDT、48 个月里 14 个月有这类）
-        //         ⇒ **不算包含对、别当自检点**。
-        //     ✏️ **09-12 1x:xx 作废的两对**：`monthlyFourBull` ∩ `monthlyFiveBear`（08-09 起站内最老的一对）与
-        //       `weeklyFourToSixBull` ∩ `weeklyFiveBear` —— **事实仍对，只是对家被移除了**。
-        //     ⚠️ 同日新增的 `monthlyFourToSixBull` **不带来任何互斥**：与 `monthlySarBearish` 可以同时命中
-        //       （月线 SAR 翻多要时间，连阳的标的完全可能 SAR 还在空头侧；上线当天实测交集 1），
-        //       与 `monthlyVolRising` / `monthlyEma921Persist` / `monthlySarFirstBar` 同理（实测 1 / 0 / 0）。
-        //     ✏️ **09-12 08:5x 作废的两对**：`weeklySixBull` ∩ `weeklyFourBull`（**事实没变、降级成合并榜内部两支之间的
-        //       关系** —— 同 09-09 合并「前两根」的先例；三支两两互斥 ⇒ 命中 ＝ 三批之和、不重复计数）；
-        //       原 `weeklySixBull` ∩ `weeklyFiveBear` 与 `weeklyFourBull` ∩ `weeklyFiveBear` **并成上面那一条**。
-        //     ✏️ **09-12 06:2x 作废的四对**：`weeklyTwoBullExactCloseVolRising` ∩ 三个周线连阳/连阴榜（随榜移除）；
-        //       `monthlyVolRising` ∩ `monthlyFiveBear`（随阳K 撤回 —— 撤回当天两者交集实测 2 个）。
-        //     ⚠️ `monthlyVolRising` **不参与任何包含 / 互斥 / 孪生**（撤回阳K 后回到 11:0x 建榜时的状态）：
-        //       与 `monthlyFourBull` / `monthlyFourToSixBull` 都不包含不互斥（连阳不看量、它不看前几根）。
-        //       （09-12 1x:xx 前那句"与 `monthlyFiveBear` 可以同时命中（放量下跌）"随对家移除而失效。）
-        //     ⚠️ `dailyOrWeeklyTripleEmaPersist`（09-13 由 `weeklyTripleEmaPersist` 并进日线那一支而来）**不参与任何包含 / 互斥 / 孪生**：
-        //       9/21 扩张那几张（周线三张 + `dailyTwoToSixBullRsiEma921`）要求最新一根还在张开、它不要求；它要 EMA55 那档、那几张不看
-        //       （360 天回放 `dailyTwoToSixBullRsiEma921` 的 2483 人次里 694 次不在它里面；上线当天那 6 个恰好全在 —— 快照，别当包含）。
-        //     ⚠️ `dailyTwoToSixBullRsiEma921`（09-12 1x:xx 新增，同日稍后置顶 + 接手橱窗）**不参与任何包含 / 互斥 / 孪生**：
-        //       与 `dailySarFirstBar` 两个方向都不包含；站内**没有**「日线9/21扩张」全集榜（只有周线版）⇒ 别照周线那套关系图抄出一对包含来。
-        //       （✏️ 建榜时写的「与 `dailyEmaSarFirstTwo` 两个方向都不包含」随那张榜同日移除而失去对家。）
-        //     ⚠️ `monthlyEma921Persist`（09-11 17:5x）**也不参与任何包含 / 互斥 / 孪生**：月线另五张不看 EMA（48 个月回放与四张各有交集、两个方向差集都非空）；周线那几张 9/21 / 三线的榜周期不同。
-        //   · **`weeklyEmaGap` 恒为正的周线榜三个**（09-10 13:3x 移除 `weeklyTripleEma` 后三个，09-11 16:3x 新增 `weeklyTripleEmaPersist` 回到四个，
-        //     **09-13 它并进跨周期合并榜后又回到三个**）：
-        //     `weeklyEmaSarBull` / `weeklyEma921Expansion` / **`weeklyEmaSarFirstTwo`**（都蕴含 9/21 扩张）；
-        //     ✏️ 合并榜 `dailyOrWeeklyTripleEmaPersist` **不适用**：只靠日线那一支入榜的行 weeklyEmaGap 可以为负（上线当天 203 行）——
-        //     它的自检点是「emaGap 与 weeklyEmaGap **至少一个 ≥ 0**」（当天两列同时 < 0 的 0 行）；
-        //     `weeklySarUptrend` **不适用**（它完全不看 EMA、可正可负）——**别互抄**。`monthlyEma921Persist` 也不适用（它的 EMA 在月线上，行里没有月线 EMA 间距列、周线EMA间距可正可负）。
-        //   · **`emaGap` 恒为正的日线榜【一个】**：**`dailyTwoToSixBullRsiEma921`**（条件之一就是日线 9/21 扩张）。
-        //     ✏️ 09-12 1x:xx 当天两度变化：新增这张时由一个变两个，**同日稍后移除 `dailyEmaSarFirstTwo` 又回到一个**。
-        //     ⚠️ 另一张日线榜 `dailySarFirstBar` 不看 EMA、emaGap 可正可负 —— **别互抄**。
-        //     ⚠️ 合并榜 `dailyOrWeeklyTripleEmaPersist` 同样**不适用**：只靠周线那一支入榜的行 emaGap 可以为负（上线当天 4 行）。
-        //     ⚠️ 两张日线榜之间**两个方向都不包含**；上面的包含清单是**四对**、不含日线那对。
-        //     ⚠️ 新榜还多一条自己的自检点：行里 `rsi` **恒 ≥ 70**（后端用未 round 的值判 ⇒ 页面上不会出现 69.99）。
-        //     ⚠️ 这两根轴 09-12 05:2x 已从排序条上移除（后端行字段 `emaGap` / `weeklyEmaGap` 照常发）⇒ 这两条现在是读付费 JSON 时的对账，不是页面自检点。
-        //   · **周线榜五个**（09-11 08:5x 一度九个 → 09-12 06:2x 移除 `weeklyTwoBullExactCloseVolRising` 后八个
-        //     → 08:5x 合并 4/5/6 连阳后七个 → 1x:xx 移除 `weeklyFiveBear` 后六个 → **09-13 `weeklyTripleEmaPersist` 并进跨周期合并榜后五个**）/ **月线榜六个**
-        //     （`monthlySarFirstBar` / `monthlyFourBull` / `monthlyVolRising` / `monthlyEma921Persist` /
-        //     `monthlySarBearish` / **`monthlyFourToSixBull`（09-12 1x:xx 新增）**；同日移除 `monthlyFiveBear`
-        //     ⇒ 一减一加、总数没变）/ **日线榜两个**
-        //     （`dailyTwoToSixBullRsiEma921`〔本组第一个 + 橱窗〕/ `dailySarFirstBar`；09-11 06:4x 一度四个，
-        //     09-12 移除 `dailyFourBull` 后两个 → 1x:xx 新增那张回到三个 → **同日移除 `dailyEmaSarFirstTwo` 又回到两个**）
-        //     / **跨日线 · 周线的榜一个**（`dailyOrWeeklyTripleEmaPersist`：09-13 站长新增日线版并与周线那张合并〔并集〕，一减一加）。
-        //     ⇒ 加密策略榜共 **14** 个（09-12 那天：06:2x 由 17 变 15、08:5x 合并后 14、09:xx 新增回到 15、
-        //     1x:xx 移除两张五连阴 ＋ 新增一张月线合并榜 ⇒ 14、同日新增那张日线榜 ⇒ 15、
-        //     **同日最后一条移除 `dailyEmaSarFirstTwo` ⇒ 14**；09-13 合并一减一加、仍 14）⇒ 全站 **17** 个榜。
-        //
-        // ⚠️⚠️ **2026-09-12 1x:xx 起站内也不再有任何「连续收阴」的榜**（`weeklyFiveBear` / `monthlyFiveBear`
-        //   一次移除）⇒ 连同下面那句，**一个要求阴 K 的榜都没有了**。`monthlySarBearish`（09-12~09-13 叫「月线SAR空头」）**不算**：
-        //   它只问 SAR 方向，月阳线照样在榜上。⚠️ 这同样是**全称否定句**，下一条指令随时会把它推翻。
-        // ⚠️⚠️ **站内已不再有任何要求「阴K」或找「回调」的榜**（三个在 2026-09-09 15:3x 被
-        //   一次移除）。**但别把这句当永久前提去简化代码** —— 在案通用教训：「『站内已经
-        //   没有 X 了』下一条指令就可能把 X 加回来」，已应验七次（08-16 阴K / 08-18 互斥 /
-        //   08-19 包含 / 09-03 阴K再翻 / 09-06 同判据异周期孪生 / 09-10 传递包含链＋孪生回归 /
-        //   09-10 第 9 条纯 SAR 首根榜回归〔`monthlySarFirstBar` 12:1x 追加反包后「一个都没有」只成立了约五小时〕）。
-        //   ⚠️ 反方向又一例：09-11 `dailySarFirstBar` 改成前两根 ⇒ 纯 SAR 首根榜又一个都没有了（前后约八小时）。
-        //   ⚠️ 09-10 回归的那对孪生**同日又解除了**（日线那张追加「成交额递增」）—— 反方向同理，
-        //   「站内有 X」这类句子也会随下一条指令失效。
-        //   ⚠️ **2026-09-12 一条消息又翻了两句**：① 09-11 08:5x 回归的「同判据异周期孪生」随两张「两连阳＋价涨量增」
-        //     一起移除 ⇒ 站内又一个孪生都没有了（只活了一天）；② `monthlyVolRising` 撤回阳K ⇒「现役唯一完全不看价格
-        //     的一张」那句**第三次翻面**（11:0x 写下、13:2x 自己推翻、09-12 又成立）。**同一句一天之内翻两次是常态，别写死。**
-        // **各榜轴集已于 2026-07-30 对齐成同一套**（09-04 加「日SAR多头根数」18 轴、09-11 加周 / 月成交额 20 轴、
-        //   **2026-09-12 05:2x 站长移除七根后 13 轴**：周线EMA间距 / 周ADX / 周+DI / 周MACD强弱 / 日波动幅度 / 日EMA间距 / 日量比；
-        //   **同日 09:xx 加「周涨跌幅」⇒ 现 14 轴**。⚠️ 轴数别写死，要数就展开 `cryptoStrategySorts`（含 `...dmiSorts` 两根））。
+        // 各榜判据、结构性关系、型别与自检点以 CLAUDE.md 为准，这里不维护；已移除榜的 name / desc 查 git 历史，
+        //   判据存档在后端 build_rankings。
         label: "加密策略", asset: "加密", tf: "月线",
         tabs: [
-            // ⚠️⚠️ **本组第一条 ＝ 站长 2026-09-12 1x:xx 明确要求的「置顶」**（逐字：「移除：日线9/21扩张＋
-            //   SAR多头前七根。置顶：日线二到六连阳＋RSI≥70＋9/21扩张」）—— 同一条消息里上一任置顶榜
-            //   `dailyEmaSarFirstTwo` 被移除（存档见上方），本榜从 rail 末尾提到第一位。
-            //   **rail 顺序就由本数组的顺序决定**（后端 build_rankings 那个 dict 按建榜时间排、与 rail 无关）。
-            // ⚠️⚠️ **本榜同时接手了橱窗 `TEASER_TAB` 与默认落地榜** ⇒ 三者统一（橱窗 ＝ 落地榜 ＝ rail 第一个），
-            //   这是 09-09 置顶上一任时定下的做法。⚠️ 代价已量化并经站长拍板：本榜 **360 天回放 14 天为空**，
-            //   空的那天橱窗 0 行、新访客落在空榜上、后端 audit D 项报错（预期内报警，别放宽那条检查）。
-            //   ⚠️ 本榜是**事件型**（最多连着六天；改判据前是五天）⇒ 橱窗内容天天换是正确行为。
-            // ⚠️ 移除上一任后，**本榜是站内唯一「`emaGap` 恒为正」的榜**（`dailySarFirstBar` 不看 EMA、可正可负）。
-
-            // ➕ **2026-09-12 1x:xx UTC 站长「新增一个TAB，逻辑是；日线2-6连阳，且日线RSI大于等于70，且EMA9/21扩张。」**
-            //   （没点资产 ⇒ 加密）。追加在 rail 末尾成为加密策略组第 15 个 ⇒ 策略榜 14 → 15、全站 17 → 18。
-            //   3 个条件全在日线；后端新增旗标 `threeBull` / `fiveBull` / `sixBull` / `rsiGe70`（日线不走缓存 ⇒ **零 schema**），
-            //   `twoBullExact` / `fourBull` 两个零消费者保留字段本轮**转正**。
-            // ✏️✏️ **2026-09-12（同日第三次动它）站长「…逻辑改日线二到七连阳＋RSI≥70＋9/21扩张」⇒ 上界 6 → 7**
-            //   （后端新增 `sevenBull`，零 schema；name 跟着改、**key 不动**）。**纯放宽**：当天 4 → 6。
-            // ⚠️⚠️ **「2-7」两端仍都卡死**（恰好不是至少）：1 连阳不入、**8 连阳及以上**也不入。
-            // ⚠️ RSI 阈值**含等号**（站长「大于等于70」）；后端用**未 round** 的 RSI 判 ⇒ 页面上不会出现 69.99 的行。
-            // ⚠️ 与另两张日线榜两个方向都不包含、不参与任何互斥；站内没有「日线9/21扩张」全集榜 ⇒ 没有对应的包含对。
-            // ⚠️ 事件型，**最多连着六天**（2→3→…→7，第七天必掉出）——回放连庄分布最大值实测就是 6。
-            // 📊 上线当天 4（LSK / RAYSOL / SOMI / VTHO）；360 天回放 min 0 / p25 2 / 中位 4 / p75 8 / max 152 / 14 天为空。
-            // ⚠️⚠️ **回放里略微跑输大盘**：成员次日收盘更高 40.8%（n=2388）vs 全体 45.5%（n=173634）
-            //    ⇒ desc 里明说「不是买入信号」、给了"观察名单 / 反向筛回调"两种读法，**别改成追涨话术**。
+            // 本组第一个 ＝ 橱窗 TEASER_TAB ＝ 默认落地榜，三者必须统一：挪位置或换 key 要连动前后端 TEASER_TAB、
+            //   currentTab、lastTabByAsset、switchAsset 兜底与 index.html FAQ「哪些免费」里的榜名。
             { key: "dailyTwoToSixBullRsiEma921", name: "日线二到七连阳＋RSI≥70＋9/21扩张", tf: "日线",
               desc: "三个条件都在最新已收盘的那根日线上：一是这根 K 线正好是连续第 2 到第 7 根阳线（也就是连涨两天到七天这一段），二是日线 RSI(14) 不低于 70，三是 EMA9 在 EMA21 上方、而且两条均线的间距比前一天更大（结构正在张开）。三条合起来找的是同一件事：短线上涨已经连着走了几天、动能进了强势区、均线结构也在同步张开——典型的加速段画像。有三处要先说清楚。第一，连阳根数是恰好不是至少，而且两头都卡死：只涨了一天的不在这张榜上（还没走到第 2 根），已经连涨 8 天、9 天的也不在（它们的最新一根是第 8 根、第 9 根）。第二，扩张是两半合起来才算：光是间距在变大还不够，EMA9 必须已经站到 EMA21 上方；一个标的的间距从 −6.2% 收窄到 −5.9%，数字确实变大了，但那时 EMA9 还在下面，不算扩张。第三，RSI 不低于 70 本身就是通常说的超买区间——这既是本榜要找的强势，也是它最大的风险，下面单独说。最要紧的一句，本榜必须如实说：它不是买入信号，回放里甚至略微跑输大盘。过去 360 天，本榜成员次日收盘更高的比例是 41.0%，而同期全市场是 45.4%，低了 4 个多百分点。原因不难理解：连涨几天、RSI 超买、均线张开，正是短线最热的时刻，第二天回落的概率比平均更高。所以它更适合当成一张「谁在加速」的观察名单（看资金正在追什么、哪些标的走出了独立行情），而不是照着它追进场；想做回调的，反而可以拿它筛出「短线涨过头」的那一批，再自己等位置。这是一张事件清单不是持续清单：同一个标的最多连着出现六天——这天是第 2 根，明天若再收阳就成第 3 根、仍在榜上，一路到第 7 根都还在，第七天必然离开（要么成了第 8 根、要么连阳已经断掉）；另外两个条件任何一天不满足也会中途掉出去。回放里上一天的成员第二天还在的比例中位数不到四成，连着出现超过六天的一个都没有。命中数很少、空榜是常态：回放过去 360 天，每天中位只有 4 个，四分之一的日子不超过 2 个，360 天里有 13 天一个都没有；全市场一起普涨的那天能到 155 个。改判据当天是 6 个。本榜是免费橱窗榜：没有通行证也能看到这张榜里排在第一位的那个标的（按日成交额排序的第一名）；本榜命中本来就少，碰上一个都没有的那天，橱窗自然也就没有内容可看。六档的分布也不均匀：连涨两天、三天的最常见，第七天那一档最少见——过去 360 天里它只占全部命中的不到二十五分之一，所以把上界从第 6 根放宽到第 7 根，命中数只多了一点点。表格里的 日线RSI 这一列在本榜上恒定不低于 70（那正是条件之一），可以直接用它在榜内再分强弱；其余各轴都不参与筛选。日线数据每天 00:00（UTC）收盘后才换一批，同一天之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。上市不足 23 天的新合约日线数据不够，不入榜。范围是全部加密 USDT 永续合约。" },
-            // 🔴🔴 【已移除】`dailyEmaSarFirstTwo`「日线9/21扩张＋SAR多头前七根」——
-            //   **2026-09-12 1x:xx UTC 站长「移除：日线9/21扩张＋SAR多头前七根。置顶：日线二到六连阳＋
-            //   RSI≥70＋9/21扩张」**（一条消息两件事：移除它 ＋ 把下面那张提到本组第一位）。
-            //   纯移除、无替代；判据存档在后端 `build_rankings` 原位（2 个条件、七支 SAR 旗标之并）。
-            //   在站三天（09-09 由「首根」＋「第二根」合并建榜并置顶），期间改判据五次：前两根 → 前四根
-            //   → 前六根＋CVD递增 → 前七根（条件数 2→3→2）。移除前最后一次命中 **22**。
-            // ⚠️⚠️ **它曾是橱窗 `TEASER_TAB` 兼默认落地榜** ⇒ 橱窗已随同一条指令搬到**新置顶那张**
-            //   `dailyTwoToSixBullRsiEma921`（后端常量 + 本文件 `TEASER_TAB` / `currentTab` /
-            //   `lastTabByAsset.crypto` / `switchAsset` 兜底 + index.html FAQ 那句榜名，六处同改）。
-            //   ⚠️ **落地榜必须 ＝ 橱窗榜**：只改一处，新访客会落在全锁的空榜上、转化位直接消失。
-            //   ⚠️⚠️ 这次是**知情地放弃**「橱窗从不空榜」那条硬指标：新橱窗 360 天回放 **14 天为空**
-            //   （备选 `dailySarFirstBar` 是 0 天为空，站长选了「跟着置顶榜走」）。空的那天橱窗 0 行、
-            //   后端 audit D 项报错 —— **那是预期内的报警，别去把它放宽成 ≤1**。
-            // ⚠️ 连带作废（都是它独有的）：**`emaGap` 恒正的日线榜 两个 → 【一个】**（只剩下面那张）；
-            //   「每行 `sarBullBars` 恒 ∈ {1..7}」与「命中 ＝ 七批之和」随榜消失。
-            //   ⚠️ **`dailySarFirstBar` 的「恒 ∈ {1,2,3,4}」照旧**（它从头到尾没跟着改根数）—— 别互抄。
-            // ⚠️ 结构性关系**一对都没带走**：它 09-12 更早改前六根时就已断掉最后一对包含
-            //   （曾经的「本榜 ⊊ `dailySarFirstBar`」）⇒ 包含仍四对、互斥仍一对。
-            //   连带数量：日线榜 3 → **2**、加密策略榜 15 → **14**、全站 18 → **17**；
-            //   事件型名单去掉它（「最多连着七天」随之作废）。
-
-            // ⚠️ 四线族曾经的三个榜都已移除，判据存档见后端 build_rankings：
-            //   · `dailyFourEmaAligned`「日线四线多头排列」（2026-07-26 新增 → 07-28 与
-            //     下面那个二选一被移除）：只要四条线排好了，不要求任何一档间距在扩大。
-            //   · `dailyFourEmaPersist`「日线9/21/55/200扩张存续」（2026-07-28 新增 →
-            //     **2026-08-09 站长「移除：日线9/21/55/200扩张存续」，纯移除、无替代**）：
-            //     四线排列还立着 且 这段排列里出现过一次三档间距同时张大的首次扩张（状态型）。
-            //   · `dailyFourEmaExpansion`「日线9/21/55/200扩张」（2026-08-09 新增 →
-            //     **2026-08-16 站长移除**）：最新那一根正在扩张（事件型）。
-            // ⇒ 四线族现在一个 live 榜都不剩。
-            // ⚠️ **name 用「排列」不用「扩张」**：站内「扩张」专指间距在变大，两个词混用
-            // 会把判据说反 —— 复活任一四线榜时这条用词规矩仍然管着它的 name。
-            // ⚠️ 「日线SAR多头第二根」`dailySarSecondBar` **2026-08-11 站长移除**、
-            // 「周线SAR多头首根」`weeklySarSecondBar` **2026-08-16 站长移除**（都是纯移除、
-            // 无替代）。判据存档在后端 build_rankings；compute 层旗标（日线 `sarSecondBar` /
-            // 周线 `sarFirstBar`）照常产出为保留组 ⇒ 复活 = 后端重建列表 + 这里与
-            // TABS_CONFIG 各加回一条，零抓取/缓存改动。
-            // ⚠️ `weeklySarSecondBar` 的 key 里 "SecondBar" 名不副实（2026-08-11 判据改成
-            // "首根"、槽位规矩 key 固定）——复活时沿用原 key、别按名字推判据。
-            // tf 周线：两个条件都在周线。⚠️ 2026-07-30 站长逐字：「新增一个TAB，逻辑是：最新
-            // 已收盘周线是EMA9/21扩张，且SAR多头。支持当前各种升降序。」（没点资产 ⇒ 加密）
-            // ⚠️⚠️ 这是同日移除的「周线SAR多头」榜槽位第二版判据的**新榜化身**（key 全新）：
-            // 在"周线 SAR 站多头"之上再叠一道"EMA9/21 结构在张开"，命中比纯 SAR 多头少得多。
-            // ⚠️ name 写「9/21扩张」不写「两线扩张」：后者是 (9/21 ∪ 9/26) 并集专称，本榜严格 9/21。
             { key: "weeklyEmaSarBull", name: "周线9/21扩张＋SAR多头", tf: "周线",
               desc: "最新已收盘周线要同时满足两条：一是 EMA9 在 EMA21 上方、而且两者的间距比上一周更大（均线正在张开，不是单纯的多头排列），二是这根周线的 Parabolic SAR 站在多头一侧。它在「周线 SAR 站多头」这个方向门槛之上，还要求 EMA9/21 均线结构本身正在加速张开，所以命中数比单看方向少得多，找的是「趋势方向和结构强度双双确认」的标的，而不是「方向朝上但可能还在磨」的一大批。用法上，SAR 保证了方向，EMA 扩张保证了力度，两者叠加天然偏强势。需要至少 22 根已收盘周 K 才算得出 EMA9/21 扩张，所以上市不足约半年的新合约不入榜。表格里的日线各轴不参与筛选，用来在这批标的里再看日线强弱。范围是全部加密 USDT 永续合约。" },
-            // ⚠️【已移除】2026-09-09 站长「移除：日线9/21扩张＋CVD递增」—— 那张榜
-            //   `dailyTripleEmaCvd`（2026-08-07 建、2026-09-05 改判据）已下线，判据存档在后端。
-            //   ⚠️⚠️ 它曾是**橱窗 TEASER_TAB 兼默认落地榜** ⇒ 两者已一同搬到
-            //   `dailyEmaSarFirstTwo`（它正好也是本组置顶那个）。**落地榜必须 ＝ 橱窗榜**：
-            //   只改一个会让新访客落在一个全锁的空榜上、转化位直接消失（在案）。
-            // ⚠️ 四线族第三张「日线9/21/55/200扩张」`dailyFourEmaExpansion` **2026-08-16
-            // 站长移除**（判据存档见后端；四线族至此一个 live 榜都不剩）。
-            // ⚠️ 「日线9/21/55扩张＋SAR多头＋阴K」`dailyTripleEmaSarBearish` **2026-08-16
-            // 站长移除**（判据存档见后端）。⚠️⚠️ 那句「站内不再有要求阴K 的榜、也不再有
-            // "找回调"的榜」**同日稍后即作废** —— 站长新增了 `weeklySarBearish`
-            // 「周线阴K＋SAR多头」（**该榜 2026-09-09 15:3x 已移除**）。⚠️ 而「它是站内唯一要求阴K/找回调的榜」那句
-            // **2026-09-03 又作废**：新增了 ⑩ `dailyEmaSarBearish`（日线级同类，且叠一道 9/21
-            // 扩张门）⇒ 站内现有两个偏阴线侧的榜（周线 ⑦ / 日线 ⑩）。别照那些旧话去找。
-            // tf 月线：唯一的条件在月线。⚠️ 2026-08-13 站长逐字：「新增一个TAB，逻辑是：
-            // 最新已收盘月线的SAR是首个SAR多头。」（没点资产 ⇒ 加密）＝ 倒1（最新已收盘
-            // 月 K）SAR 多头 且 倒2 空头。后端判据字段 `sarUptrend`/`sarUptrendPrev` 都是
-            // 月线缓存早就产出的（原供已移除的 `monthlySarBreakout` —— 那个还要收盘价突破
-            // 空头段末根圆点价，判据不同 ⇒ 开的新 key）。
-            // ⚠️ 建榜时与「周线SAR多头首根」判据同构、只差周期，显示名刻意对称——**那个榜
-            // 2026-08-16 已移除**，本榜现在是站内唯一的纯 SAR 首根榜。
-            // ⚠️ 命中天然很小、空榜正常（事件型；旧判据 36 个月回放中位 8、2 个月为 0）；
-            // **月内成员恒定**（月线缓存每月 1 号 UTC 才刷新）—— 这两条 desc 里都写给用户了。
-            // ✏️ **2026-09-10 12:1x UTC 站长追加条件②「且收盘价反包所有空头SAR」** ⇒ 2 个条件、name 同步改
-            //   （key 不动）。收盘价要站上刚结束那一轮空头 SAR 段的**全部**圆点（＝第一个、也是最高的那个）。
-            //   ⇒ 上面「站内唯一的纯 SAR 首根榜」**作废**；命中大幅收窄：上线当天 16 → 3，48 个月回放中位 1 /
-            //   max 11 / 19 个月为 0（旧判据中位 4 / max 41 / 5 个月为 0），保留率约 21% —— desc 里已按新数字写。
-            //   （⚠️ 同日第 9 条新增 `dailySarFirstBar`「日线SAR多头首根」后站内又有纯 SAR 首根榜了 —— 日线的，与本榜不是孪生。）
-            //   （⚠️ 09-11 那张改成「前两根」⇒ 又没有了。）
             { key: "monthlySarFirstBar", name: "月线SAR多头首根＋收盘价反包所有空头SAR", tf: "月线",
               desc: "两个条件都看最新已收盘的那根月线：① 它正好是这一轮 Parabolic SAR 多头趋势的首根——SAR 圆点刚刚在这个月由价格上方翻到下方，而上个月还停在空头一侧；② 这根月线的收盘价，站在了刚刚结束的那一轮空头趋势里所有 SAR 圆点的上方，也就是把整轮下跌期间的每一个空头圆点都「反包」了。第二条比光翻多严格得多：空头趋势里 SAR 圆点是一路往下移的，最高的那个就是这轮下跌开始时的第一个圆点；SAR 翻多只需要价格刺破最近、也是最低的那个圆点，而本榜要求收盘价在一个月之内站上整轮下跌起点的那个圆点——相当于按月计的整段下行轨道被一根 K 线全部收复，找的是强到直接把下跌结构吞掉的月线反转，而不是跌久了之后的一次翻多。回放过去四年，月线翻多的标的里只有大约五分之一能同时做到反包。月线是全站最大的周期，同一个标的平均要好几年才轮到一次月线翻多，再叠上反包这一条，命中数天然很小：回放过去 48 个月，每月中位只有 1 个、最多 11 个，接近四成的月份一个都没有——遇到空榜是正常的。代价也要说清楚：月线信号天然滞后于真正的底部，能做到反包的往往已经离底部很远了。这是一次性的事件清单不是持续清单——同一个标的只在翻多的那个月出现，下个月它就成了第二根、不再在榜上，所以相邻两个月的名单不会有重叠。本榜只看 SAR 与收盘价，完全不看均线与资金。另外月线数据每月 1 号（UTC）新月线收盘后才刷新一次，整个月之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。表格里的日线、周线各轴都不参与筛选，用来在这批标的里再分强弱。上市不足 3 个月的新合约看不出「翻多的前一个月是空头」，不入榜；日线数据不足 23 天的，日线那几轴会显示「—」。范围是全部加密 USDT 永续合约。" },
-            // （已移除）`weeklyTripleEma`「周线9/21/55扩张」—— 2026-08-16 复活 → **2026-09-10 13:3x
-            // 站长「移除：周线9/21/55扩张」**（纯移除、无替代）。判据存档见后端 build_rankings 原位；
-            // 复活时把这一项（key / name / tf 周线 / desc）从 git 历史捞回来（最后一版在 0b81e98）。
-            // tf 周线：两个条件都在周线。⚠️ 2026-08-16 站长逐字：「新增一个TAB，逻辑：最新
-            // 已收盘的周线是阴线，且SAR是多头。」（没点资产 ⇒ 加密）
-            // ⚠️ 站长同一条消息里先发过两条随即打断改口（日线版、周线版都带 EMA9/21 扩张）
-            // ——**那两条被撤回了**，以本判据为准。
-            // ⚠️⚠️ **本榜当时是站内唯一要求阴K/"找回调"的榜**（别的榜问"哪些在启动/在延续"，
-            // 本榜问"哪些在强势里回踩"）——同日移除 dailyTripleEmaSarBearish 后那句「站内不再有
-            // 阴K 榜」只成立了约两小时，见上方那张日线 SAR 榜（`dailyEmaSarFirstTwo`，2026-09-09
-            // 由 ④`dailyEmaSarFlip`＋⑪`dailyEmaSarSecond` 合并而成）上方那段。⚠️ **"唯一"2026-09-03 又
-            // tf 周线：唯一的条件在周线。⚠️ 2026-08-19 站长逐字：「新增一个TAB，逻辑：最新
-            // 已收盘的周线是SAR多头即可。」（没点资产 ⇒ 加密）＝ 站内"周线 SAR 多头"全集。
-            // ⚠️⚠️⚠️ **本榜引入三对结构性严格包含**：① `monthlyWeeklyDaily`、② `weeklyEmaSarBull`、
-            // ⑦ `weeklySarBearish` 都以「周线 SAR 多头」为条件之一 ⇒ ①②⑦ 全都 ⊊ 本榜。
-            // ⇒ 上方那两处「站内没有任何一对结构性包含的 live 榜」已就地改掉。这是"『站内已经
-            // 没有 X 了』下一条指令就把 X 加回来"的第三次应验（阴K/互斥/包含）。
-            // ⚠️ 严格子集但**不该取代**（子集⇒取代只针对九成保留率的双胞胎）：①②⑦ 量级差
-            // 一个数量级、语义各异、站长说"新增" ⇒ 并列是对的。周线榜由此变**五个**。
-            // ⚠️ key 新建、刻意不复用已移除的 `weeklyEmaBearish`（判据虽逐字命中它第三版，但
-            // "Ema/Bearish"对纯SAR多头误导 + 复用价值为零）；也没用 `weeklySarBull`（与
-            // `weeklyEmaSarBull` 危险近亲）。现名与字段 `sarUptrend` 同名。
-            // ⚠️ name：一个条件 ⇒ 无 ＋；判据无 EMA ⇒「写全 EMA 周期数」不适用（同 ⑤⑦⑧）。
-            // ⚠️ 状态型 + 周内成员恒定；门槛只要 3 根周 K（同 ⑦⑧ 最低）；weeklyEmaGap 可正可负。
-            // ✏️ **2026-09-11 站长「周线SAR多头这个TAB的逻辑改为：周线SAR多头且周线RSI大于等于50」** ⇒ 2 个条件、都在周线；
-            //   name 改「周线SAR多头＋RSI≥50」；⚠️ **key 不动 ⇒ 已不是「周线 SAR 多头」全集**。上面几行按新判据读：
-            //   · 「①②⑦ 全都 ⊊ 本榜」里还活着的 ② `weeklyEmaSarBull` **作废**（9/21 扩张不蕴含 RSI≥50；上线当天 XANUSDT 就是反例，
-            //     周线 RSI 49.993884）；`weeklyEmaSarFirstTwo` ⊊ 本榜同样作废 ⇒ 包含七对 → 五对。
-            //   · 门槛由 3 根抬到 **16 根**已收盘周 K（RSI 所需）；每行 周线RSI **恒 ≥ 50**（自检点）；周线EMA间距 仍可正可负。
-            //   · 后端 RSI≥50 在 compute 层用未 round 的 RSI 判（新字段 `rsiGe50`，WEEKLY_CACHE_SCHEMA 20→21）。
-            // 📊 命中 232 → 94；60 周回放 中位 26 / min 11 / max 94（＝上线当天）/ 0 周为空；保留率均值 32%；跨周延续 87.5% → 75.6%；
-            //   SAR 多头里 RSI≥50 那批下周仍 SAR 多头 90.5% vs RSI<50 那批 86.2%（desc 里如实写了"差距不大"）。
             { key: "weeklySarUptrend", name: "周线SAR多头＋RSI≥50", tf: "周线",
               desc: "两个条件都看最新已收盘的那根周线：一是它的 Parabolic SAR 站在多头一侧，也就是圆点已经翻到价格下方；二是周线 RSI（14）不低于 50，正好等于 50 也算。第一条管方向——按周计的趋势眼下朝上；第二条管动能——RSI 在 50 以上，意味着最近 14 周左右平滑下来的上涨幅度不小于下跌幅度，于是把「SAR 已经翻多、但上涨力度还没盖过下跌」的那一批先筛掉了。两个条件叠在一起之后命中数少了很多：回放过去 60 周，处在周线 SAR 多头的标的里平均只有约三分之一同时满足 RSI 不低于 50；每周命中的中位数在 26 个上下，最少 11 个、最多 94 个，还没有出现过空榜——上线当天的 94 个恰好是这 60 周里最多的一周，别把它当成常态。它仍然是一张状态清单不是事件清单：SAR 多头和 RSI 在 50 以上都能连续维持很多周，同一个标的可以连着好几周都在；不过 RSI 常常在 50 上下来回，回放里本周的成员大约四分之三在下一周仍留在榜上。回放还显示，周线 SAR 多头的标的里 RSI 不低于 50 的那批，下一周仍保持 SAR 多头的比例约九成，比 RSI 不到 50 的那批（约八成六）略高——差距不大，别把它当成更强的做多信号，它做的只是把动能还没跟上的那批先剔掉。和「周线9/21扩张＋SAR多头」「周线9/21扩张＋SAR多头前四根」这两张榜的关系要说清楚：那两张也要求周线 SAR 多头，但不看 RSI，所以它们的成员不一定在本榜上——均线正在张开时 RSI 通常也在 50 以上，但并不必然，上线当天就有一个标的在「周线9/21扩张＋SAR多头」上、周线 RSI 却停在 49.99。反过来本榜完全不看均线，所以成员里也有「SAR 已翻多、RSI 也过了 50，但 9 与 21 两条均线还没张开」的那一类。表格里的周线RSI 那一列在本榜一定不低于 50，这是判据决定的，按它降序能看出动能强到什么程度。另外周线数据每周一 00:00（UTC）新周线收盘后才刷新一次，同一周之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。周线 RSI 需要至少 16 根已收盘周 K 才算得出来，所以上市不足约四个月的新合约不入榜；日线数据不足 23 天的，日线那几轴会显示「—」。范围是全部加密 USDT 永续合约。" },
-            // tf 月线：两榜的唯一条件都在月线。⚠️ 2026-09-06 站长同一条消息连发两条：
-            // 「新增一个TAB，逻辑是：最新已收盘月线是恰好4连阳的月K。」+「…恰好5连阴的月K。」
-            // （都没点资产 ⇒ 加密）。纯 K 线形态、零指标，站内此前只有 ⑧weeklyTwoBullExact 同类。
-            // ⚠️⚠️ **恰好不是至少**：⑬ 要倒5 非阳、⑭ 要倒6 非阴（「非阳」/「非阴」含平盘），
-            //   所以已连涨 5-6 个月 / 已连跌 6+ 个月的标的都不在榜上。门槛也因此比根数多一根
-            //   （≥5 / ≥6）：判"恰好"必须看得见再往前那一根。
-            // ⚠️⚠️ 两榜结构性互斥（倒1 阳 vs 阴，判据保证）⇒ 站内互斥 live 对当时由三对变四对；
-            //   **2026-09-09 ④`dailyEmaSarFlip`＋⑪`dailyEmaSarSecond` 合并成一个榜后，④∩⑪ 那一对
-            //   消失 ⇒ 现为【三对】**（⑦∩⑧ · ⑫∩⑧ · 本对）。⚠️ 榜号那轮整体位移过，去查 key 别信号。
-            //   ⚠️ 同日 15:3x ⑦⑧⑫ 移除后只剩本对；**2026-09-10 12:1x 新增三个周线连阳/连阴榜后【四对】**。
-            // ⚠️⚠️ ⑭ 是站内第一个**纯粹筛下跌**的榜（⑦⑩⑫ 那三个阴K 榜都另要求 SAR 多头或
-            //   EMA 扩张 ⇒ 找的是"强势里回踩"）——读法与全站其余各榜相反。
-            // ⚠️ ⑬ 上线当天空榜（连阳分档恰好没有 4 这档），48 个月回放 8/48 为 0 ⇒ 空榜是常态。
-            // ⚠️⚠️ **2026-09-09 移除「月线突破SAR空头第二根低点」后，月线榜由四个变【三个】**
-            //   （⑤monthlySarFirstBar / ⑬ / ⑭），而且**三者全是「恰好第 N 根」的【事件】型**
-            //   ⇒ 相邻两月成员交集恒空。被移除的那张是月线端唯一的【状态】型，**它一走，
-            //   "两类别混"那条告诫在月线端就不再适用**（复活它要把这两条一起改回来）。
-            // 🔴 **2026-09-12 1x:xx 站长「移除：周线五连阴。月线五连阴。」** ⇒ 本组原有的 `monthlyFiveBear`
-            //   「月线五连阴」一条删掉（09-06 建、在站 6 天；移除前最后命中 2）。上面整段里凡讲 ⑭ / 五连阴 /
-            //   「两榜结构性互斥」的，从此都是**已移除榜的历史说明**。⚠️ 连带：站内互斥 live 对 两对 → 【一对】
-            //   （只剩 `monthlySarBearish` ∩ `monthlySarFirstBar`）；**站内不再有任何「连续收阴」的榜**
-            //   （⚠️ 全称否定句，已被推翻过九次，别拿它简化代码）。
-            // ➕ **同一条消息新增「月线四到六连阳」`monthlyFourToSixBull`**（配置在本组末尾）⇒ `monthlyFourBull`
-            //   **没被取代**、两张并列，且 `monthlyFourBull` ⊊ 那张（共用后端同一个 `fourBull` 旗标）。
-            // ✏️ **2026-09-11 起上面「月线榜三个 / 全是事件型」两句都已作废**：11:0x 新增 `monthlyVolRising`（逐月比较型）、
-            //   17:5x 新增 `monthlyEma921Persist`「月线9/21扩张存续」（**状态型**）⇒ 月线榜五个、月线端又有状态型榜了 ——
-            //   「不再有 X」全称句又一例被推翻。现状以组头注释「现状分类」为准。
             { key: "monthlyFourBull", name: "月线四连阳", tf: "月线",
               desc: "最新已收盘的那根月线，正好是连续第 4 根阳线——这个月收阳，往前数第 2、3、4 个月也都收阳，而第 5 个月不是阳线。注意是恰好 4 根，不是至少 4 根：已经连涨 5 个月、6 个月的标的不在这张榜上，它们的最新一根是第 5 根、第 6 根而不是第 4 根。想把连涨两个月到七个月的各档一起看，请用「月线二到七连阳」那张——本榜的每一个标的都必然也在那张榜上，那张多出来的是连涨两、三、五、六、七个月的那些。本榜是全站少数几张纯看 K 线形态的榜之一，完全不看均线、SAR、资金流或任何指标——只问一件事：按月计的上涨，是不是刚好走到第四个月。月线是全站最大的周期，连续四个月收阳意味着这轮上涨已经跨过了「反弹」的量级、按月计的结构确实转了过来，而卡在第 4 根这个位置，找的是趋势已经立住、但还没走到人尽皆知的那一段。代价也要说清楚：月线级别的形态确认得慢，等到第四根阳线收出来，价格往往已经离底部很远了。这是一次性的事件清单不是持续清单——同一个标的只在第 4 根那个月出现，下个月它要么成了第 5 根、要么连阳已经断掉，两种情况都会让它离开本榜，所以相邻两个月的名单不会有重叠。命中数天然很少，遇到空榜是正常的：回放过去四年，多数月份只有个位数，全市场一起普涨的月份能到几十个，而大约每六个月就有一个月一个都没有——上线当天正好是这样的月份，全市场连阳的标的要么只走到第 3 根、要么已经超过 4 根，恰好卡在第 4 根的一个也没有。另外月线数据每月 1 号（UTC）新月线收盘后才刷新一次，整个月之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。表格里的日线、周线各轴都不参与筛选，用来在这批标的里再分强弱。上市不足 5 个月的新合约看不出「第 5 个月不是阳线」，不入榜；日线数据不足 23 天的，日线那几轴会显示「—」。范围是全部加密 USDT 永续合约。" },
-            // ⭕ `weeklyEma921Expansion`「周线9/21扩张」（2026-09-09 站长复活，加密第 15 个策略榜）
-            // 站长口径逐字：「新增一个TAB，逻辑是：最新已收盘周线是EMA9/21扩张即可。」（没点资产 ⇒ 加密）
-            // ⚠️ **「即可」＝只有这一个条件**，别顺手叠 SAR / 阴K / CVD 任何第二道门。
-            // ⚠️⚠️ **key 复用**（2026-08-12 上线当天即被移除的那个，判据逐字相同 ⇒ 按「同判据 ⇒
-            //   复用旧 key」办）。它**移除于付费墙之后** ⇒ 上线前实测公开顶层 / paidMeta / 付费镜像
-            //   三处均无残留，复用安全。**日后复用「付费墙之后移除」的 key，照这个查一遍再用。**
-            // ⚠️⚠️⚠️ **本榜一次性引入三对结构性严格包含 ⇒ 站内由六对变【九对】**：
-            //   ②`weeklyEmaSarBull` ⊊ 本榜、⑥`weeklyTripleEma` ⊊ 本榜、⑫`weeklyEmaSarBearish` ⊊ 本榜
-            //   （实测 51 / 8 / 4 全部 ⊆ 67、榜外 0 个）。⑥ 那条还是**免费的跨实现对账**：三线扩张
-            //   与 9/21 扩张在 `get_weekly_rsi` 里是**两份独立实现**，差集非空就说明有人动了其中一处。
-            // ⚠️⚠️ **② 从此同时挂在 ⑨ 和本榜两个「父」下面**（⑫⊊②⊊本榜 与 ⑫⊊②⊊⑨ 都成立）
-            //   —— 读关系图时别再假设每个榜只有一条向上的边。
-            // ⚠️ 与 ⑦⑧⑨ 两个方向都不包含（三者完全不看 EMA），实测榜外 20 / 23 / 181 个。
-            // ⚠️ **行里 `weeklyEmaGap` 恒为正** ⇒ 恒正的榜由 ②⑥⑫ 三个变【四个】；⑦⑧⑨ 仍不适用，别互抄。
-            // ⚠️ **2026-09-10 13:3x ⑥`weeklyTripleEma` 移除** ⇒ 本榜的子集现为 `weeklyEmaSarBull` /
-            //   `weeklyEmaSarFirstTwo`，那条跨实现对账暂无消费者（后端两段仍别合并）；desc 里「这两张榜」同步改成现役的两张。
-            // ⚠️ name 写「9/21扩张」不写「两线扩张」：后者是 (9/21 ∪ 9/26) 并集专称，本榜严格 9/21。
-            // ⚠️ 一个条件 ⇒ 名字里无 ＋。状态型 + 周内成员恒定 —— 两条 desc 里都写给用户了。
             { key: "weeklyEma921Expansion", name: "周线9/21扩张", tf: "周线",
               desc: "只看最新已收盘的那根周线一件事：EMA9 在 EMA21 上方，而且两条均线之间的间距比上一周更大——短周期均线正在加速甩开中周期均线，结构在张开。要注意「扩张」是两半合起来才算：光是间距在变大还不够，EMA9 必须已经站到 EMA21 上方；一个标的的间距从 −6.2% 收窄到 −5.9%，数字确实变大了，但那时 EMA9 还在下面，不算扩张。这是站内周线组里条件最少的一张，也是那一组里两张榜的母集：「周线9/21扩张＋SAR多头」「周线9/21扩张＋SAR多头前四根」这两张榜的成员必然全部出现在本榜里，它们都是在「结构在张开」这个池子上再叠一道门——前一张再要求周线 SAR 站在多头一侧，后一张更严，要求 SAR 恰好处在刚翻多的前四根之内。所以本榜适合当那两张的上游来用：先在这里看清楚哪些标的的周线结构正在张开，再决定要不要用更严的那两张往下收窄。它是一张状态清单不是事件清单：只要 EMA9 还在 EMA21 上方而且还在继续张开，同一个标的可以连着好几周都留在榜上，回放过去 60 周大约一半成员会跨周延续，每周命中数中位在 21 上下、最少 6 个、最多 67 个，还没有出现过空榜；上线当天的 67 个恰好就是这 60 周里最多的一周，所以别把它当成常态。另外周线数据每周一 00:00（UTC）新周线收盘后才刷新一次，同一周之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。需要至少 22 根已收盘周 K（约 5 个月）才算得出上一周的间距，所以上市不足半年的新合约不入榜。表格里的日线各轴不参与筛选，用来在这批标的里再看日线强弱。范围是全部加密 USDT 永续合约。" },
-            // ⭕ `weeklyEmaSarFirstTwo`「周线9/21扩张＋SAR多头前两根」（2026-09-10 站长新增，
-            //    加密第 9 个策略榜 ⇒ 加密 12、全站 16）
-            // 站长口径逐字：「新增一个TAB，逻辑是最新已收盘周线是EMA9/21扩张＋SAR多头前两根」
-            // （**没点资产** ⇒ 按在案十余次的先例做加密）。
-            // ⚠️⚠️ **本轮真动了 compute 层**：周线端此前只有 `sarFirstBar`、**没有"第二根"**
-            //   （2026-08-11 改判据时连那第二次 calc_sar 一起删了）⇒ 新增 `sarSecondBar` 字段、
-            //   `WEEKLY_CACHE_SCHEMA` 18→19。连带 `sarFirstBar` **从零消费者的保留字段转正**。
-            // ⚠️⚠️⚠️ **一次引入三对结构性严格包含 ⇒ 站内由三对变【六对】，两条传递包含链回归**：
-            //   本榜 ⊊ `weeklyEmaSarBull` ⊊ `weeklySarUptrend` / `weeklyEma921Expansion`
-            //   （实测 7 全部 ⊆ 51 ⊆ 232 / 67，榜外 0 个）。
-            //   ✏️ **2026-09-11 起经 `weeklySarUptrend` 的那条断了**（它追加周线 RSI≥50）⇒ 只剩 本榜 ⊊ `weeklyEmaSarBull` ⊊ `weeklyEma921Expansion`；
-            //   desc 里「这三张榜」已改成两张 + 一句「不一定在「周线SAR多头＋RSI≥50」上」。
-            //   ⇒ 2026-09-09 15:3x 那句「站内唯一的两条传递包含链已消失、包含回到只有一层」
-            //   **当场作废**（只成立了九个小时）—— 在案通用教训「『站内已经没有 X 了』下一条
-            //   指令就可能把 X 加回来」的**第六次应验**，也是最快的一次。
-            // ⚠️ 与 `weeklyTripleEma` 两个方向都不包含（实测交集 1、两侧独有 6 / 7；那榜 09-10 13:3x 已移除）。
-            // ⚠️ **行里 `weeklyEmaGap` 恒为正** ⇒ 恒正的周线榜由三个变【四个】（13:3x 移除 `weeklyTripleEma` 后回到三个）；
-            //   `weeklySarUptrend` 仍不适用（完全不看 EMA、可正可负），别互抄。
-            // ⚠️ 事件型：最多连着两周（这周首根 → 下周第二根 → 第三周必掉出），
-            //   且周线走缓存 ⇒ 周内成员纹丝不动。两条 desc 里都写给用户了。
-            // ✏️ **2026-09-11 14:xx UTC 站长「涉及到SAR多头前2根的都改为SAR多头前4根」** ⇒ 条件② 放宽成**前四根**
-            //   （后端 `sarFirstBar` ∪ `sarSecondBar` ∪ 新字段 `sarThirdBar` ∪ `sarFourthBar`，WEEKLY_CACHE_SCHEMA 22→23）；
-            //   name「周线9/21扩张＋SAR多头前四根」；⚠️ key 不动 ⇒ `FirstTwo` 已名不副实。上面「最多连着两周」按「最多连着四周」读。
-            //   当天 7 → 26（＝60 周回放最大值）；60 周中位 5 / 1 周为空（前两根版中位 3 / 6 周为空）；第三 / 四根那批下周仍多头 94.1% vs 96.3%。
-            //   顺手删掉 desc 里一句本来就不对的话：「刚好满 22 周的标的只可能从第一根那一支进来」—— EMA 门槛 22 根早已覆盖第二~四根要的 4~6 根。
             { key: "weeklyEmaSarFirstTwo", name: "周线9/21扩张＋SAR多头前四根", tf: "周线",
               desc: "两个条件都在最新已收盘的那根周线上：一是 EMA9 在 EMA21 上方、而且两条均线的间距比上一周更大（结构正在张开），二是周线的 SAR 恰好处在这一轮多头的前四根之内——从刚刚由空翻多的第一根，到翻多之后接着站住的第二、第三、第四根都算。两个条件合起来找的是同一件事的早期形态：均线结构已经开始张开，而按周计的趋势方向也在最近一个月之内才站到多头这一侧。有两处容易读错，先说清楚。第一，扩张是两半合起来才算：光是间距在变大还不够，EMA9 必须已经站到EMA21 上方；一个标的的间距从 −6.2% 收窄到 −5.9%，数字确实变大了，但那时 EMA9 还在下面，不算扩张。第二，前四根是恰好不是至少：已经翻多五周、八周的标的不在这张榜上，它们早就过了这个窗口。两张榜之间没有包含关系，同时出现在两边的标的很少见——日线刚翻多和周线刚翻多是两回事，真撞在一起时反而值得多看一眼。本榜是站内最严的一张周线榜：它的成员必然同时出现在「周线9/21扩张＋SAR多头」「周线9/21扩张」这两张榜里，因为那两张各自只要求本榜条件的一部分。所以反过来用也成立——先看那两张里的哪些标的，最近四周之内才刚刚把趋势和结构凑齐。另有一张「周线SAR多头＋RSI≥50」，它和本榜都要求周线 SAR 多头，但它还要求周线 RSI 不低于 50、本榜不看 RSI，所以本榜的成员不一定在那张榜上。这是一张事件清单不是状态清单：这周的第一根，下周会变成第二根，再往后是第三、第四根，都仍然留在榜上，第五周就必然掉出去，所以同一个标的最多连着出现四周。表格里没有周线 SAR 的根数这一列（日SAR多头根数 量的是日线，见下），想分清是刚翻多还是已经第四周，得自己去看周线图。命中数不多，遇到空榜也正常：回放过去 60 周，每周中位 5 个左右，有 1 周一个都没有；改成前四根的这一周是 26 个（第一根 7 个、第三根 16 个、第四根 3 个），恰好是这 60 周里最多的一周，别把它当成常态。多确认几周不是白送的：回放里第三、四根才进来的那批，下一周仍保持 SAR 多头的比例约 94%，比第一、二根（约 96%）略低。另外周线数据每周一 00:00（UTC）新周线收盘后才刷新一次，同一周之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。门槛方面：算上一周的间距需要至少 22 根已收盘周 K（约 5 个月），所以上市不足半年的新合约不入榜。表格里的各轴都不参与筛选，用来在这批标的里再分强弱。要提醒一句，日SAR多头根数 那根轴量的是日线不是周线，在本榜上它可以是任意值、也可能显示「—」，别把它当成本榜的筛选条件来读。日线数据不足 23 天的，日线那几轴会显示「—」。范围是全部加密 USDT 永续合约。" },
-            // ➕ 2026-09-10 12:1x UTC 站长同一条消息连发三条（没点资产 ⇒ 加密）：「新增一个TAB，逻辑是：周线6连阳。」
-            //   「新增一个TAB，逻辑是：周线4连阳。」「新增一个TAB,逻辑是：周线5连阴。」
-            //   ＝ `monthlyFourBull` / `monthlyFiveBear` 的**周线版**，纯 K 线形态、零指标。
-            // 🔗 **2026-09-12 08:5x UTC 站长「周线连阳的TAB，改为：4，5，6合并。也就是说4,5,6连阳都合并到一个TAB。」**
-            //   ⇒ 前两条（`weeklySixBull`「周线六连阳」/ `weeklyFourBull`「周线四连阳」）**合并成 `weeklyFourToSixBull`
-            //   「周线四到六连阳」**，rail 位置就用原来那两张的位置；「连阳」⇒ `weeklyFiveBear` 不在合并范围内、原样留着。
-            //   判据 ＝ 连阳根数 ∈ {4,5,6} ＝ 后端 `fourBull` ∪ **`fiveBull`（新增字段 ⇒ WEEKLY_CACHE_SCHEMA 24→25）** ∪ `sixBull`；
-            //   三支两两互斥 ⇒ 命中 ＝ 三批之和。⚠️ **"恰好 5 连阳"那一档是这次新进来的** ⇒ 合并榜 ⊋ 原两榜之并。
-            //   ⚠️ key 是**新的**（判据与原两张都不同 ⇒ 按「同判据才复用旧 key」的规矩，同 09-09 合并出 `dailyEmaSarFirstTwo` 的先例）。
-            //   ⚠️ 显示名用汉字数字（站长写的是 4，5，6）；1 个条件 ⇒ 名字里无 ＋。轴一根没加。
-            // ⚠️⚠️ **恰好不是至少**（上界没拆：7 连阳不在榜上）；三档门槛各比根数多一根（≥5 / ≥6 / ≥7 根已收盘周 K）。
-            // ⚠️⚠️ **事件型但不再"相邻两周交集恒空"** ⇒ 合并榜「最多连着三周」（4→5→6，第四周必掉出）；
-            //   `weeklyFiveBear` 仍恒空。互斥 live 对由四对变【两对】（本榜 ∩ `weeklyFiveBear` + `monthlyFourBull` ∩ `monthlyFiveBear`）。
-            // 🔴 **2026-09-12 1x:xx 站长「移除：周线五连阴。月线五连阴。」** ⇒ 本组原有的 `weeklyFiveBear`
-            //   「周线五连阴」一条删掉（09-10 12:1x 建、在站 2 天；移除前最后命中 3）。⇒ 上面那两对互斥的对家
-            //   双双下线、**站内互斥 live 对只剩一对**；「相邻两周交集恒空」这句从此没有消费者
-            //   —— **别把它抄到本合并榜上**（它最多连着三周）。同一条消息新增的是**月线版**
-            //   `monthlyFourToSixBull`（判据逐字同构、只换周期），与本榜**两个方向都不包含** ⇒ 不是孪生。
-            // 📊 60 周回放（合并后）：中位 **7** / min 1 / max 94 / **0 周为空**（原两张之并：中位 5、1 周为空；
-            //   分档 4连阳 中位 4 / max 87、5连阳 中位 2 / max 32、6连阳 中位 1 / max 24 且 26 周为 0）；
-            //   跨周延续中位 40%、相邻周 Jaccard 27.3%、连庄分布实测 {1,2,3}（>3 周 0 个）；
-            //   成员下一周收盘更高 42.3% vs 全体 41.3%（**不是择时信号**，desc 里如实写了）。
-            //   上线当天命中 **13** ＝ 4连阳 5 ＋ 5连阳 8 ＋ 6连阳 0。
             { key: "weeklyFourToSixBull", name: "周线四到六连阳", tf: "周线",
               desc: "最新已收盘的那根周线，正好是连续第 4、第 5 或第 6 根阳线——按周计的连涨刚好走在第四、第五、第六周这三档之中的一档。这张榜把原来分开的「四连阳」「六连阳」两张合在了一起，并且把中间的第五周那一档也一并放进来，所以三档现在在同一张榜上看。有两处要先说清楚。第一，上界并没有拆掉：仍然是恰好不是至少，已经连涨 7 周、8 周的标的不在这张榜上，它们的最新一根是第 7 根、第 8 根；只连涨两三周的也不在，那还没走到第四周。第二，本榜只看 K 线形态，完全不看均线、SAR、资金流或任何指标——只问一件事：按周计的上涨，是不是正好落在第四到第六周这一段。这一段的用意是：连涨一个月已经成形、趋势的连贯性得到确认，但还没有拖得太远，第七周之后就自动离开本榜。这不是持续清单，也不是只闪现一周的清单——同一个标的最多连着出现三周：这周是第 4 根，下周若再收阳就成第 5 根、仍在榜上，再一周第 6 根也还在，第四周必然离开（要么成了第 7 根、要么连阳已经断掉）。回放过去 60 周，上一周的成员本周还在的比例中位数约四成，其余的都是连阳断了。站内另有一张月线上的连阳榜「月线二到七连阳」，那张问的是按月计的连涨走到第二到第七个月——周期和区间都和本榜（周线的第四到第六周）不同，两张之间没有包含关系，周线连涨四周和月线连涨四个月是两回事。命中数：回放过去 60 周，每周中位 7 个左右，最少的一周只有 1 个，全市场一起普涨的一周能到 94 个，60 周里没有哪一周是空的（合并前的两张各自都有空榜的周份，六连阳那档更是超过四成的周份都是 0）。三档的分布每周都不一样，第六周那一档本来就最少见。最后一句要紧的：本榜不是择时信号。回放里成员下一周收盘更高的比例约 42%，全市场约 41%，几乎没有差别——连涨到第四、五、六周并不预示下一周继续涨，它更适合当成「按周计的上涨已经成形」的筛选起点，再用表格里的各轴自己分强弱。另外周线数据每周一 00:00（UTC）新周线收盘后才刷新一次，同一周之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。表格里的日线、周线、月线各轴都不参与筛选。门槛方面：判「恰好」必须看得见连阳段之前那一根，所以第 4 根这档要至少 5 根已收盘周 K、第 5 根要 6 根、第 6 根要 7 根，上市不足五周的新合约不入榜；日线数据不足 23 天的，日线那几轴会显示「—」。范围是全部加密 USDT 永续合约。" },
-            // 🔴 2026-09-11 08:1x 站长「移除：月线两连阳，月线三连阴后首阳，月线两连阳＋成交量递增，日线两连阳」（纯移除、无替代）：
-            //   这里原有 `monthlyTwoBullExact`「月线两连阳」/ `monthlyBullAfterThreeBear`「月线三连阴后首阳」/
-            //   `monthlyTwoBullExactVolRising`「月线两连阳＋成交量递增」三条（09-10 建），`dailyFourBull` 后面原有 `dailyTwoBullExact`「日线两连阳」一条
-            //   （09-11 06:4x 建）。key / name / desc 最后一版在 bishuju-web `f653c6a`；判据存档在后端 build_rankings 原位。
-            //   ⚠️ 连带：rail 上 `dailySarFirstBar` / `dailyFourBull` 前移（第 12 / 13 个策略榜）；月线榜只剩 `monthlySarFirstBar` /
-            //   `monthlyFourBull` / `monthlyFiveBear` 三个。别家 desc 里没有指向这四张的句子（移除前 grep 过）。
-            // ➕ 2026-09-10（当日第 9 条）站长「新增一个TAB，逻辑是最新已收盘日线是sar多头首根K线。」（没点资产 ⇒ 加密）。追加在末尾成为 ⑮。
-            // ✏️ **2026-09-11 01:0x UTC 站长「日线SAR多头首根，这个TAB的逻辑改为：日线SAR多头首根+第二根。」** ⇒ 判据改成**前两根**
-            //   （首根 ∪ 第二根，后端 `sarFirstBar` ∪ `sarSecondBar`；两者互斥只能是并集，同 09-09 合并「前两根」时站长的原话）；
-            //   name 改「日线SAR多头前两根」（站内同义的既有叫法）；⚠️ **key 不动 ⇒ `FirstBar` 已名不副实**；rail 位置不动。
-            // ⚠️⚠️ 1 个条件、全在日线；**不带任何 EMA / 成交额条件** ⇒ 改判据后「日线9/21扩张＋SAR多头前两根＋成交额递增」**⊊ 本榜**（包含七对），
-            //   那张 desc 里指向本榜的那句同步改了。自检点：日SAR多头根数恒 ∈ {1, 2}；日EMA间距可正可负（别照那张抄「恒为正」）。
-            // ⚠️ 事件型但相邻两日交集不恒空：今天的首根明天成第二根、仍在榜上 ⇒ 最多连着两天、连着三天交集恒空。别为 SAR 加轴；轴集照旧。
-            // 📊 改判据后 360 天回放：min 2 / p25 15 / 中位 27 / p75 49 / max 195 / 均值 36.5 / **0 天为空**（90 天中位 33.5、min 4）；
-            //    改判据当天 21（首根 6 ＋ 第二根 15，含「日线9/21扩张＋…」那张的 3 个）；人次里第二根约占一半。旧判据（首根）360 天中位 14 / 2 天为空。
-            // ✏️ **2026-09-11 14:xx UTC 站长「涉及到SAR多头前2根的都改为SAR多头前4根」** ⇒ 判据再改**前四根**（后端 `sarFirstBar` ∪
-            //   `sarSecondBar` ∪ 新旗标 `sarThirdBar` ∪ `sarFourthBar`，四者互斥；日线零 schema）；name「日线SAR多头前四根」；key 仍不动。
-            //   ⇒ 上面「日SAR多头根数恒 ∈ {1, 2}」「最多连着两天、连着三天交集恒空」按「∈ {1,2,3,4}」「最多连着四天、连着五天交集恒空」读；
-            //   与「日线9/21扩张＋SAR多头前四根＋成交额递增」同批改 ⇒ 那张 ⊊ 本榜照旧。
-            //   ⛔ **这句 2026-09-12 1x:xx 作废**：那张改成「前6根＋CVD递增」时**本榜没跟着改**（站长只点了那一张）
-            //   ⇒ **那对包含断了**，两张互相都不包含；本榜行里 `sarBullBars` 仍恒 ∈ {1,2,3,4}，**别照那张抄 {1..6}**。
-            // 📊 当天 21 → 61（首根 6 ＋ 第二根 15 ＋ 第三根 13 ＋ 第四根 27）；360 天回放 min 8 / 中位 56 / max 287 / 0 天为空；
-            //   次日即翻空 第 1~4 根 4.1% / 4.3% / 6.1% / 7.4%，之后还多头根数中位 8 / 7 / 6 / 6 —— desc 如实写了「多确认几天不是白送的」。
             { key: "dailySarFirstBar", name: "日线SAR多头前四根", tf: "日线",
               desc: "只看最新已收盘的那根日线：它是这一轮 Parabolic SAR 多头的前四根之一——从 SAR 刚刚由空翻多的第一根（前一天还在空头一侧），到翻多之后接着站住的第二、第三、第四根（仍在多头一侧）都算。已经连着站在多头一侧五天及以上的标的不在这张榜上，表格里的 日SAR多头根数 在本榜只会是 1 到 4：想抢第一时间的看 1，想让信号多被确认几天、滤掉翻多后很快掉头的看 3、4。多确认几天不是白送的，回放过去一年：从第一、二根进来的，第二天就翻回空头的约 4%；从第三、四根进来的约 6% 到 7%，之后这一轮多头还能再撑的天数中位也从 7、8 天缩到 6 天，5 天后的表现同样略差一点——越晚进场、离翻多那一刻的价格就越远。本榜只看 SAR 这一个条件，完全不看均线或资金流。同时出现在两边的，是 SAR 刚翻多、均线结构也同步张开的那一小撮；只在本榜上的，其中不少只是下跌途中的一次反抽，需要自己分辨。代价要说清楚：日线 SAR 是很敏感的信号，回放过去一年，翻多之后这一轮多头维持的天数中位只有 9 天左右，大约七分之一在三天之内就重新翻回空头，能撑过十天的不到一半。这是一张事件清单而不是持续清单：同一个标的最多连着四天出现在这里（翻多当天是第一根，之后每站住一天加一根），第五天起就不在了，所以名单换得很快，每天的名单里七成多是前一天就在榜上、只是往后挪了一根的。命中数随行情起伏：回放过去一年，每天中位 56 个左右，全市场一起反弹之后的那几天能到两三百个，一年里没有一天是空的。日线每天 00:00（UTC）收盘后才换一批，同一天之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。除了 日SAR多头根数，表格里的其余各轴都不参与筛选，用来在这批标的里再分强弱。上市不足 23 天的新合约日线数据不够，不入榜。范围是全部加密 USDT 永续合约。" },
-            // 🔴 2026-09-12 站长「移除两个TAB：周线两连阳＋价涨量增。日线两连阳＋价涨量增。」（纯移除、无替代）：
-            //   这里原有 `dailyFourBull`「日线两连阳＋价涨量增」与 `weeklyTwoBullExactCloseVolRising`「周线两连阳＋价涨量增」
-            //   两条（都是 09-11 建、在站约一天）。key / name / desc 最后一版在 bishuju-web `9cb4922`；后端判据存档在 build_rankings 原位。
-            //   ⚠️ 连带：rail 上其后三条前移（`monthlyVolRising` / `weeklyTripleEmaPersist` / `monthlyEma921Persist` ＝ ⑬⑭⑮）；
-            //   日线榜只剩 `dailyEmaSarFirstTwo` / `dailySarFirstBar` 两个、周线榜八个；同判据异周期孪生又一个都没有了。
-            //   ⚠️ 别家 desc 里指向这两张的句子移除前 grep 过：`weeklyFiveBear` 的互斥枚举里点过「周线两连阳＋价涨量增」，已同批删掉。
-            // ➕ 2026-09-11 11:0x UTC 站长「新增一个TAB，逻辑是最新已收盘月线的成交量递增。」（没点资产 ⇒ 加密）。追加在末尾（⑮）。
-            //   1 个条件、全在月线：最新已收盘月 K 的成交量 k[5] > 上一根 ＝ 后端月线字段 `volRising`（09-10 为已移除的「月线两连阳＋成交量递增」建，
-            //   零消费者后本次转正 ⇒ 零 schema）。「成交量」照站长用词取 k[5]（不是 USDT 成交额）；「递增」只比最新两根（不是连续多月）。
-            // ⚠️ 不看价格方向：放量上涨、放量下跌都在榜上（desc 写给用户了）；与各榜无包含 / 互斥 / 孪生；不计入纯 K 线形态。
-            // ⚠️ 既不是事件型也不是状态型：下个月约三分之一的成员还在；月线走缓存 ⇒ 月内成员纹丝不动。显示名照站长用词、1 个条件 ⇒ 无 ＋。
-            // ⚠️ 已知边界没特判：上市第 2 个月的合约拿整月比不满月的首月（上线当天只有 GRVTUSDT 一个；48 个月回放占命中 3.8%、方向不固定）。
-            // 📊 上线当天 303 个（占可判 522 个的 58%，收阳 253 个）＝ 48 个月回放最大值；回放 min 18 / 中位 89.5 / max 302 / 0 个月为空、中位占可判四成；
-            //    成员当月收阳 48.7%；下个月量继续增 35.9%（全体 45.7%）、下个月收阳 35.2%（全体 37.4%）；次月仍在榜中位 36.3%。k[7] 口径当天 306（差 31 个）。
-            // ✏️⚠️ **2026-09-11 13:2x 站长「月线成交量递增的逻辑改为：月线成交量递增且必须是月线阳K。」** ⇒ 一度是 2 个条件
-            //   （① 成交量 k[5] > 上一根 ② 该月 K 收阳），名「月线成交量递增＋阳K」、key 不动。
-            // ✏️🔴 **2026-09-12 站长「月线成交量递增＋阳K的逻辑改为：月线成交量递增即可。」** ⇒ **阳K 撤回、判据回到建榜时那一条**，
-            //   name 改回「月线成交量递增」、key 仍不动、sorts 一根没动。⇒ 13:2x 那版的连带**全部回滚**：
-            //   与 `monthlyFiveBear` 的结构性互斥作废（撤回当天两者交集实测 2）、「不看价格方向」回来、
-            //   命中 253 → **303**（阳K 版 ⊊ 本版，多出来的正好是放量收阴那 50 个）、回放回到 min 18 / 中位 89.5 / max 302 / 0 个月为空、
-            //   相邻两月留存回到约三分之一。desc 基本复用 11:0x 建榜那一版（口径逐字相同），只更了「月成交额」那句和快照措辞。
-            //   ⚠️ 它又是现役唯一完全不看价格的一张（全称句第 N 次翻烧饼：11:0x 写、13:2x 翻、09-12 又翻回来）。
             { key: "monthlyVolRising", name: "月线成交量递增", tf: "月线",
               desc: "只看一件事：最新已收盘的那根月线，成交量比上一个月大。成交量按标的数量计（比如 BTC 合约就是这个月成交了多少个 BTC），不是按 USDT 计的成交额——价格跌了一半的月份，成交的币数可能翻倍、USDT 成交额却没怎么变，同一个月里两种算法会有三十来个标的结论不同。「递增」只比最新这一个月和上一个月，不要求连续好几个月都在放大。本榜完全不看价格：放量上涨和放量下跌都会出现在这里——回放过去 48 个月，上榜标的里当月收阳的不到一半（约 49%）；眼下这一批（最新已收盘的是八月）正赶上全市场普遍放量，上榜 303 个、八成多是阳线，这是那个月的特殊情况，别当成常态。它也不是做多信号：成交量放大之后更常回落，上榜标的下个月成交量继续放大的只有约 36%，比全部标的的平均（约 46%）还低；下个月收阳的约 35%，也略低于平均（约 37%）。所以更适合把它当成一张「这个月谁被交易得更热」的名单，再结合价格方向自己判断：放量上涨可能是资金在进，放量下跌可能是恐慌在出。命中数通常很宽：回放过去 48 个月，每月中位 90 个左右、大约占当时可比较标的的四成，少的月份十几个、多的月份三百个，没有一个月是空的。这张榜既不是一次性的事件清单、也不是持续清单——每个月都拿新的一根和上一根重新比一次，下个月大约三分之一的成员还会留在榜上。月线数据每月 1 号 00:00（UTC）新月线收盘后才刷新一次，同一个月之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。表格里的日线、周线、月线各轴都不参与筛选，用来在这批标的里再分强弱；表格里有「月成交额」这一列（这个月成交了多少 USDT，按它排序时左边还标着全市场排第几），但没有「月成交量增幅」这一列，排不出「放大了多少」。已收盘月线不足两根的新合约没有上一个月可比，不入榜；刚上市第二个月的合约，拿来比的上一个月是不满一整月的上市首月，结果要打个折看。范围是全部加密 USDT 永续合约。" },
-            // ➕ 2026-09-11 16:3x UTC 站长「新增一个TAB，逻辑是：周线是EMA9/21/55三线扩张的存续期间。」（没点资产 ⇒ 加密）。追加在末尾（⑯）。
-            //   判据 ＝ 最新已收盘周 K 仍 EMA9>21>55（排列还立着）∧ 这段排列里出现过一次 9/21、21/55 两档间距同时变大（＝出现过首次扩张）。
-            //   「扩张存续期间」逐字沿用 07-28 站长给四线版下的定义（「出现过首次扩张后，均线依然还是多头排列」）。后端 `emaExpansionPersist`，schema 23→24。
-            // ⚠️⚠️ 不是 09-10 移除的「周线9/21/55扩张」（最新一根在扩张、事件型）的复活 ⇒ key 另起 `weeklyTripleEmaPersist`（照 `dailyFourEmaPersist` 先例，
-            //   刻意不叫 …Expansion）；显示名「周线9/21/55扩张存续」与四线版同构。desc 里没提那个已移除的榜（免得悬空引用）。
-            // ⚠️ 与各现役榜无包含 / 互斥 / 孪生：9/21 那几张要求这一周还在张开、本榜不要求；本榜要 EMA55 那档、它们不看。
-            // ⚠️ 状态型 + 周内恒定；窗口边界：刚满 56 根周 K、排列从一开始就立着的新合约看不到首次扩张、不入榜（与 TV 同一指标一致）—— desc 都写给用户了。
-            // 📊 上线当天 15 个（同周三线排列 17 个，挡掉的两个都是窗口边界）；60 周回放 min 2 / 中位 14 / max 29 / 0 周为空；跨周延续中位 100%、Jaccard 0.88；
-            //    保留率 本榜/三线排列 中位 96.1%；已结束存续段长度中位 13 周 / p75 18；下一周收盘更高 41.6% vs 全体 40.3%（不是择时信号，desc 如实写了）。
-            //   （↑ 以上 9 行是原周线榜 `weeklyTripleEmaPersist`「周线9/21/55扩张存续」的建榜注释；2026-09-13 起它并进下面这一条。）
-            // 🔗 **2026-09-13 站长「新增一个TAB，逻辑：最新已收盘日线是EMA9/21/55三线扩张后的存续期间。和周线榜合并为一个。」**
-            //   「合并」当场问过站长 ＝ **并集**（日线或周线任一处于存续期即入榜）⇒ 原周线榜并进本条、旧 key 退役（判据不同 ⇒ 开新 key，
-            //   同 09-12 合并 4/5/6 连阳的先例）。rail 位置沿用旧榜的 ⇒ 编号一个没动；榜数不变（仍 14 策略 + 3 涨跌幅）⇒ og.png 不用重跑。
-            //   显示名用「或」写明并集（站内名字里的 ＋ / × 都表示同时满足，别套用）。
-            // ⚠️ tf「日线/周线」→ 徽标「日周」（本轮在 TF_SHORT 里新增）；挂「日」或「周」都会误导另一支的成员。
-            // ⚠️ 表格上**看不出某行是哪一支带进来的**（没加轴 / 旗标列）—— desc 如实写了。
-            // ⚠️ 与各现役榜无结构性包含 / 互斥 / 孪生（360 天回放：`dailyTwoToSixBullRsiEma921` 的 2483 人次里 694 次不在本榜；
-            //   上线当天那 6 个恰好全在、`monthlyEma921Persist` 的 6 个也恰好全在 —— 都是快照，别当包含）。
-            // ⚠️ 状态型；日线那一支每天 00:00 UTC 换、周线那一支每周一换 ⇒ 同一 UTC 日内成员不动（原周线榜是周内不动）。
-            // 📊 上线当天 **270**（日线 265 ＋ 周线 15 − 两支都在 10；只靠周线进来的 5）—— **回放里的高位**（360 天只有 15 天 ≥ 270，
-            //    ≥200 的 33 天集中在 2026-05 上中旬与 08-24 以来）；360 天回放 min 22 / 中位 **62** / max 339（2026-05-12）/ 0 天为空；
-            //    日线那一支中位 54、周线那一支中位 11、两支都在中位 4、只靠周线进来的中位 6；日线存续 / 日线三线排列 中位 97.1%；
-            //    跨日延续中位 96.8%；已结束在榜段中位 14 天 / p75 23；次日收盘更高 45.5% vs 全体 45.3%（不是择时信号，desc 如实写了）。
             { key: "dailyOrWeeklyTripleEmaPersist", name: "日线或周线9/21/55扩张存续", tf: "日线/周线",
               desc: "日线或周线，只要有一个处在 EMA9/21/55 三线扩张之后的存续期里就入榜——原来的「周线9/21/55扩张存续」和同一条件的日线版合并成了这一张，原周线榜的成员一个不少都在这里。「存续期」两条合起来看：一是最新已收盘的那根 K 线上 EMA9 在 EMA21 上方、EMA21 又在 EMA55 上方，三线多头排列还立着；二是从这段排列形成以来，至少出现过一根三线扩张，也就是 EMA9 与 EMA21、EMA21 与 EMA55 这两档间距同时比上一根更大。换句话说：均线结构曾经真正张开过，而且到现在都没有被打破——扩张过之后横盘、间距慢慢收窄，只要三条线的上下顺序没乱就仍然算数。日线、周线两边各算各的，满足任何一边就入榜；表格里没有一列标明某个标的是因为哪一边进来的。大多数是日线那一边带进来的：回放过去 360 天，每天满足日线的中位 54 个、满足周线的中位 11 个、两边同时满足的中位 4 个，只因为周线满足才进来的中位 6 个左右——这类通常是周线结构完好、日线正在回调的标的。合在一起，每天命中数中位 62 个、最少 22 个、最多 339 个，大约占全部标的的一成出头，没有一天是空榜；普涨时会明显变多（上两百个的日子集中在 2026 年 5 月上中旬和 8 月下旬以来），本榜上线时（2026 年 9 月 11 日那根日线）是 270 个，属于这一年里的高位，别当成常态。这是一张状态清单不是事件清单：前一天的成员第二天还留在榜上的比例中位约 97%，一段在榜期中位两周左右、四分之一在三周以上。日线那一边每天 00:00（UTC）新日线收盘后才换，周线那一边每周一 00:00（UTC）才换，同一天之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。有两处先说清楚。第一，在日线上「扩张过」这一条几乎不额外筛人：回放里满足日线三线多头排列的标的约 97% 同时也在存续期，日线那一边基本可以当成「日线三线多头排列」来读；被挡在外面的，主要是排列一路磨蹭形成、从没真正张开过的，以及上市不久、EMA55 第一次算得出来时排列就已经立着的新合约。第二，扩张量的是加速度不是涨幅：一个匀速上涨的标的，间距几乎不变，可能迟迟算不上扩张。它和站内那几张看 9/21 扩张的榜（「日线二到七连阳＋RSI≥70＋9/21扩张」和周线那三张）没有包含关系：那几张要求最新这一根 EMA9 与 EMA21 的间距还在变大、不看 EMA55，本榜不要求间距还在变大、但要求 EMA55 那一档。它也不是择时信号：回放里本榜成员第二天收盘比前一天高的比例约 45.5%，和全部标的的平均（约 45.3%）几乎一样——更适合当成「趋势结构完好」的候选池，再用表格里的其他轴自己挑。表格里的日线、周线、月线各轴都不参与筛选，用来在这批标的里再分强弱。日线那一边要求至少 56 根已收盘日线、周线那一边要求至少 56 根已收盘周线（上市一年多），两边都不够的新合约不入榜。范围是全部加密 USDT 永续合约。" },
-            // ➕ 2026-09-11 17:5x UTC 站长「新增一个TAB，逻辑是：月线EMA9/21扩张存续期间。」（没点资产 ⇒ 加密）。追加在末尾（⑰）。
-            //   判据 ＝ 最新已收盘月 K 仍 EMA9>21（排列还立着）∧ 这段排列里出现过一根 9/21 间距比上一根大的月 K（＝出现过首次扩张）。
-            //   「扩张存续期间」同上一条（07-28 站长给四线版下的定义），后端 `ema921ExpansionPersist`，MONTHLY_CACHE_SCHEMA 17→18。
-            // ⚠️⚠️ 两线版里 EMA9 刚站上 EMA21 那一根本身就是扩张 ⇒ ≈「月线 EMA9 在 EMA21 上方」；差别只在窗口边界（第 21 根月 K 时已排列、之后间距没再变大过）——
-            //   desc 写给用户了（全部历史 47 段、都在上市 22~37 个月时，39 段没等到再扩张就死叉）。
-            //   key `monthlyEma921Persist`（`Ema921` 同 `weeklyEma921Expansion`、`Persist` 同上一条）；显示名与「周线9/21/55扩张存续」同构。
-            // ⚠️ 与各现役榜无包含 / 互斥 / 孪生；状态型 + 月内恒定；只有满 22 根已收盘月 K 的合约有资格（上线当天 242 / 524）。
-            // 📊 上线当天 6 个（同月 EMA9>21 的 7 个，挡掉的 BANUSDT 是窗口边界）；48 个月回放 min 0 / 中位 13 / max 44（2025-01）/ 2 个月为空；
-            //    跨月延续中位 91.4%；保留率 本榜/EMA9>21 月份中位 92.6%（人次 88.5%）；已结束存续段中位 5 个月 / p75 13；
-            //    下个月收盘更高 40.3% vs 满 22 根全体 37.6%（不是择时信号，desc 如实写了）。
-            // ➕ **2026-09-12 09:xx UTC 站长「另外新增一个TAB，逻辑是：最新收盘的月线SAR是空头就行。」** 建榜（判据 ＝ 月线SAR空头）。
-            // ✏️✏️ **2026-09-13 UTC 站长改判据**：「月线SAR空头改为：最新已收盘月线的收盘价大于最近一轮月线SAR空头趋势的
-            //   第二根K线的最低价。」⇒ 判据 ＝ 后端 `close > lastBearSarSecondLow`（**既有月线字段、零 schema**）。
-            //   **key 不动**（改判据的老规矩）⇒ `monthlySarBearish` **已名不副实**、别再当 SAR 方向榜读；
-            //   显示名改「**月线突破SAR空头第二根低点**」—— 逐字沿用 09-08~09-09 在站一天的 `monthlyBreakBearSecondLow`
-            //   （判据与那张逐字相同、后端照抄存档；⚠️ 那个 key 仍退役、别复用）。rail 位置不动。
-            // ⚠️⚠️ **与 `monthlySarFirstBar` 那对互斥随判据一起作废** ⇒ 站内结构性互斥 live 对 **一对 → 【零对】**。
-            //   ⚠️ 反方向"差一点就是包含"（那张的参照价 `lastBearSarMax` 恒 ≥ 本榜这条线）**但有实测反例**：
-            //   空头段只有 1 根月 K 时本榜参照价是 None ⇒ 改判据当天 `monthlySarFirstBar` 3 个里 CAPUSDT 不在本榜、
-            //   48 个月回放 14 个月有这类反例 ⇒ **不算包含对、不能当自检点**（包含 live 对仍四对）。
-            // ⚠️ **型别由"状态型"变【门槛型】**：参照线只在 SAR 换段时才变、收盘价每月一变 ⇒ 成员在线上下进出
-            //   （跨月延续中位 84.0%、在榜段中位 2 个月，旧判据是 95.5% / 8 个月）。月线走缓存 ⇒ 月内纹丝不动。
-            // ⚠️ 退化档**刻意保留**：参照根恰好是最新那根时 `close >= low` 是 K 线定义 ⇒ 必然命中（当天 18/120，站长 09-08 拍板）。
-            // 📊 改判据当天 **469 → 120**（其中 94 个月线 SAR 仍是空头、18 个退化档、另有 16 个因参照价为 None 不入榜）
-            //    —— **120 / 18 / 94 与 09-09 移除那张时的存档逐个相同**（同一根已收盘月 K）＝ 免费的"照抄没抄错"对账。
-            //    48 个月回放：min **14** / p25 31 / 中位 **96** / p75 120 / max 184 / **0 个月为空**；
-            //    占当月可判标的 min 13.0% / 中位 **27.6%** / max 83.3%（旧判据中位 160、占比约九成）。
-            //    **不是择时信号（反向也不是）**：成员下个月收盘更高 37.0%（n=3994）vs 当月可判全体 37.4%。
-            //    与同日改判据的 `monthlyFourToSixBull` 当天交集 38（差集 113 / 82）⇒ 互不包含。
             { key: "monthlySarBearish", name: "月线突破SAR空头第二根低点", tf: "月线",
               desc: "最新已收盘那根月线的收盘价，站上了最近一轮月线 SAR 空头段里第 2 根 K 线的最低价。拆开说：先在月线上找到最近一轮 SAR 处在空头（圆点在 K 线上方）的那一段，取这一段第 2 根月 K 的最低价当参照线，再看最新已收盘那根月线的收盘价有没有高过这条线。只有这一个条件。有四处要先说清楚。第一，「最近一轮」不要求那一段已经结束：如果最新这根月线的 SAR 还在空头侧，参照的就是正在进行的这一轮下跌——收盘价站上这轮下跌第 2 根的低点，是抢在 SAR 翻多之前的领先信号，改判据当天 120 个命中里有 94 个正是这一类；如果 SAR 已经翻多，参照的就是刚刚结束的那一段。第二，本榜完全不问当前 SAR 是多头还是空头（这一点和它上一版判据正相反，上一版只问 SAR 方向）。第三，有一个退化的情形：当那个参照根恰好就是最新已收盘的这根月线时，「收盘价高于自己的最低价」按 K 线定义必然成立，这类标的会自动命中（改判据当天 120 个里有 18 个属于此类）——这是刻意保留的，不是漏做。第四，参照价取的是那一段第 2 根的最低价，不是收盘价、也不是第 1 根。命中数：改判据当天 120 个（上一版是 469 个、占全市场九成，那是一张背景名单，这一版不是）。回放过去 48 个月：中位 96 个、最少的一个月 14 个、最多 184 个，48 个月里一个月都没有空过；占当月可判标的中位约27.6%，也就是四分之一上下。这是一张门槛清单：参照线只在 SAR 换段时才会变，而收盘价每个月都在动，所以成员会随收盘价在那条线上下进出——上个月的成员这个月还在的比例中位数 84%，已经结束的在榜段中位只有 2 个月，最长的一段39 个月。也要如实说一句：它不是择时信号。回放里成员下个月收盘更高的比例是 37.0%（3994 个样本），当月可判全体是37.4%，两者几乎没有差别——它标记的是「价格已经从这轮月线级下跌里抬起头」这个事实，而不是预测下个月。它和「月线SAR多头首根＋收盘价反包所有空头SAR」那张榜大多数时候会重叠（那张要求收盘价越过整段空头 SAR 的圆点，位置比本榜这条线更高，站上更高的线自然也站上了这条），但不是必然：如果那一轮空头段只有 1 根月 K，本榜就没有「第 2 根」可参照、那个标的不会出现在本榜上——改判据当天就有这样一个。门槛：算 SAR 至少要 3 根已收盘月 K；另外那一轮空头段必须有第 2 根，段里只有 1 根、或者可用历史里一次空头都没出现过的标的不入榜（改判据当天有 16 个因此不在）。另外月线数据每月 1 号 00:00（UTC）新月线收盘后才刷新一次，同一个月之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。表格里的日线、周线、月线各轴都不参与筛选，用来在这批标的里再分强弱。范围是全部加密 USDT 永续合约。" },
             { key: "monthlyEma921Persist", name: "月线9/21扩张存续", tf: "月线",
               desc: "最新已收盘的那根月线，处在 EMA9/21 两线扩张之后的存续期里——两条合起来看：一是这个月 EMA9 在 EMA21 上方，两线多头排列还立着；二是从这段排列形成以来，至少出现过一个月两线扩张，也就是 EMA9 与 EMA21 的间距比上一个月更大。换句话说：月线级别的均线结构曾经真正张开过，而且到现在都没有被打破。它不要求这个月还在继续张开——扩张过之后进入横盘、间距慢慢收窄，只要 EMA9 还在 EMA21 上方，就仍然留在榜上；一旦 EMA9 跌回 EMA21 下方，这段存续期就结束了，要等下一次重新站上去才会回来。有一点要先说清楚：只有两条线时，EMA9 刚站上 EMA21 的那个月，间距是从负数变成正数，这本身就算一次扩张，所以本榜在绝大多数时候就是「月线 EMA9 在 EMA21 上方」的名单（回放过去 48 个月，这类标的约九成在本榜上）。差出来的只有一类：EMA21 要攒够 21 根月线才算得出来，如果它第一次算得出来时 EMA9 就已经在上方、之后间距又一直没再变大，那它是怎么站上去的就看不到了，这类标的要等间距再变大一次才会进来（TradingView 上同一个指标看到的也是这样）；按全部月线历史统计，这样被挡在外面的都是上市两三年左右的合约，而且多数还没等到间距再变大，EMA9 就先跌回了 EMA21 下方。这是一张状态清单不是事件清单：回放里上个月的成员这个月还留在榜上的比例中位约九成；按全部月线历史统计，已经结束的存续期中位维持 5 个月左右、四分之一在 13 个月以上。命中数很少、而且跟着大行情走：回放里每月中位 13 个，最多是 2025 年 1 月的 44 个，2022 年底到 2023 年初有两个月一个都没有，空榜不是数据出错；本榜上线时（2026 年 8 月这根月线）只有 6 个。它也不是择时信号：回放里本榜成员下个月收盘比这个月高的比例约 40%，只比同样上市满 22 个月的全部标的（约 38%）略高一点——更适合当成「月线趋势结构完好」的少数派名单，再用表格里的其他轴自己挑。它和站内其他榜没有包含关系：月线上另外几张榜看的是 SAR、K 线阴阳或成交量，不看均线；「周线9/21扩张」要求这一周间距还在变大，「日线或周线9/21/55扩张存续」看的是日线、周线上的三条线，周期和条件都不同。月线数据每月 1 号 00:00（UTC）新月线收盘后才刷新一次，同一个月之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。表格里的日线、周线、月线各轴都不参与筛选，用来在这批标的里再分强弱。上市不足 22 个月的合约算不出 EMA21 这个月和上个月的值，不入榜——这差不多是全市场一半以上的合约；日线数据不足 23 天的，日线那几轴会显示「—」。范围是全部加密 USDT 永续合约。" },
-            // ➕ **2026-09-12 1x:xx UTC 站长「新增：月线四到六连阳。」**（没点资产 ⇒ 加密）建榜、追加在 rail 末尾成为
-            //   加密策略组第 14 个（同一条消息还移除了周线 / 月线五连阴两张 ⇒ 策略榜 15 → 14、全站 18 → 17）。
-            // ✏️✏️ **2026-09-13 UTC 站长改判据**：「月线四到六连阳改为：月线2到7连阳。」⇒ 连阳根数 ∈ {4,5,6} 放宽成
-            //   **∈ {2,3,4,5,6,7}** ＝ 后端六支**恰好**旗标之并（`twoBullExact` ∪ **`threeBull`** ∪ `fourBull` ∪
-            //   `fiveBull` ∪ `sixBull` ∪ **`sevenBull`**；threeBull / sevenBull 是本轮新增 ⇒ **MONTHLY_CACHE_SCHEMA 19→20**）。
-            //   六支两两互斥 ⇒ 命中 ＝ 六批之和。**key 不动** ⇒ `FourToSix` **已名不副实**；显示名改「**月线二到七连阳**」。
-            // ⚠️⚠️ **纯放宽**（{4,5,6} ⊂ {2..7}）⇒ 旧成员一个不掉（48/48 个月回放"旧 ⊆ 新"恒成立）。
-            // ⚠️⚠️ **两端仍都卡死**（恰好不是至少）：只连涨 1 个月的不入榜、**8 连阳及以上也不入榜**
-            //   —— 只是把左端点 4→2、右端点 6→7，界一个都没拆。⇒ 页面上出现 8 连阳的标的 ＝ 有人动了判据。
-            // ⚠️⚠️ **判据自此与「周线四到六连阳」不再同口径**（站长只点了月线那张、周线那张一个字没动）
-            //   ⇒ 两张**不是同判据异周期孪生**，两个方向都不包含。
-            // ⚠️⚠️ **`monthlyFourBull` ⊊ 本榜照旧成立**（共用后端同一个 `fourBull` 旗标）⇒ 站内包含 live 对仍**四对**；
-            //   站长当初说的是「新增」不是「合并」⇒ 那张**没被取代**、两张并列。
-            // ⚠️ 事件型但**相邻两月交集不恒空** ⇒ ✏️ **09-13 起「最多连着六个月」**（第 2 根 → … → 第 7 根，第七个月必掉出；
-            //   放宽前是三个月）；`monthlyFourBull`（单档）**仍然**恒空 —— 别互抄。月线走缓存 ⇒ 月内成员纹丝不动。
-            // ⚠️ 与 `monthlySarBearish`（09-13 起＝收盘价 vs 空头段第 2 根低点）/ `monthlyVolRising` /
-            //   `monthlyEma921Persist` / `monthlySarFirstBar` 都**不包含不互斥**（当天实测交集 38 / 80 / 4 / 3）。
-            //   ⚠️⚠️ 当天 `monthlySarFirstBar` 3 个**恰好全在本榜里**（3/3）、`monthlyEma921Persist` 4/6 ——
-            //   **n 太小的巧合、别当包含**（同 `dailyEmaSarFlip ⊆ dailyEmaExpansion` 那次 n=2 的教训：
-            //   数字撞上先回放再下结论）。
-            // 📊 改判据当天 **3 → 151**；分档 恰好2 **136** / 恰好3 12 / 恰好4 **0** / 恰好5 2 / 恰好6 1 / 恰好7 **0**
-            //    （全市场连阳分档 {0:113, 1:259, 2:136, 3:13, 5:2, 6:1}）⇒ **九成命中是"刚满两个月"那一档**，desc 如实写了。
-            //    48 个月回放：min 0 / p25 4 / 中位 **17.5** / p75 42 / max **151**（＝当天）/ **1 个月为空**
-            //    （旧判据 中位 1 / max 68 / **13 个月为空**）；跨月延续中位 **36.2%**、Jaccard 0.19；
-            //    已结束在榜段分布 {1:545, 2:182, 3:91, 4:26, 5:17, 6:13} —— **>6 个月 0 个**，与判据对上。
-            //    成员下个月收阳 **40.6%**（n=1471）vs 全体 37.0%（n=12637）—— 样本比放宽前（n=238）厚实得多，
-            //    仍撑不起一个结论，desc 如实写了。
             { key: "monthlyFourToSixBull", name: "月线二到七连阳", tf: "月线",
               desc: "最新已收盘的那根月线，正好是连续第 2 到第 7 根阳线之间的一档——按月计的连涨走在第二、三、四、五、六、七个月这六档之中的任意一档。有三处要先说清楚。第一，两头都是卡死的：只连涨 1 个月的不在榜上（那还看不出连续性），已经连涨 8 个月、9 个月的也不在（它们的最新一根是第 8 根、第 9 根）——是恰好落在 2 到 7 这一段，不是「至少两个月」。第二，命中里绝大多数是刚满两个月那一档：改判据当天 151 个里有 136 个是第 2 根，第 3 根 12 个，第 5 根 2 个，第 6 根 1 个，第 4 根和第 7 根一个都没有。这是判据本身决定的——连涨越久的标的越稀少；如果你要找的是「已经涨了很久」的那一批，请用表格上方的排序轴再筛，或者去看「月线四连阳」那张单档榜。第三，本榜只看 K 线形态，完全不看均线、SAR、资金流或任何指标——只问一件事：按月计的上涨连续了几个月。月线是全站最大的周期，连涨两个月以上意味着按月计的结构已经往上转了；而上界卡在第七个月，是为了把已经人尽皆知的那一段排除在外。站内另有一张「月线四连阳」，那正是本榜第四档单独拿出来的一张——那张榜上的每一个标的都必然也在本榜上，本榜多出来的是连涨两、三、五、六、七个月的那些。另外站内还有一张「周线四到六连阳」，那是周线上的第四到第六周，周期和区间都和本榜不同，别混起来看。这不是持续清单，也不是只闪现一个月的清单——同一个标的最多连着出现六个月：这个月是第 2 根，只要接着收阳就一路第 3、4、5、6、7 根都还在榜上，第七个月必然离开（要么成了第 8 根、要么连阳已经断掉）。回放过去 48 个月，上个月的成员这个月还在的比例中位数约 36%，其余的都是连阳断了；已经结束的在榜段里，超过六个月的一个都没有。命中数跟着大盘走、波动很大：回放中位 17 个左右，四分之一的月份不到 4 个，全市场一起普涨的月份能到 151 个（正好就是改判据当天），48 个月里只有 1 个月一个都没有。最后一句要紧的：把它当择时信号要很小心。回放里成员下个月收盘更高的比例约 40.6%（1471 个样本），全市场约 37.0%，高出三四个百分点——样本比放宽之前厚实得多，但这点差距仍撑不起一个结论。它更适合当成「按月计的上涨已经连续起来」的筛选起点，再用表格里的各轴自己分强弱。另外月线数据每月 1 号 00:00（UTC）新月线收盘后才刷新一次，同一个月之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。表格里的日线、周线、月线各轴都不参与筛选。门槛方面：判「恰好」必须看得见连阳段之前那一根，所以第 2 根这档要至少 3 根已收盘月 K、往上每加一档多要一根、第 7 根那档要 8 根，上市不足三个月的新合约不入榜；日线数据不足 23 天的，日线那几轴会显示「—」。范围是全部加密 USDT 永续合约。" },
         ],
     },
-    // 🔴🔴 **2026-09-12 10:xx UTC 站长「A股直接移除所有TAB。我不玩A股了。需要恢复的时候我再告诉你。
-    //   暂时先直接移除整个A股的数据。」⇒ A股 两个组整体删除**（同 2026-08-16 移除美股/ETF 那一轮）：
-    //   原「A股行情」三个涨跌幅榜（`ashareDailyChange` / `ashareWeeklyChange` / `ashareMonthlyChange`，
-    //   **close-to-close 口径**、4 轴无订单流）+「A股策略」一个（`ashareMonthlyWeeklyDaily`
-    //   「周线9/21扩张＋SAR多头」，与加密 `weeklyEmaSarBull` 逐字同判据、显示名也刻意相同）。
-    //   key / name / desc 最后一版在 bishuju-web `ddc693e`；判据存档在后端 `fetch_ashare.py`（休眠件、整条管道保留）。
-    // ⚠️⚠️ **全站从此只有加密一个资产** ⇒ 资产分段控件（`.asset-seg`，rail + drawer 两份）与 A股 新鲜度胶囊
-    //   （`#freshAshare`）同批从 DOM 删掉；`ASSET_KEY` / `ASSET_CN` / `switchAsset` / `isAshareTab` /
-    //   `snapshotBanner` / `volRankBadgeFor` 的 A股 分母等机制**原样保留为休眠件**（`currentAsset` 从此恒为
-    //   crypto ⇒ 那些分支恒不触发、零副作用）。复活 A股 ＝ 把这两个组 + 四条 `TABS_CONFIG` + 三个
-    //   `CHANGE_PCT_TABS` key + 两处 `.asset-seg` + `#freshAshare` 加回来，并把后端 `RETIRED_KEY_PREFIXES`
-    //   里的 `"ashare"` 拿掉（不拿掉的话管道照跑、数据照样进不了站）。
+    // A股「行情」「策略」两组已随整族退役删除（前端最后一版在 bishuju-web ddc693e）；复活清单见后端 fetch_ashare.py 顶部
+    //   （前端要连同 TABS_CONFIG、CHANGE_PCT_TABS、资产分段控件与 A股 新鲜度胶囊一起加回）。
 ];
 
-// tab key → {asset, tf, name, full}。组的 asset/tf 下发到每个 tab；tab 自带的 tf 优先
-// （涨跌幅组）。full 缺省用 name。标识栏/角标都读这张表。
+// tab key → {asset, tf, name, full, desc}：组的 asset / tf 下发到每个 tab（tab 自带 tf 优先），full 缺省用 name。
 const TAB_META = {};
 for (const g of TAB_GROUPS) {
     for (const t of g.tabs) {
@@ -1723,41 +336,17 @@ for (const g of TAB_GROUPS) {
     }
 }
 
-// === 付费墙配置（2026-07-21 接 OxaPay 重新启用）===
-// 免费橱窗留 TEASER_TAB（现为加密榜 dailyTripleEmaCvd）里 日线 RSI 最高的 1 行，
-// 其余全部榜锁定后 data[tab] 是 undefined（公开 JSON 根本不含这个 key）——不是"给个
-// 空数组"那种锁法。2026-07-25 起全站每一个榜都付费，这 1 行是唯一的榜单类免费内容。
-// 总开关：必须跟后端 fetch_data.py 的 PAYWALL_ENABLED 保持一致，留作紧急回滚
-// 开关（两处一起改回 false，不用逐处回退 diff）。
+// === 付费墙配置 ===
+// 总开关，必须与后端 fetch_data.py 的 PAYWALL_ENABLED 一致（audit C）；紧急回滚时两处一起改 false。
 const PAYWALL_ENABLED = true;
 const WORKER_API = "https://bishuju-api.fanshenpan.workers.dev";
-// ⚠️ 必须与后端 fetch_data.py 的 TEASER_TAB 一致。历经 dailyCvd → dailyEma921
-// （2026-07-22 日线策略收敛）→ monthlyWeeklyDaily（2026-07-25 加密收敛成单一榜）→
-// usMonthlyWeeklyDaily（同日站长「移除加密所有TAB」，加密一个榜都不剩）→
-// **dailyTripleEmaCvd**（2026-08-16 站长「移除美股，移除ETF」，橱窗又一次被迫搬家）→
-// **dailyEmaSarFirstTwo**（2026-09-09 站长把两张 SAR 榜合并并要求置顶，橱窗随落地榜搬来）→
-// **dailyTwoToSixBullRsiEma921**（2026-09-12 1x:xx 站长「移除：日线9/21扩张＋SAR多头前七根。
-// 置顶：日线二到六连阳＋RSI≥70＋9/21扩张」—— 上一任被移除，橱窗第六次被迫搬家，跟着新置顶那张走）。
-// ⚠️⚠️ **选榜的唯一硬指标是「从不空榜」**：橱窗是全站唯一的榜单类免费内容 + 默认落地
-// 榜，空一天 = 新访客落在什么都没有的页面上、转化钩子当天死掉且不报错。2026-08-16 按
-// 此对三个候选做了回放：dailyTripleEmaCvd 90 天 min **7** / 中位 15 / **0 天为空**；
-// weeklyEmaSarBull 60 周 min 3 / 0 周为空；weeklySarSecondBar 60 周 **1 周为空**（出局）。
-// 取地板最高的那个，它还是日线榜（成员每天换血，橱窗不会整周不动）。完整依据见后端
-// fetch_data.py 的 TEASER_TAB 上方注释。
-// ⚠️⚠️ **2026-09-12 这次搬家是【知情地放弃】上面那条硬指标**：新橱窗 `dailyTwoToSixBullRsiEma921`
-// 360 天回放 min 0 / 中位 4 / **14 天为空（3.9%）**；更稳的备选 `dailySarFirstBar`（360 天 min 8 /
-// 中位 56 / **0 天为空**、同为日线榜）落选，因为站长要「橱窗跟着置顶榜走」＝ 保住「橱窗 ＝ 落地榜
-// ＝ rail 第一个」三者统一。⇒ **空榜那天橱窗 0 行、后端 audit D 项会报错，那是预期内的报警**，
-// 别去把那条检查放宽成 ≤1；要降风险只能再换榜（换就得连落地榜一起换）。
-// ⚠️ 换榜要同时改六处：这里 + 后端同名常量 + 下面的 `currentTab` 默认值 + `lastTabByAsset.crypto`
-// + `switchAsset` 的 fallback + index.html FAQ「哪些免费」那句里的榜名
-// （**落地榜必须 ＝ 橱窗榜**：只改落地页不改橱窗 ⇒ 新访客落在全锁空榜上，转化位直接消失）。
-// 全站每个榜都付费，这 1 行橱窗 + marketOverview 是仅存的两个免费面（榜数别写死，去数 TAB_GROUPS）。
+// 免费橱窗榜：公开 JSON 只含它的第 1 行（默认视图第一名）。必须与后端同名常量一致（audit C）。
+// 橱窗 ＝ 默认落地榜 ＝ 策略组第一个，换榜六处同改：这里 + 后端 + currentTab + lastTabByAsset.crypto
+// + switchAsset 兜底 + index.html FAQ「哪些免费」的榜名（只改落地页不改橱窗 ⇒ 新访客落在全锁空榜上）。
 const TEASER_TAB = "dailyTwoToSixBullRsiEma921";
 const LS_LICENSE = "bishuju_license";
 const PLAN_LABEL = { monthly: "月付", quarterly: "季付", yearly: "年付" };
-// ⚠️ 仅供页面标价显示——实际扣款金额以 Worker 的同名常量为准，两处必须一致，
-// 否则页面写一个价、OxaPay 收另一个价。
+// 仅供页面标价；实际扣款以 Worker 同名常量为准，两处必须一致（audit C）。
 const PRICES = { monthly: 19, quarterly: 49, yearly: 149 };
 let selectedPlan = "quarterly"; // 购买弹窗默认选中项，对应 UI 上标"最划算"的那档
 const LOCK_REASON = {
@@ -1766,12 +355,10 @@ const LOCK_REASON = {
     revoked: "通行证已被停用，如有疑问请联系我",
     missing: "请输入通行证",
 };
-// 内联锁图标（emoji 跨平台渲染不一致，SVG 统一视觉）。width/height 属性内置：
-// 锁图标可能出现在无 CSS 作用域的容器里（如导航项/脉搏磁贴），不能只靠样式给尺寸。
+// 内联锁图标。width/height 必须写在属性里：它会进无 CSS 作用域的容器（如导航项），不能只靠样式给尺寸。
 const LOCK_SVG = '<svg class="tab-lock" width="11" height="11" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M6 1a2.7 2.7 0 0 0-2.7 2.7V5H3a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-.3V3.7A2.7 2.7 0 0 0 6 1Zm1.5 4h-3V3.7a1.5 1.5 0 1 1 3 0V5Z"/></svg>';
 
-// 存储安全包装:浏览器禁 cookie/存储时裸调 localStorage 会抛异常——顶层一抛整个脚本
-// 死掉、页面全白(审计 P2-7)。降级为"不记忆",功能照常。
+// 存储安全包装：禁用存储时裸调 localStorage 会抛异常（顶层一抛整个脚本死掉、页面全白），降级为不记忆。
 const safeStore = {
     get(store, k) { try { return window[store].getItem(k); } catch (e) { return null; } },
     set(store, k, v) { try { window[store].setItem(k, v); } catch (e) { /* 禁存储:本次会话内不记忆 */ } },
@@ -1780,37 +367,30 @@ const safeStore = {
 
 let data = null;
 let lastRenderKey = null; // loadData 上次重渲染时的 updateTime，用于跳过无变化的重建
-// 默认落地榜 = TEASER_TAB（加密）：未解锁的新访客一进来就能看到唯一那行免费内容 +
-// 「解锁查看剩余 N 个」的转化位。履历：加密 monthlyWeeklyDaily → 2026-07-25 晚改美股
-// （加密全部 TAB 已移除）→ **2026-08-16 移除美股/ETF 后回到加密 dailyTripleEmaCvd**。
-// 改这里要同步 currentAsset 的默认值（两者必须同属一个资产）。
+// 默认落地榜 ＝ TEASER_TAB（未解锁的新访客一进来就看到那行免费内容 + 转化位）；改这里要同步 currentAsset 默认值。
 let currentTab = "dailyTwoToSixBullRsiEma921";
 let sortAsc = false; // false=降序, true=升序
-let sortField = "value"; // 当前排序字段；默认 value，带 sorts 的 tab 可切 RSI/成交额
+let sortField = "value"; // 当前排序字段（切 tab 时重置为该 tab 首轴）
 let searchQuery = ""; // 表格搜索（代码/名称子串），切 tab 时清空
 let lastBustAt = 0; // 上次带 cache-buster 强拉的时间（限流用，见 loadData）
 let bustStreak = 0; // 连续强穿仍拿到同一 updateTime 的次数，驱动 loadData 的指数退避（线上抓取中断时省带宽）
 let license = { key: safeStore.get("localStorage", LS_LICENSE) || "", valid: false, expiresAt: null, plan: null, reason: null };
 let paidData = null; // Worker 返回的全量付费数据（未解锁或未拉到时为 null）
-let lastPaidUpdateTime = null; // 上次成功拉到付费数据时对应的 updateTime，避免每 30s 轮询都打 Worker
+let lastPaidUpdateTime = null; // 上次拉付费数据时的 paidFetchKey（与 loadData 同构），避免每 30s 轮询都打 Worker
 
 function formatPercent(val) {
     const sign = val >= 0 ? "+" : "";
     return `${sign}${val.toFixed(2)}%`;
 }
 
-/** 与 Worker 的 normalizeKey 对齐：trim/大写/去空白/全角横线→半角。
- * 必须在存储和发请求头之前做——X-License-Key 头含非 Latin-1 字符（如全角横线）
- * 会让 fetch() 同步抛 TypeError，表现为"验证通过但榜单全空"的幽灵故障。 */
+/** 与 Worker 的 normalizeKey 对齐：trim / 大写 / 去空白 / 全角横线→半角。必须在存储和发请求头之前做：
+ * X-License-Key 头含非 Latin-1 字符会让 fetch() 同步抛 TypeError（表现为验证通过但榜单全空）。 */
 function normalizeKey(raw) {
     return (raw || "").trim().toUpperCase().replace(/\s+/g, "").replace(/[—–－]/g, "-");
 }
 
-/** 某榜的"命中数"：优先 paidMeta（服务端按完整名单算的真实命中数，免费橱窗和
- * 已解锁两种状态下都存在、数值恒等），数组长度只在 paidMeta 没有这个 key 时
- * 兜底——TEASER_TAB 的 data[key] 故意只截了 1 行，若直接拿数组长度会显示
- * "命中 1 个"这种误导数字，橱窗行本身要看真数据就点开那一行。
- * data 未就绪或两边都没有时返回 null。 */
+/** 某榜命中数：优先 paidMeta（服务端按完整名单算），数组长度只兜底——橱窗榜的 data[key] 只有 1 行，
+ * 反过来锁定态会显示「命中 1 个」。data 未就绪或两边都没有时返回 null。 */
 function tabCount(key) {
     if (!data) return null;
     if (data.paidMeta && key in data.paidMeta) return data.paidMeta[key];
@@ -1818,40 +398,15 @@ function tabCount(key) {
     return null;
 }
 
-// 涨跌幅榜：无筛选、全量入榜、值是涨跌幅，走红绿配色（getColorClass）。
-// **2026-07-29 站长新增三个加密涨跌幅榜后重新非空**（2026-07-25～07-29 之间曾是空集）。
-// ⚠️⚠️ 这个 Set 现在同时决定**三件事**，加涨跌幅类 tab 时三件一起生效、漏加则三件一起
-// 静默失效（都不报错）：
-//   ① 值列红绿上色（getColorClass；另需 renderTable 里 sortField === "value"，见下）
-//   ② 导航 chip **不挂命中徽标**（isStrategyTab，见下面那行）——涨跌幅榜恒为全市场数量，
-//      挂个 528 既没信息量又会被误读成"筛出了 528 个"
-//   ③ 空状态文案走"暂无数据"而不是"0 命中是正常信号"（策略榜才有后一种语义）
-// 加密 3 个 + A股 3 个（2026-07-29）。A股 的三个走 close-to-close，但红绿/非策略语义与加密
-// 一致，同样进这个集合。红绿方向由 CSS 的 [data-asset] 作用域翻（A股 涨红跌绿）。
-// 🔴 2026-09-12 A股 整族退役 ⇒ 这里原有 `ashareDailyChange` / `ashareWeeklyChange` / `ashareMonthlyChange`
-// 三个 key（复活 A股 时必须一并加回来：它管着红绿上色、空状态文案、不挂命中徽标三件事）。
+// 涨跌幅榜（无筛选、全市场入榜），行情榜 / 策略榜的唯一分界。同时决定 ① 值列红绿（另需 sortField === "value"）
+// ② 导航不挂命中徽标、量词说「共」③ 空状态走「暂无数据」；漏加则一起静默失效。复活 A股 时加回它的三个涨跌幅 key。
 const CHANGE_PCT_TABS = new Set(["dailyChange", "weeklyChange", "monthlyChange"]);
 
-// 免费引流层（2026-07-22 站长定：通用行情开放引流，策略筛选付费）。整榜免费的通用
-// 行情榜：涨跌幅 + 成交额 + 振幅 + 资金费率。**必须跟后端 fetch_data.py 的同名
-// FREE_TABS 一致**——后端据此把这些榜整榜写进公开文件，前端据此判断"不锁"；漏一处
-// 会让已免费的榜被前端当付费锁上、或后端没写进公开文件导致空榜。CHANGE_PCT_TABS
-// ⊂ FREE_TABS（涨跌幅走红绿，成交额/振幅/资金费率走中性色——是量级/带符号数不是涨跌方向）。
+// 整榜免费的榜：必须与后端 fetch_data.py 同名 FREE_TABS 一致（audit C；后端据此整榜写进公开文件，前端据此不锁）。
+// 空集不是漏写：全站没有免费整榜，免费面只剩橱窗 1 行 + marketOverview。
 const FREE_TABS = new Set([]);
-// ⚠️⚠️ **2026-07-25 起为空集：全站一个免费整榜都没有了，这不是漏写。** A股/美股/ETF
-// 于 2026-07-24 各收敛成 1 个纯付费策略榜（各自 7 个免费行情榜一并移除），加密于
-// 2026-07-25 移除全部 15 个榜（含最后 8 个免费行情榜：涨跌幅 日周月 + 成交额 日周月 +
-// 振幅 + 资金费率），当晚站长再下「移除加密所有TAB」，加密新定版的 3 个榜也一并下线、
-// 资产整体退役。免费引流面现在只剩「橱窗 1 行（TEASER_TAB）+ 市场概览全局条」。
-// 后端 fetch_data.py 的同名 FREE_TABS 同样是空集，两边必须一致。
-// 策略榜 = **有筛选条件的榜**（"0 命中"是正常信号而非故障，值是 RSI/成交额等指标）。
-// 空状态文案、脉搏策略计数、导航命中徽标都据此——行情榜（涨跌幅）不参与这些语义。
-// ⚠️⚠️ **2026-07-29 加了 `&& !CHANGE_PCT_TABS.has(tab)`**：在此之前判据只有
-// `!FREE_TABS.has(tab)`，那是因为历史上涨跌幅榜**同时**在 FREE_TABS 里（免费引流层），
-// 一个条件顺带盖住了两件事。这次新增的三个涨跌幅榜**是付费的**（FREE_TABS 仍是空集），
-// 两者第一次解耦 ⇒ 只判 FREE_TABS 会把行情榜当成策略榜：chip 上挂出「528」这种没有信息
-// 量的命中徽标、空榜时说"0 命中是正常的"（对全市场行情榜而言那分明是故障）、脉搏磁贴的
-// 策略榜计数从 6 虚增到 9。**"是不是策略榜"是语义问题，与免费/付费无关。**
+// 策略榜 ＝ 有筛选条件的榜（0 命中是正常信号）：空状态文案、脉搏计数、导航命中徽标据此。
+// 必须同时排除 CHANGE_PCT_TABS：涨跌幅榜也付费，只判 FREE_TABS 会把行情榜当策略榜（是不是策略榜与免费 / 付费无关）。
 const isStrategyTab = tab => !FREE_TABS.has(tab) && !CHANGE_PCT_TABS.has(tab);
 
 function getColorClass(val, tab) {
@@ -1870,10 +425,7 @@ function isCryptoSymbol(symbol) {
     return symbol.endsWith("USDT");
 }
 
-// A股 symbol 形如 "600000.SH"/"000001.SZ"：6 位数字 + 点 + 交易所后缀，精确正则匹配。
-// **不能用"带不带点"当判据**（2026-07-20 接入美股时修：美股有些 ticker 本身带点，
-// 如 BRK.B / BF.B 这类 class share 后缀，includes(".") 会把它们误判成 A股 代码，
-// 导致 symbolDisplayParts/tvSymbolFor 按 A股 逻辑错误拆分）。
+// A股 symbol 形如 "600000.SH"，精确正则匹配；别改成「带不带点」判据（BRK.B 这类 ticker 本身带点）。
 function isAshareSymbol(symbol) {
     return /^\d{6}\.(SH|SZ)$/.test(symbol);
 }
@@ -1882,17 +434,7 @@ function isAshareTab(tab) {
     return tab.startsWith("ashare");
 }
 
-// ⚠️ `isUsTab` / `isEtfTab` 已于 2026-08-16 随美股/ETF 整族移除一并删除（连同它们在
-// staleBanner / renderUpdatePill / 收盘快照横幅 / 脉搏磁贴里的全部调用点）。复活时
-// 从 git 捞，并记住它们的两条语义：`"etf"` 前缀不会撞 `"us"`；ETF 数据与美股同管道
-// 产出、**共用 usUpdateTime**，所有"按时间戳分流"的地方要把 etf 归到美股一侧。
-
-// TradingView 符号：crypto "BTCUSDT" -> "BINANCE:BTCUSDT.P"（永续合约后缀）；美股/ETF
-// 裸 ticker（如 "AAPL"）原样返回不加交易所前缀——后端（Massive 分组日线）没有把
-// primary_exchange 带进每行 payload，而 TV 的 symbol 搜索对美股裸 ticker 足够智能、
-// 能自动解析到正确交易所（不像加密那样交易所前缀是消歧义必需的），故不多传一个字段。
-// ⚠️ 美股有些 ticker 本身带点（BRK.B / BF.B 这类 class share 后缀），任何按"带不带点"
-// 分流的写法都会误伤它们——2026-07-20 接入美股时踩过（当时是 A股 分支用了 includes(".")）。
+// TradingView 符号：加密 "BTCUSDT" → "BINANCE:BTCUSDT.P"（永续后缀）；A股 "600000.SH" → "SSE:600000"；其余原样返回。
 function tvSymbolFor(symbol) {
     if (isAshareSymbol(symbol)) {
         const [code, ex] = symbol.split(".");
@@ -1909,9 +451,7 @@ function tvUrlFor(symbol) {
     return `https://www.tradingview.com/chart/?symbol=${tvSymbolFor(symbol)}`;
 }
 
-// 表格里符号列的展示拆分：主代码 + 后缀（crypto 用计价币种，美股/ETF 用裸 ticker 无
-// 后缀——item.name 存在时 renderTable 优先显示公司名，suffix 派不上用场，但仍返回空串
-// 保持函数签名一致，防御 name 缺失的边缘情况）。
+// 符号列展示拆分：主代码 + 后缀（加密为计价币种，A股 为交易所，其余空串）。
 function symbolDisplayParts(symbol) {
     if (isAshareSymbol(symbol)) {
         const [code, ex] = symbol.split(".");
@@ -1937,30 +477,10 @@ function getSortedItems() {
     }
     const key = sortField;
     const dir = sortAsc ? 1 : -1;
-    // null 沉底：CVD强弱/RSI 对新合约/次新股/历史不足的标的是 null，裸 a[key]-b[key] 会算出
-    // NaN 打乱排序。null（及 NaN）一律排到末尾，升降序都沉底，只对有值的行按 dir 比较。
-    // === 平局 tie-break：日成交额降序（2026-09-04 加）===
-    // ⚠️⚠️ **它在此之前是"隐式"存在的**：原来平局 `return 0`，靠 JS 排序的**稳定性**保住
-    // 入场顺序，而入场顺序正是后端按 `value` 降序排好的 ⇒ 事实上早就是"平局按日成交额降序"。
-    // 现在写成显式的，收益不是"更好看"，是**确定性**：同一份数据每次渲染顺序恒定，不再依赖
-    // 引擎的稳定排序保证（也不再依赖"后端一定先排好"这个隐含前提）。
-    //
-    // **为什么现在才需要**：此前 17 根轴**全是连续浮点**（成交额/涨跌幅/RSI/CVD/订单流/量比/
-    // EMA间距/ADX/+DI/MACD/波动幅度/周线各轴/月线RSI），两个标的撞到小数点后 6 位几乎不可能
-    // ⇒ 平局在本站从没真正发生过，也就从没人定过规则。**`sarBullBars` 是全站第一根整数轴，
-    // 平局是常态**（「值==1」那一档全市场实测个位数到十几个），必须给个确定的说法。
-    //
-    // 选 `value`（策略榜＝日成交额）而不是别的三条理由：① 它是全站默认排序量、**永不平局**
-    // （浮点成交额）；② **中性** —— 不替用户判断"哪个刚翻多更值钱"，符合站内"轴披露事实、
-    // 不下判断"的纪律（同 atrPct 那条"不许写低波动会跑赢"）；③ 它就是现在事实上的行为，
-    // 改成显式**不改变任何人看到的顺序**（本轮验证里有一条断言专门守这一点）。
-    // ⚠️ **tie-break 恒为降序，不跟随 dir 翻转**：升序看新鲜度时，同样是先看大票。
-    // ⚠️ `|| 0` 与后端排序键 `x["value"] or 0` 同款兜底（低门槛周线榜真有 value 为 null 的行）。
-    // ⚠️ 三个涨跌幅榜的 `value` 是涨跌幅不是成交额，但那三个榜的 `value` 平局才会走到这里，
-    // 此时 tie(a,b) 恒为 0、退化成原行为 ⇒ 无影响。
-    // ⚠️ 同档内部要再分高下**不该靠加 tie-break**，而是切轴（「值==1」那一批最该看
-    // 日ADX/日+DI 分"真趋势 vs 震荡里的假突破"、日EMA间距 分"结构张没张开"）——
-    // 排序条本来就是干这个的。**别把判断塞进 tie-break。**
+    // null / NaN 两个方向都沉底（裸相减得 NaN 会打乱排序），只对有值的行按 dir 比较。
+    // 平局一律按 value 降序（策略榜 ＝ 日成交额）、不跟随 dir：显式写出保证渲染顺序确定、不依赖引擎稳定排序；
+    // sarBullBars 这类整数轴平局是常态，别当无用代码删。`|| 0` 与后端排序键 `x["value"] or 0` 同款兜底。
+    // 同档内要再分高下就切轴，别把判断塞进 tie-break。
     const tie = (a, b) => (b.value || 0) - (a.value || 0);
     items.sort((a, b) => {
         const av = a[key], bv = b[key];
@@ -1975,33 +495,16 @@ function getSortedItems() {
     return items;
 }
 
-// === master-detail 左栏导航（Claude Design 重设计落地）===
-// 左栏 rail：顶部 加密/A股 分段控件 + 当前资产的分组榜单（组数由 TAB_GROUPS 决定，
-// 别写死），「资产·周期·策略」同屏全见、一键直达；rail 激活态随资产变色
-// （--asset-accent）。移动端 rail 隐藏，同一份导航渲染进抽屉。
-// **资产变迁**：crypto 曾有 12H策略组（2026-07-22 移除）；A股 曾整体退役过一次
-// （2026-07-24 白天，当晚复活为单 tab）；加密于 2026-07-25 晚整体退役过几十分钟
-// （站长「移除加密所有TAB」），同晚随新增 dailyEmaExpansion 榜复活；
-// **美股 与 ETF 于 2026-08-16 整族移除**（站长「移除美股，移除ETF」）——分段控件因此
-// 从四段回到两段，复活清单见后端 fetch_us.py 顶部 docstring。
-// ✏️ 2026-09-13 新增 "日线/周线" → "日周"：`dailyOrWeeklyTripleEmaPersist`「日线或周线9/21/55扩张存续」（并集）横跨两个周期，
-//   挂「日」或「周」都会误导另一支的成员；两个字自动走 `.tf-chip--wide`（12H 时代留下的宽徽标样式，`tf.length > 1` 就套上）。
-//   表头 `bhTf` 直接显示 tf 原文「日线/周线」。⚠️ tf 纯展示用，没有任何逻辑按它分支（2026-09-13 核对过）。
+// === 左栏导航（master-detail）===
+// rail：当前资产的分组榜单（组数由 TAB_GROUPS 决定、别写死），激活态随资产变色；移动端 rail 隐藏，同一份导航渲染进抽屉。
+// TF_SHORT：tf → rail 徽标缩写，查不到时徽标静默消失（跨周期榜要在这里补，两个字自动套 .tf-chip--wide）。tf 纯展示用。
 const TF_SHORT = { "日线": "日", "周线": "周", "月线": "月", "日线/周线": "日周" };
-// ⚠️ 两张映射表**刻意不保留 us/etf 条目**（对比 2026-07-25 加密退役时保留了 crypto 条目
-// ——那次胶囊与 data-asset 主题色还在用它）：这次两个资产的胶囊、分段按钮、CSS 主题色
-// 全都一并删了，留着就是死条目。复活时两处一起加回来。
+// 资产名双向映射，两张一起维护（ashare 为休眠条目）。
 const ASSET_KEY = { "加密": "crypto", "A股": "ashare" };   // TAB_GROUPS.asset → data-asset
 const ASSET_CN = { crypto: "加密", ashare: "A股" };        // data-asset → TAB_GROUPS.asset
-// ⚠️ 默认资产 = 默认落地 tab 所属资产，**2026-08-16 起回到加密**（美股/ETF 移除，橱窗
-// 随之搬回加密榜）——落地榜刻意跟着 TEASER_TAB 走（未解锁的新访客一进来就能看到那 1 行
-// 免费内容 + 转化位）。换落地页**必须同时**改 currentTab、这里、以及前后端两处
-// TEASER_TAB —— 只改落地页不改橱窗，新访客会落在一个全锁的空榜上，转化位直接消失。
+// 默认资产 ＝ 默认落地 tab（currentTab）所属资产，两者同改。
 let currentAsset = "crypto";                            // 当前资产（由 tab 派生/资产切换驱动）
-// 各资产记住上次看的榜；这里是"还没看过时"的初值 = 该资产 TAB_GROUPS 里的第一个榜。
-// A股 只有一个策略榜 + 三个涨跌幅榜，初值取策略榜；加密初值取默认落地的橱窗榜
-// （＝ TEASER_TAB，未解锁时它是加密侧唯一有内容的榜，回到加密时不该落在全锁的榜上）。
-// 🔴 2026-09-12 A股 整族退役 ⇒ 这里原有 `ashare: "ashareMonthlyWeeklyDaily"`（复活时加回来）。
+// 各资产上次看的榜；加密初值 ＝ TEASER_TAB（未解锁时唯一有内容的榜）。复活 A股 时加回 ashare: "ashareMonthlyWeeklyDaily"。
 const lastTabByAsset = { crypto: "dailyTwoToSixBullRsiEma921" };
 
 function assetOfTab(tab) {
@@ -2009,7 +512,7 @@ function assetOfTab(tab) {
     return m ? ASSET_KEY[m.asset] : "crypto";   // 兜底跟默认落地 tab 走
 }
 
-// rail 组标签统一显示"周期/行情"（资产已由分段控件表达,组名不再重复"A股"前缀）
+// rail 组标签去掉 "A股" 前缀（资产本由分段控件表达）；现有组名不带该前缀，原样返回
 function navGroupLabel(g) {
     return g.label.replace(/^(A股)/, "") || g.label;
 }
@@ -2022,9 +525,7 @@ function navHtml() {
             ${g.tabs.map(t => {
                 const m = TAB_META[t.key];
                 const tf = TF_SHORT[m.tf] || "";
-                // 策略榜在导航右端直接亮命中数——现在锁定态也照亮(tabCount 退回
-                // paidMeta)，"今天没命中"和"没解锁"都是有用信号,不隐藏。涨跌幅榜恒为
-                // 全市场数量,显示无意义,不挂。数据未到时不渲染,loadData 后 renderNav 补上。
+                // 策略榜挂命中数（锁定态也挂，走 paidMeta）；涨跌幅榜恒为全市场数量、不挂。数据未到时不渲染，loadData 后补上。
                 const hits = isStrategyTab(t.key) ? tabCount(t.key) : null;
                 const locked = PAYWALL_ENABLED && !license.valid && t.key !== TEASER_TAB && !FREE_TABS.has(t.key);
                 return `<button class="nav-item${t.key === currentTab ? " is-active" : ""}" data-tab="${t.key}"${t.key === currentTab ? ' aria-current="page"' : ''} title="${g.label} · ${t.name}${hits != null ? ` · 命中 ${hits}` : ""}${locked ? " · 未解锁" : ""}">
@@ -2038,7 +539,7 @@ function navHtml() {
 }
 
 function renderNav() {
-    // 资产分段控件激活态（rail + drawer 两份）
+    // 资产分段控件激活态（休眠件：rail / drawer 两份 DOM 随 A股 退役已删，这里空转）
     document.querySelectorAll(".asset-seg__opt").forEach(b => {
         const on = b.dataset.k === currentAsset;
         b.classList.toggle("is-active", on);
@@ -2053,10 +554,7 @@ function renderNav() {
     if (foot && data) {
         const assetCn = ASSET_CN[currentAsset];
         const n = TAB_GROUPS.filter(g => g.asset === assetCn).reduce((s, g) => s + g.tabs.length, 0);
-        // 一律写**标的范围**而不是数量——写 tabCount(某个榜) 会变成"监控 N 只"却是
-        // 命中数，是误导（这条规矩定于三个股票系资产各只有 1 个策略榜的年代，现在两个
-        // 资产都有全量涨跌幅榜了，但"范围"仍然比"某一个榜的命中数"更准确）。
-        // 🔴 2026-09-12 A股 整族退役 ⇒ 原来这里按资产三元：A股 写「沪深 A 股全市场」（复活时加回来）。
+        // 写标的范围而不是数量（tabCount 是某个榜的命中数，写成「监控 N 只」会误导）；复活 A股 时按资产写「沪深 A 股全市场」。
         const uni = "加密 USDT 永续合约全市场";
         foot.innerHTML = `<b>${n}</b> 个榜单 · 监控 ${uni}`;
     }
@@ -2070,30 +568,22 @@ function renderBoardHead() {
     if (!m) { head.hidden = true; return; }
     const tagEl = document.getElementById("bhAsset");
     tagEl.textContent = m.asset;
-    // ⚠️ 只有 A股 需要显式加类：加密走 .asset-tag 的默认（品牌色）样式，
-    // is-us / is-etf 两个类随 2026-08-16 移除美股/ETF 一并删掉（CSS 侧也删了）。
+    // 加密走 .asset-tag 默认样式，只有 A股 需要显式加类。
     tagEl.classList.toggle("is-ashare", m.asset === "A股");
     const tfEl = document.getElementById("bhTf");
     tfEl.textContent = m.tf || "";
     tfEl.style.display = m.tf ? "" : "none";
     document.getElementById("bhName").textContent = m.full;
-    // 说明行 = 完整筛选规则 + 命中数。规则写在这里（而不是挤进导航的名字里）是
-    // 2026-07-21 重命名的关键一步：导航名可以短，规则一个字都不丢。涨跌幅榜的
-    // desc 说明的是"取哪根 K、有没有筛选"，同样有用。
+    // 说明行 ＝ desc（完整规则，导航名可以短）+ 命中数。
     const note = document.getElementById("bhNote");
     const n = tabCount(currentTab);
-    // ⚠️ 2026-07-29：量词按榜的类型分开。**只有策略榜说"命中"**（有筛选条件、N 是筛出来
-    // 的）；涨跌幅这类行情榜没有任何筛选、N 恒等于全市场标的数，说"命中 528"会被读成
-    // "筛出了 528 个"。行情榜改说"共 N 个标的"，与 .table-foot 正常态的措辞一致。
+    // 量词随榜的语义：策略榜说「命中」；行情榜无筛选，说「共」（与表尾同一判据）。
     const hit = n != null ? `${isStrategyTab(currentTab) ? "命中" : "共"} ${n} 个标的` : "";
     note.textContent = m.desc ? (hit ? `${m.desc} · ${hit}` : m.desc) : hit;
     head.hidden = false;
 }
 
-// 排序条(2026-07-20 移动端拥挤重设计)：多轴排序的**选择**从值列表头挪到表格上方的
-// chip 条——此前 5-6 个轴挤在表头 116px(移动)/240px(桌面)里换行成 3-4 行 10px 小字,
-// 触控目标过小且表头被撑高。chips 是真按钮(键盘可达),移动端横向滑动,表头只保留
-// 当前轴+方向箭头(点击仍切升/降)。
+// 排序条：选轴在表格上方的 chip 条（真按钮、键盘可达、移动端横向滑动）；表头只标当前轴 + 方向，点击切升 / 降序。
 let lastStripTab = null; // 上次渲染排序条的 tab：切轴时保留 chips 横向滚动位,切 tab 时回卷
 function renderSortStrip() {
     const strip = document.getElementById("sortStrip");
@@ -2109,17 +599,14 @@ function renderSortStrip() {
             return `<button type="button" class="sort-chip${act ? " is-active" : ""}" data-sortkey="${s.key}"
                 aria-pressed="${act}" title="${(act ? "再点一次切换升/降序" : `按${s.label}排序`) + (s.hint ? "　·　" + s.hint : "")}">${s.label}${act ? `<span class="sort-chip__arrow">${arrow}</span>` : ""}</button>`;
         }).join("") + `</div>`;
-    // 重建 innerHTML 会把横向滚动位归零——点最右侧的轴(如 订单流)后 chips 弹回左端、
-    // 刚点的轴反而看不见了；同 tab 内重渲染时手动还原
+    // 重建 innerHTML 会把横向滚动位归零（刚点的右侧轴会滚出视野），同 tab 内重渲染时手动还原
     const chips = strip.querySelector(".sort-strip__chips");
     if (chips && keepScroll) chips.scrollLeft = keepScroll;
     lastStripTab = currentTab;
     strip.hidden = false;
 }
 
-// 锁定橱窗的模糊预览行：8 行确定性假数据(宽度参差,模拟真实榜单的长短)。整体高斯
-// 模糊后当"橱窗背景",让未解锁用户看见"这里满满一榜标的,就差解锁"——比一堵光墙 +
-// emoji 锁的转化力强得多(2026-07-23 转化改造)。宽度写死不用随机,避免每次重渲染抖动。
+// 锁定态的模糊预览行：确定性假数据，宽度写死不用随机（避免每次重渲染抖动）。
 const LOCK_PREVIEW_ROWS = [
     { sym: 82, bar: 96 }, { sym: 104, bar: 78 }, { sym: 66, bar: 64 }, { sym: 92, bar: 55 },
     { sym: 74, bar: 47 }, { sym: 110, bar: 39 }, { sym: 70, bar: 30 }, { sym: 88, bar: 23 },
@@ -2138,8 +625,7 @@ function lockPreviewRowsHtml() {
         </div>`;
     }).join("") + `</div>`;
 }
-// 锁定橱窗卡片：模糊预览行 + 品牌锁(LOCK_SVG,统一视觉,不用 emoji) + 命中数 + 醒目 CTA。
-// n=命中数(paidMeta,可为 null)。CTA 沿用 #emptyUnlockBtn 的 id,由调用方绑定动作。
+// 锁定卡片：预览行 + 锁图标 + 命中数 + CTA。n ＝ 命中数（paidMeta，可为 null）；CTA 的 #emptyUnlockBtn 由调用方绑定动作。
 function lockGateHtml(n, opts) {
     const count = n != null ? `已找到 <b>${n}</b> 个标的` : (opts.fallbackTitle || "该榜已锁定");
     return `<div class="lockgate">
@@ -2155,8 +641,7 @@ function lockGateHtml(n, opts) {
         </div>
     </div>`;
 }
-// 锁定态收起"假控件"(搜索框/排序条/表头)：无数据可搜、可排,点了没反应 = 首屏空间
-// 浪费 + 误导;收起后橱窗 CTA 卡片直接顶到看板头下方(首屏可见)。非锁定态恢复显示。
+// 锁定态收起无数据可操作的搜索框 / 排序条 / 表头，让 CTA 卡片顶到首屏；非锁定态恢复显示。
 function setLockedChrome(hide) {
     const search = document.querySelector(".board-head .search");
     if (search) search.hidden = hide;
@@ -2167,8 +652,7 @@ function setLockedChrome(hide) {
 }
 
 function renderTable() {
-    // 榜单标识不依赖数据(命中数自带空守卫),放在 !data 早退之前——
-    // 否则首屏数据未到时切 tab,nav 高亮已变而标识栏还是旧内容(审计 P2-9)
+    // 标识与排序条不依赖数据，放在 !data 早退之前（否则首屏数据未到时切 tab，标识栏停在旧内容）
     renderBoardHead();
     renderSortStrip();
 
@@ -2184,43 +668,32 @@ function renderTable() {
     const header = document.getElementById("valueHeader");
     if (!tbody || !header) return;
 
-    // 锁定态(公开 JSON 不含该 key)：提前判定,据此收起搜索/排序条/表头等"假控件",
-    // 并在下方空状态里渲染橱窗卡片(模糊预览 + CTA)。data 此处已保证非空(上方早退)。
+    // 锁定态 ＝ 公开 JSON 不含该 key（undefined，不是空数组）。提前判定：收起假控件，下方空状态渲染橱窗卡片。
     const locked = PAYWALL_ENABLED && data[currentTab] === undefined && currentTab !== TEASER_TAB && !FREE_TABS.has(currentTab);
     setLockedChrome(locked);
 
     const arrow = sortAsc ? " ▲" : " ▼";
     if (config.sorts) {
-        // 多轴的选择在排序条(#sortStrip)；表头只标注当前轴+方向,点击切升/降序
         const active = config.sorts.find(s => s.key === sortField) || config.sorts[0];
         header.innerHTML = `<span class="sort-opt active" data-sortkey="${active.key}" title="点击切换升/降序">${active.label}<span class="sort-arrow">${arrow}</span></span>`;
     } else {
-        // 兜底分支：当前所有 tab 都带 sorts，走不到这里；留一层防御，未来若加无 sorts 的
-        // tab 也不会印出字面 "undefined"（config.header 已随三轴改造移除）。
+        // 兜底：现在所有 tab 都带 sorts、走不到这里；防未来无 sorts 的 tab 印出 "undefined"
         header.innerHTML = (config.header || "值") + `<span class="sort-arrow">${arrow}</span>`;
     }
     const sortDef = config.sorts ? (config.sorts.find(s => s.key === sortField) || config.sorts[0]) : null;
 
     if (items.length === 0) {
-        // 空状态三种情形：搜索无匹配 / 策略榜 0 命中（筛选严格的信号，不是故障）/ 数据未生成
-        // "每交易日收盘后更新"的日更资产用另一套文案（加密是「合约/整点后重算」）。
-        // ⚠️ 2026-08-16 前这里还要 || isUsTab || isEtfTab —— 美股/ETF 移除后只剩 A股，
-        // 复活那两个资产时**必须把它们加回这一行**，否则它们会落进 else 显示加密的
-        // 「整点后重算」文案、误导更新预期（2026-07-20 审计就修过一次同款漏判）。
+        // 空状态：锁定 / 搜索无匹配 / 橱窗行未到 / 策略榜 0 命中（筛选严格，不是故障）/ 数据未生成。
+        // 日更资产（A股，休眠件）用「收盘后重算」文案；再加日更资产要并进 dailyAsset，否则落进加密的「整点后重算」。
         const dailyAsset = isAshareTab(currentTab);
         const strict = isStrategyTab(currentTab);
-        // 锁定态(见上方 locked 判定)优先于"筛选严格 0 命中"(key 存在、数组为空)：
-        // 未解锁 / 通行证失效 → 橱窗卡片(模糊预览 + 醒目 CTA,顶到首屏);有有效通行证
-        // 只是付费数据暂时没拉到 → 加载态(不催已付费的人重复付款,Worker 抖动时这文案
-        // 就是事故现场),落到下方通用 .empty 分支。
+        // 锁定态优先：未解锁 / 通行证失效 → 橱窗卡片；通行证有效只是付费数据没拉到 → 加载态（别催已付费的人重复付款）。
         if (locked && !license.valid) {
             const n = tabCount(currentTab);
             const expired = !!license.key; // 有 key 但 !valid = 过期/吊销
             const desc = expired
                 ? "通行证已失效（过期或被停用）<br>续费后即可继续查看完整名单"
-                // ⚠️ 2026-07-29 由「全部策略榜」改成「全部榜单」：站内已不只有策略榜，
-                // 当天新增的六个涨跌幅榜（加密 3 + A股 3）是行情榜（无筛选、全市场），
-                // 同样要付费解锁。
+                // 写「全部榜单」不写「全部策略榜」：涨跌幅榜同样付费
                 : "购买通行证，解锁本站全部榜单的完整名单与多轴排序";
             const ctaLabel = expired ? "重新输入 / 续费" : "立即解锁";
             const ctaAction = expired ? () => openUnlockDialog() : openPurchaseDialog;
@@ -2232,8 +705,7 @@ function renderTable() {
             if (cta) cta.addEventListener("click", ctaAction);
             const enter = document.getElementById("lockgateEnterBtn");
             if (enter) enter.addEventListener("click", () => openUnlockDialog());
-            // 页脚(role=status/aria-live)保留一句状态给 AT 用户(#rankBody 不朗读上千行,
-            // 空/锁定态一律靠页脚播报)——视觉上不重复卡片里的命中数,只说"这是锁定榜"
+            // 页脚（role=status / aria-live）给读屏用户播报一句状态（#rankBody 不设 live）
             if (foot) { foot.textContent = expired ? "通行证已失效，续费后可继续查看" : "该策略榜需通行证解锁"; foot.hidden = false; }
             updateExportBar();  // 锁定态也要刷：否则切榜后导出坞仍显示上一榜的「已选 N 个」+ 表头勾选态残留
             return;
@@ -2241,14 +713,8 @@ function renderTable() {
         let ico, title, desc;
         if (locked && license.valid) {
             const n = tabCount(currentTab);
-            // ⚠️ 两种情况必须分开说，别一律许诺"30 秒自动重试"（2026-07-24 审计）：
-            //  a) paidData == null —— 整包没拉到（5xx/网络）。fetchPaidData 失败时不推进
-            //     lastPaidUpdateTime，所以下一轮轮询确实会重试，许诺成立。
-            //  b) paidData 有、但缺这个 key —— 整包拉到了，是**服务端没产出这个榜**
-            //     （2026-07-22 split_output 400 事故就是这样：us/etf/ashare 33 个 tab
-            //     从未进 KV）。此时 paidFetchKey 不变，整点前不会再打 Worker，"30 秒重试"
-            //     是假的，用户会盯着"加载中"直到下次数据更新。这里如实说，且**不**自动
-            //     重试——真坏掉时每 30s 打一次 Worker 会撞上付费侧的节流纪律。
+            // 两种情况分开说：a) paidData == null（整包没拉到）：fetchPaidData 失败不推进 lastPaidUpdateTime，下一轮确会重试；
+            // b) 整包有但缺这个 key（服务端没产出）：paidFetchKey 不变、数据更新前不再打 Worker ⇒ 别许诺「30 秒重试」，也别自动重试。
             const missingKey = paidData && !(currentTab in paidData);
             ico = missingKey ? "🛠️" : "⏳";
             if (missingKey) {
@@ -2264,14 +730,8 @@ function renderTable() {
             title = `没有匹配「${escapeHtml(searchQuery)}」的标的`;
             desc = "试试换个代码或名称关键词";
         } else if (currentTab === TEASER_TAB && !license.valid && (tabCount(currentTab) || 0) > 0) {
-            // 橱窗榜命中数 >0 却一行都没有 = **免费橱窗那 1 行还没写进公开文件**，不是
-            // "今日无人命中"。这个分支诞生于 2026-07-25~08-16 橱窗挂在美股榜的年代：
-            // 那时橱窗由美股管道（每交易日 21:20 UTC）写、公开文件每小时被加密任务重写
-            // 一次，两条管道错位就有一段空窗（改动当天就撞上了）。
-            // ⚠️ 2026-08-16 橱窗搬回加密榜后写入方与公开文件同源、错位窗口消失，**但这个
-            // 分支要留着**：paidMeta 与橱窗行来自同一枪、理论上同生同灭，可一旦哪天又
-            // 不同源（或 _teaser_rows 出别的意外），走下面的 strict 分支页面会说"今日没有
-            // 标的命中"而导航徽标同时显示 25，自相矛盾且是假话。这里如实说 + 给转化位。
+            // 橱窗榜命中数 > 0 却一行没有 ＝ 免费那 1 行还没进公开文件，不是 0 命中。
+            // 别删这个分支：一旦橱窗行与 paidMeta 不同源，落进 strict 会与导航徽标自相矛盾。
             ico = "🔒";
             title = `已找到 ${tabCount(currentTab)} 个标的`;
             desc = "免费预览的那一行正在更新，稍后自动出现<br>购买通行证可立即查看完整名单";
@@ -2292,17 +752,14 @@ function renderTable() {
                 <div class="empty__title">${title}</div>
                 <div class="empty__desc">${desc}</div>
             </div>`;
-        // 空状态也给 #tableFoot(role=status/aria-live)一句话,让 AT 用户得到反馈
-        // (#rankBody 不设 live——30s 刷新会朗读上千行)。搜索分支用原始 searchQuery,
-        // textContent 自动转义;非搜索用 title(不含用户输入,无双重转义问题)。
+        // 页脚同样播报（#rankBody 不设 live：30s 刷新会朗读上千行）。搜索分支用原始 searchQuery：
+        // title 里是 escapeHtml 过的，进 textContent 会双重转义。
         if (foot) { foot.textContent = searchQuery ? `没有匹配「${searchQuery}」的标的` : title; foot.hidden = false; }
-        updateExportBar();  // 同上：0 行/空状态分支也要刷导出坞，别把上一榜的勾选计数留在屏幕上
+        updateExportBar();  // 同上：空状态也要刷导出坞
         return;
     }
 
-    // 渲染上限：加密 yesterdayChange 全量 500+ 行、历史上 usChange 曾 5000+ 行，
-    // 一次性 innerHTML 在中低端机型是数百毫秒
-    // 卡顿；超过 1000 行只渲染前 1000（排序/搜索仍作用于全量数据，尾部靠搜索定位）
+    // 渲染上限：大表一次性 innerHTML 在中低端机型卡顿数百毫秒；排序 / 搜索仍作用于全量，尾部靠搜索定位
     const RENDER_CAP = 1000;
     const capped = items.length > RENDER_CAP;
     const shown = capped ? items.slice(0, RENDER_CAP) : items;
@@ -2314,15 +771,12 @@ function renderTable() {
     tbody.innerHTML = shown
         .map((item, i) => {
             const rank = i + 1;
-            // 只在「值」列真正展示涨幅（sortField==="value"，即涨跌幅 tab 的默认轴）时才红绿上色；
-            // 切到 RSI/成交额/CVD强弱 时值列展示的是那个指标，红绿会误导（RSI 62 染成绿 = 假涨），
-            // 一律 neutral。策略 tab 的 sortField 永远不是 "value"，本就 neutral。
+            // 只在值列展示涨跌幅时红绿上色：涨跌幅榜首轴 key 就是 value（别改名，否则红绿失效）；切到其它轴一律 neutral。
             const colorClass = sortField === "value" ? getColorClass(item.value, currentTab) : "neutral";
-            // 涨跌语义只标 up/down,红绿由 CSS 的 [data-asset] 作用域决定(A股 涨红跌绿自动翻)
+            // 涨跌语义只标 up/down，红绿由 CSS 的 [data-asset] 作用域决定（A股 涨红跌绿，休眠件）
             const valCls = colorClass === "positive" ? " val--up" : colorClass === "negative" ? " val--down" : "";
             const displayValue = sortDef ? sortDef.format(item) : config.format(item);
-            // 值列数字左侧的小标（2026-09-10：「日成交额」轴的全市场名次，见 volRankBadge）。
-            // 轴定义上没有 badge、或这一行没有名次时是空串 ⇒ 值列与改动前逐字相同。
+            // 值列数字左侧的成交额名次小标（volRankBadgeFor）；轴上没有 badge 或行上无名次字段时为空串
             const badge = sortDef && sortDef.badge ? sortDef.badge(item) : "";
             const checked = selectedSymbols.has(item.symbol) ? "checked" : "";
 
@@ -2336,14 +790,11 @@ function renderTable() {
             const subInfo = config.subFormat ? `<div class="sub">${config.subFormat(item, sortField)}</div>` : "";
 
             const tvUrl = tvUrlFor(item.symbol);
-            // symbol 与 name 同样来自数据管道，一律转义后再进 innerHTML（2026-07-24 审计：
-            // 原先只转 name、symbol 裸拼，防御不一致——标的池目前全是 [A-Z0-9.] 所以是潜伏面
-            // 不是活 bug，但 ticker 一旦含 " 或 < 就会撑破行结构/属性逃逸）。data-symbol 转义
-            // 无副作用：浏览器读 dataset 时会自动解码回原值。
+            // symbol 与 name 都来自数据管道，一律转义后再进 innerHTML；data-symbol 转义无副作用（读 dataset 时自动解码）
             const symSafe = escapeHtml(item.symbol);
             const { base: symBase0, suffix: symSuffix0 } = symbolDisplayParts(item.symbol);
             const symBase = escapeHtml(symBase0), symSuffix = escapeHtml(symSuffix0);
-            // A股行带 name（股票名），比 "/ SH" 后缀对用户有用得多；crypto 行维持 "/ USDT"。
+            // 行上有 name（A股 股票名）时显示 name，否则显示 "/ USDT" 这类后缀
             const symLabel = item.name
                 ? `${symBase} <span class="sym__suffix">${escapeHtml(item.name)}</span>`
                 : `${symBase} <span class="sym__suffix">/ ${symSuffix}</span>`;
@@ -2364,17 +815,10 @@ function renderTable() {
         .join("");
 
     if (foot) {
-        // 四种情形分开说：搜索给「匹配/命中」双数,截断提示渲染上限,橱窗榜未解锁给
-        // 解锁 CTA（「共 1 个标的」对着「命中 55」毫无解释,还浪费了最强的转化位——
-        // 用户刚看完 TOP1 正想看剩下的）,平常一句「共 N」
+        // 表尾：搜索给「匹配 / 总数」· 截断提示 · 橱窗未解锁给解锁 CTA（别只写「共 1 个」）· 平常「共 N」
         const total = (data[currentTab] || []).length;
         const teaserLocked = PAYWALL_ENABLED && currentTab === TEASER_TAB && !license.valid;
-        // ⚠️⚠️ 量词必须随榜的语义走（与 renderBoardHead 同一判据）：策略榜「命中 N」、
-        // 行情榜「共 N」——行情榜无任何筛选，说"命中 5193"会被读成"筛出了 5193 个"。
-        // **2026-07-29 A股 三个涨跌幅榜（各 ~5190 行）上线后才暴露**：加密那三个只有 528 行、
-        // 从未越过 RENDER_CAP(1000)，所以截断分支历史上从没在行情榜上触发过；正常态那句
-        // （下面的 else）本来就写的是"共"，于是 board-head 说「共 5193」而同屏表尾说
-        // 「命中 5193」，**自相矛盾**。搜索分支同理——截断提示恰恰在劝用户去搜索。
+        // 量词随榜的语义走（与 renderBoardHead 同一判据）：策略榜「命中」、行情榜「共」
         const q = isStrategyTab(currentTab) ? "命中" : "共";
         if (searchQuery) {
             foot.textContent = `匹配 ${items.length} / ${q} ${total} 个${capped ? ` · 仅渲染前 ${RENDER_CAP} 行` : ""}`;
@@ -2409,7 +853,7 @@ function switchTab(tab) {
     searchQuery = ""; // 切 tab 清空搜索
     const sb = document.getElementById("searchBox");
     if (sb) sb.value = "";
-    // 表体是容器内滚动(.tbody),切榜必须回顶,否则新榜停留在上一榜的滚动位置(审计 P1-2)
+    // 表体是容器内滚动（.tbody），切榜必须回顶，否则新榜停留在上一榜的滚动位置
     const tb = document.getElementById("rankBody");
     if (tb) tb.scrollTop = 0;
     renderNav();
@@ -2421,25 +865,16 @@ function switchTab(tab) {
     renderSnapshotBanner();
 }
 
-// 切资产（rail/drawer 顶部分段控件）：回到该资产上次看的榜单
+// 切资产（分段控件，休眠件）：回到该资产上次看的榜单
 function switchAsset(assetK) {
     if (assetK === currentAsset) return;
-    // 兜底：lastTabByAsset 全量初始化后正常不可达，但兜底若被触发（未来改坏），
-    // 也要落在本资产自己的榜上。⚠️ **写成显式逐资产映射、别写二分**：2026-07-20 审计
-    // 补这条防御时的原话是"二分写法会把「ETF」误跳去别的资产"——现在只剩两个资产，
-    // 三元看着像二分，**再加资产时必须继续逐个列**。
+    // 兜底（lastTabByAsset 缺项时）也要落在本资产自己的榜上：再加资产时逐个列映射、别写成二分。加密兜底 ＝ TEASER_TAB。
     const fallback = assetK === "ashare" ? "ashareMonthlyWeeklyDaily" : "dailyTwoToSixBullRsiEma921";
     switchTab(lastTabByAsset[assetK] || fallback);
 }
 
-// 收盘快照说明横幅：切到日更资产时显示,关闭一次永久不再弹（localStorage——"这个资产是
-// 收盘快照不是盘中实时"是常识型说明,看过一次就够）。各资产独立的 dismiss key,互不影响。
-// （2026-07-24 A股 退役后连同 DOM id 一并从 ashareBanner 改名 snapshotBanner——它从
-// 2026-07-20 起就覆盖多个资产，名字早已名不副实。⚠️ localStorage 的 key 保持原样不动：
-// 改了会让所有已关过横幅的老用户重新看到它。）
-// ⚠️⚠️ **2026-08-16 美股/ETF 移除后只剩 A股 一个日更资产**（加密 7×24 不需要这条横幅）。
-// 那两个资产的文案与 dismiss key（bsj_us_banner_dismissed / bsj_etf_banner_dismissed）
-// 一并删除；**复活时 key 必须写回原来那两个字面量**，否则老用户会重新看到已关过的横幅。
+// 收盘快照说明横幅（休眠件）：切到日更资产（A股）时显示，关一次永久不弹（localStorage，各资产独立 key）。
+// dismiss key 字面量别改：改了老用户会重新看到已关过的横幅。
 const SNAPSHOT_BANNER_TEXT = {
     ashare: "A股 数据为每个交易日收盘后更新的快照，不是盘中实时行情。",
 };
@@ -2465,7 +900,7 @@ function toggleSort() {
 
 // === 数据加载 ===
 
-/** updateTime 形如 "2026-07-15 08:34:26 UTC" */
+/** updateTime 形如 "YYYY-MM-DD HH:MM:SS UTC" */
 function parseUpdateTime(s) {
     if (!s) return null;
     const t = Date.parse(s.replace(" UTC", "Z").replace(" ", "T"));
@@ -2477,37 +912,22 @@ function renderStaleBanner() {
     if (!el || !data) return;
 
     if (isAshareTab(currentTab)) {
-        // A股 每个交易日收盘后更新一次，阈值远比 crypto 的小时级宽松（容忍节假日/偶发
-        // 延迟），跟 check-freshness.yml 的 30 小时口径一致。
-        // ⚠️ 2026-08-16 前这里还并着 isUsTab/isEtfTab（读 usUpdateTime）——美股/ETF 移除
-        // 后只剩 A股；复活那两个资产时要把分支和 usUpdateTime 一起加回来。
+        // A股（休眠件）每个交易日收盘后更新，阈值放宽到 30 小时（容忍节假日 / 偶发延迟）
         const t = parseUpdateTime(data.ashareUpdateTime);
         el.hidden = !(t && Date.now() - t > 30 * 3600 * 1000);
         return;
     }
-    // 加密走小时级 updateTime（每小时抓一次，2.5h 未动就亮横幅），与收盘日更资产的阈值
-    // 差一个数量级——这条分支 2026-07-25 晚随加密榜移除短暂不可达，同晚已复活。
     const t = parseUpdateTime(data.updateTime);
-    // 数据每小时更新；超过 2.5 小时没动就亮横幅
+    // 加密每小时更新；超过 2.5 小时没动就亮横幅
     el.hidden = !(t && Date.now() - t > 2.5 * 3600 * 1000);
 }
 
-/** 顶栏新鲜度胶囊（Claude Design 重设计）：加密（小时级倒计时）+ A股（收盘日更）并置，
- *  当前资产侧高亮、另一侧 .is-dim；移动端 CSS 只显示激活侧。
- *  A股 显示 ashareDataDate（数据实际对应的交易日）——任务跑了但数据源迟发布时它会落后
- *  于更新时间，显示出来用户能看出"今天的数据其实还是昨天的"。
- *  ⚠️ 2026-08-16 起**只有两个胶囊**：第三个 `freshUS`（美股，ETF 复用它）随美股/ETF
- *  移除一并删除，DOM 与点击处理器都清了。移动端 CSS 只显示非 .is-dim 的那一个 ⇒
- *  **任何时候必须恰好有一个胶囊是亮的**，加资产时别忘了给它一个胶囊或归并到某一侧。 */
+/** 顶栏新鲜度胶囊：加密数据的更新时刻 + 下次刷新倒计时。 */
 function renderUpdatePill() {
-    // 🔴🔴 2026-09-12 A股 整族退役 ⇒ `#freshAshare` 那个胶囊连 DOM 一起删了，这里的 `elA` 与下方
-    //   「A股胶囊」整段同批删 —— **不删的话 `!elA` 会让整个函数静默 return、加密胶囊从此永不更新**
-    //   （同 2026-08-16 删 `freshUS` 那次踩的坑）。复活 A股 时两处一起加回来，阈值 25.5h / 30h 与
-    //   `ashareDataDate` 的 slice(4,6)/(6,8) 口径见 git（`ddc693e`）。
+    // A股 胶囊已连 DOM 删除（复活见 git ddc693e）；删胶囊 DOM 必须同批删这里的引用，否则早退会让加密胶囊也永不更新。
     const elC = document.getElementById("freshCrypto");
     if (!elC || !data) return;
 
-    // --- 加密胶囊 ---
     const tC = parseUpdateTime(data.updateTime);
     const ageC = tC ? (Date.now() - tC) / 60000 : Infinity;
     const clsC = ageC <= 75 ? "fresh--ok" : ageC <= 150 ? "fresh--warn" : "fresh--bad";
@@ -2520,21 +940,14 @@ function renderUpdatePill() {
     document.getElementById("freshCryptoTxt").innerHTML = data.updateTime
         ? ` · <b>${data.updateTime.slice(11, 16)}</b>&nbsp;UTC${nextTxt}` : " · —";
 
-    // 状态类（**全站只剩加密一个胶囊 ⇒ 它恒为亮态**；移动端 CSS 只显示非 .is-dim 的那一个，
-    // 任何时候必须恰好有一个亮着 —— 复活 A股 时把 .is-dim 的那套逻辑一起加回来）。
-    // 状态类 + 当前资产侧高亮（移动端只显非 dim 的那一个，必须恰好有一个亮着）。
+    // 移动端 CSS 只显示非 .is-dim 的胶囊 ⇒ 任何时候必须恰好有一个亮着（现只剩加密、恒亮）。
     elC.className = `fresh ${clsC}`;
 }
 
-// 各资产的策略 tab 数，pulse "N 榜" 用；按资产从 TAB_GROUPS 算，不硬编码。
+// 加密策略榜数（脉搏「N 榜」用），从 TAB_GROUPS 算、不硬编码。
 const CRYPTO_STRATEGY_TABS = TAB_GROUPS.filter(g => g.asset === "加密").flatMap(g => g.tabs).filter(t => isStrategyTab(t.key)).length;
-// 🔴 2026-09-12 A股 整族退役 ⇒ 原有 `ASHARE_STRATEGY_TABS`（同款一行，asset === "A股"）随 `asharePulseTiles` 一并删除，
-// 同 2026-08-16 删 `US_STRATEGY_TABS` / `ETF_STRATEGY_TABS` 那次；复活时两行一起从 git（`ddc693e`）捞回来。
 
-/** 当前资产的策略 tab 命中总数。用 TAB_META[k].asset 过滤，只统计该资产自己的
- *  策略榜。走 paidMeta（tabCount 的口径）而不是直接数组长度——付费墙生效后
- *  data.paidMeta 恒存在（免费橱窗也带着它），锁定态一样能算出总数，不会因为
- *  大部分 tab 的 data[k] 是 undefined 而漏计。 */
+/** 某资产全部策略榜的命中总数。走 paidMeta（同 tabCount 口径）而不是数组长度：锁定态下多数 data[k] 是 undefined。 */
 function strategyHits(asset) {
     if (!data || !data.paidMeta) return null;
     return Object.keys(data.paidMeta)
@@ -2546,24 +959,17 @@ function pulseTile(k, v, sub) {
     return `<div class="pulse__cell"><div class="pulse__label">${k}</div><div class="pulse__value">${v}</div><div class="pulse__sub">${sub}</div></div>`;
 }
 
-// 价格/百分比格式化：大额无小数带千分位、小额留精度（USDT 永续从 BTC 6 万到 1000SATS
-// 的 1e-5 跨 9 个数量级，固定小数位一定有一头是废的）。
-// ⚠️ fmtMktPrice **有两个消费者**：市场概览的 BTC/ETH 锚点 + 三个涨跌幅榜副行的
-// 「开 X → 收 Y」（2026-07-29 起，见 changeSub）。改它会同时动这两处。
+// 价格 / 百分比格式化：大额取整带千分位、小额留精度（永续价格跨好几个数量级，固定小数位总有一头是废的）。
+// ⚠️ fmtMktPrice 有两个消费者：市场概览的 BTC/ETH 锚点 + 涨跌幅榜副行「开 X → 收 Y」（cryptoPriceCtx）。
 function fmtMktPrice(p) {
     if (p == null) return "—";
     if (p >= 1000) return "$" + Math.round(p).toLocaleString("en-US");
     if (p >= 1) return "$" + p.toFixed(2);
     if (p >= 0.01) return "$" + p.toFixed(4);
-    // ⚠️ 2026-07-29 由 toPrecision(2) 提到 4：涨跌幅榜副行要展示「开 X → 收 Y」，2 位有效
-    // 数字会让低价币的两个价格看起来对不上涨跌幅（AKE 0.0019814→0.0031325 是 +58.1%，
-    // 但显示成 $0.0020→$0.0031 只有 +55%）。**对市场概览零影响**：那里只喂 BTC/ETH，
-    // 永远走上面 >= 1000 那个分支，这一行是死枝。外面套 Number() 是为了去掉 toPrecision
-    // 补出来的尾零（0.0000123 → "0.00001230" → "0.0000123"）。
+    // 4 位有效数字：副行两个价格要对得上涨跌幅（2 位会让低价币差出几个点）；Number() 去掉 toPrecision 补的尾零。
     return "$" + Number(p.toPrecision(4));
 }
-// A股 价格：沪深报价精度恒为 0.01 ⇒ 两位小数即完整；¥ 前缀（不是 crypto 的 $）。
-// A股 涨跌幅榜副行「昨收 X → 收 Y」用（close-to-close，见 asharePriceCtx）。
+// A股 价格（休眠，供 asharePriceCtx）：沪深报价精度 0.01 ⇒ 两位小数即完整。
 function fmtCnyPrice(p) {
     if (p == null) return "—";
     return "¥" + p.toFixed(2);
@@ -2581,16 +987,7 @@ function mktAnchor(name, a) {
     </div>`;
 }
 
-/** 市场概览全局条（免费引流）：永续合约全市场 24h 内生指标 + 合约情绪,数据来自
- *  data.marketOverview（后端 get_market_overview 自算,只用 24h 行情 + 资金费率两次调用）。
- *  参考 CMC/CoinGecko 顶部全局条,但指标为合约市场定制（涨跌宽度/资金费率持仓/合约总成交额）。
- *
- *  ⚠️ **2026-07-25 晚从"仅加密视图显示"解禁成全资产可见**：那天站长先下「移除加密所有
- *  TAB」，这条不是 tab 是个 dict（后端 ALWAYS_FREE_FIELDS）故刻意保留，但"加密视图"
- *  当时已不复存在，继续 gate 在 currentAsset==="crypto" 上等于连带删掉一个没被要求删
- *  的东西。**同晚加密榜回来了也不改回去**——全局条本来就叫"全局"条，四个资产都看得到
- *  一条 24/7 的市场温度是加分项。代价是它会挂在 A股/美股/ETF 榜上方，所以**必须自报
- *  是哪个市场的数据**，见下面第一块 tag（否则用户会以为那是当前资产的成交额/情绪）。 */
+/** 市场概览全局条（免费）：加密永续全市场 24h 指标，数据来自后端 data.marketOverview。 */
 function renderMarketOverview() {
     const el = document.getElementById("marketOverview");
     if (!el) return;
@@ -2602,9 +999,7 @@ function renderMarketOverview() {
     const zone = s < 25 ? "fear2" : s < 45 ? "fear" : s < 55 ? "neutral" : s < 75 ? "greed" : "greed2";
     const items = [];
 
-    // 身份 + 刷新时刻：这条会出现在 A股/美股/ETF 榜上方，不写明"这是加密市场的数"会被
-    // 当成当前资产的指标。顺带给了 updateTime 一个可见落点（移动端只显示当前资产那一个
-    // 新鲜度胶囊，看股票榜时这里是加密刷新时刻在小屏上唯一的落点）。复用既有 class。
+    // 第一块自报「加密市场」+ 刷新时刻：概览条对所有资产可见，不写明会被当成当前资产的指标。
     if (data.updateTime) items.push(`<div class="mkt__item" title="加密 USDT 永续合约全市场，每小时更新">
         <span class="mkt__k">加密市场</span>
         <span class="mkt__v"><b>${data.updateTime.slice(11, 16)}</b> UTC<span class="mkt__sub">每小时</span></span>
@@ -2642,40 +1037,28 @@ function renderMarketOverview() {
 
 /** 市场脉搏速览条（无缝状态条）：跟随当前资产切换,切 tab 立即重渲染。 */
 function renderPulse() {
-    // 概览条与脉搏同触发（切榜/数据刷新/解锁），一处调用覆盖三处；try 包住——新组件
-    // 渲染若出任何错，绝不能连累脉搏和整条主渲染链（付费站,稳健优先）。
+    // 概览条搭脉搏的调用点一起刷新；try 包住，它出错不能连累脉搏与主渲染链。
     try { renderMarketOverview(); } catch (e) { console.warn("市场概览渲染失败", e); }
     const el = document.getElementById("pulse");
     if (!el || !data) return;
-    // 🔴 2026-09-12 A股 整族退役 ⇒ 原来按资产二选一（`asharePulseTiles()`），现在只剩加密那一支。
     const tiles = cryptoPulseTiles();
     if (!tiles) { el.hidden = true; return; }
     el.innerHTML = tiles.join("");
     el.hidden = false;
 }
 
-// 锁定态兜底：换取"今日领涨"这类 tile 需要的是具体某一行数据，锁定后拿不到（连
-// 涨跌幅榜现在也是付费内容），不能伪造；但命中数是公开的教据（paidMeta），至少留
-// 一块"策略命中，解锁查看"的磁贴,总比整条脉搏消失更能体现"这里有东西"。
+// 脉搏只放「策略命中」一块：领涨这类磁贴要具体行数据，锁定态拿不到也不能伪造；命中数来自公开的 paidMeta。
 function lockedPulseTile(asset, totalTabs) {
     const hits = strategyHits(asset);
     if (hits == null) return null;
-    // ⚠️⚠️ 2026-08-06 修：锁图标 + 「解锁查看…」这条 CTA **只在锁定态出**。
-    // 此前解锁态一并复用了整块磁贴，等于对着已经付过钱的用户喊"去解锁"（真机实测到）。
-    // 命中数那一半锁定/解锁都正确，所以只分叉「锁图标」和「副标题」这两处，别整块另写。
+    // 锁图标与「解锁查看」CTA 只在锁定态出（别对已付费用户喊去解锁）；命中数两态共用。
     const locked = PAYWALL_ENABLED && !license.valid;
     const sub = locked ? "解锁查看完整榜单与领涨标的" : unlockedPulseSub(asset);
     return [pulseTile("策略命中" + (locked ? " " + LOCK_SVG : ""), `<span class="is-gold">${hits}</span><span class="pulse__suffix is-muted">次 · ${totalTabs} 榜</span>`, sub)];
 }
 
-// 解锁态的副标题：命中最多的那个策略榜。
-// ⚠️ 数据源仍是**公开的 paidMeta**（命中数）不是行数据 ⇒ 不触碰下方那条
-//    「别为了凑满 4 格去 data[唯一的榜] 里取行」的警告，不存在伪造全市场数字的风险。
-// ⚠️ `.pulse__sub` 是 nowrap + overflow:hidden + ellipsis，榜名再长也只会被截断，
-//    不会撑破磁贴——所以这里可以放榜名，不用怕最长的（现为「日线9/21扩张＋SAR多头首根」；
-//    A股 那张 2026-08-16 改判据后已缩成「周线9/21/55扩张」，不再是最长的那个）。
-// 单榜资产（A股 只有 1 个策略榜——三个涨跌幅榜不算策略榜）说"命中最多"是废话，
-// 故分两种措辞。判据是 keys.length，不写死资产名，加资产自动跟随。
+// 解锁态副标题：命中最多的策略榜（数据仍是公开的 paidMeta）；.pulse__sub 带省略号截断，长榜名撑不破磁贴。
+// 只有一个策略榜的资产换一种措辞，按 keys.length 判、不写死资产名。
 function unlockedPulseSub(asset) {
     if (!data || !data.paidMeta) return "";
     const keys = Object.keys(data.paidMeta)
@@ -2687,26 +1070,14 @@ function unlockedPulseSub(asset) {
         : `命中最多：${TAB_META[top].name} ${data.paidMeta[top]} 个`;
 }
 
-// 加密脉搏（与股票系同款）：加密也没有全量涨跌幅榜了，"监控 N 个 / 昨日领涨 / 周线
-// 领涨"三块磁贴的数据源（yesterdayChange/weeklyChange）随 2026-07-25 的移除一起下线，
-// 只能退到 lockedPulseTile。旧的四格实现见 git。
+// ⚠️ 别为了凑满磁贴去 data[某个榜] 里取行：那是筛选结果不是全市场，写成「监控 N 个」会把命中数说成标的总数。
 function cryptoPulseTiles() { return lockedPulseTile("加密", CRYPTO_STRATEGY_TABS); }
-
-// A股 脉搏：走同一条 lockedPulseTile 路径（"拿不到具体行、但命中数是公开数据
-// (paidMeta)"），锁定态/解锁态都正确。
-// ⚠️ **别为了凑满 4 格去 data[某个榜] 里取行**：那是筛选结果不是全市场，
-// 写成"监控 N 只"会把命中数说成标的总数，是实打实的误导。
-// ⚠️ 2026-08-16 随美股/ETF 移除删掉了 `usPulseTiles` / `etfPulseTiles`（以及它们依赖的
-// US_STRATEGY_TABS / ETF_STRATEGY_TABS 两个常量）。更早的、每个资产四格全市场磁贴的
-// 三份实现（含美股 ticker vs 全名的宽度取舍、ETF「涨跌分布」的措辞理由）见 git。
-// （`asharePulseTiles` 2026-09-12 随 A股 整族退役删除，见上方 `ASHARE_STRATEGY_TABS` 那条注释。）
 
 /** 首屏骨架行(静态灰条,无动画——GPU 硬约束) */
 function renderSkeleton() {
     const tbody = document.getElementById("rankBody");
     if (!tbody) return;
-    // 复用真实行的四列 class → 零横向漂移、继承响应式列宽,数据到位时不再整体重排。
-    // 静态灰条(GPU 硬约束禁动画);pointer-events:none 关掉骨架 hover。
+    // 复用真实行的四列 class ⇒ 数据到位时不重排；pointer-events:none 关掉骨架 hover。
     tbody.innerHTML = Array.from({ length: 10 }, () => {
         const w = 90 + Math.round(Math.random() * 80);
         return `
@@ -2719,10 +1090,8 @@ function renderSkeleton() {
     }).join("");
 }
 
-/** 拉付费全量数据。返回 {data, authFailed}：
- *  authFailed=true 表示确定性鉴权失败（401/402，key 无效/过期/吊销）——调用方据此
- *  推进 lastPaidUpdateTime，避免失效 key 的常开标签页每 30s 空打 Worker 打爆配额。
- *  网络错误 / 5xx / 503 视为暂时性，authFailed=false，保留已解锁内容不误锁。 */
+/** 拉付费全量数据，返回 {data, authFailed}。authFailed=true ＝ 确定性鉴权失败（401/402）：
+ *  调用方据此推进 lastPaidUpdateTime，免得失效卡密的常开标签页每 30s 空打 Worker。 */
 async function fetchPaidData() {
     if (!license.key) {
         license.valid = false;
@@ -2737,7 +1106,7 @@ async function fetchPaidData() {
             license.valid = true;
             license.reason = null;
             license.expiresAt = resp.headers.get("X-License-Expires");
-            license.plan = resp.headers.get("X-License-Plan"); // Worker 现回传套餐,供徽标"已解锁 · 季付"
+            license.plan = resp.headers.get("X-License-Plan"); // 供徽标「已解锁 · 季付」
             return { data: await resp.json(), authFailed: false };
         }
         if (resp.status === 401 || resp.status === 402) {
@@ -2753,31 +1122,20 @@ async function fetchPaidData() {
     }
 }
 
-// in-flight 守卫（2026-07-24 审计）：setInterval 不 await，visibilitychange 也直接调——
-// 慢网下单次拉取超过 30s（8MB / gzip 2MB，50kB/s 就要 ~40s）定时器会叠加。真正值钱的不是
-// 省那次公开 JSON，而是**付费侧的竞态**：两个重叠调用都在 lastPaidUpdateTime 被写之前读到
-// 旧值，于是同一小时打两次 Worker /api/data（每次 ~1.3MB KV 读），绕过"不能每 30s 打 Worker"
-// 那条节流纪律。finally 复位，异常路径也不会把轮询永久卡死。
+// in-flight 守卫：setInterval 不 await、visibilitychange 也直接调，慢网下调用会叠加；
+// 重叠调用都在 lastPaidUpdateTime 写入前读到旧值 ⇒ 同一小时重复打 Worker。
 let loadInFlight = false;
 async function loadData() {
     if (loadInFlight) return;
     loadInFlight = true;
     try {
-        // 带宽策略（rankings.json 已 ~8.0MB / gzip ~2.0MB，绝不能每 30s 全量拉）：
-        // 默认 {cache:'no-cache'} 走条件请求——数据没变时 CDN/浏览器返回 304，几乎零流量；
-        // 只有当手头数据已到期（>61 分钟没更新 = 新一轮抓取该到了）才带 cache-buster
-        // 强穿 CDN 缓存，且强穿最密 2.5 分钟一次（防线上抓取中断时每 30s 白拉全量）。
-        // 冷启动（data 尚为 null，页面刚加载/刷新）不算"到期"——此时无从判断数据新鲜度，
-        // 该交给条件请求自己决定（有浏览器缓存就 304，没有就正常 200，跟带不带
-        // cache-buster 结果一样，但不带的话有缓存可用时能命中 304）。带 cache-buster
-        // 会把 URL 变成从未见过的新缓存键，白白放弃这次本可能命中的 304——2026-07-20
-        // 审计发现，此前 !lastT 会让冷启动必定判定为「到期」，每次开页/刷新都必然强穿。
+        // ⚠️ 带宽：30 秒轮询绝不全量强拉。默认 no-cache 走条件请求（没变 ＝ 304），
+        // 只有手头数据旧于 61 分钟（新一轮抓取该到了）才带 cache-buster 强穿 CDN。
+        // 冷启动（data 为 null）不算到期：cache-buster 是全新缓存键，会白白放弃本可命中的 304。
         const lastT = data ? parseUpdateTime(data.updateTime) : null;
         const due = lastT != null && Date.now() - lastT > 61 * 60 * 1000;
         let url = "data/rankings.json";
-        // 强穿基线 2.5 分钟一次；但线上抓取长时间中断时每次强穿都拿回同一份陈旧数据
-        // = 纯浪费带宽（~2MB gzip/次 × 24 次/小时 ≈ 1.15GB/天/标签页）。连续强穿仍拿到
-        // 同一 updateTime 就指数退避（2.5→5→10→20min 封顶），数据一旦真更新立即复位（见下）。
+        // 强穿间隔 2.5 分钟起；连续强穿都没拿到更新的数据（线上抓取中断）就指数退避到 20 分钟封顶，拿到即复位。
         let busted = false;
         const bustGap = Math.min(150000 * (2 ** bustStreak), 20 * 60 * 1000);
         if (due && Date.now() - lastBustAt > bustGap) {
@@ -2788,23 +1146,15 @@ async function loadData() {
         const resp = await fetch(url, { cache: "no-cache" });
         const fresh = await resp.json();
 
-        // 单调性守卫：busted 请求直穿源站拿到新数据后，下一次普通轮询可能从 CDN 边缘
-        // 缓存拿回**上一小时的旧体**（max-age=600 内边缘不回源）。无条件采信会出现
-        // 新旧数据每小时来回翻转 + 反复触发 due→全量强拉。旧于手头的数据直接丢弃。
-        // crypto/A股 两条管道独立写各自的时间戳，缺一个检查就会被另一个放过——
-        // 只查 updateTime 会让 ashareUpdateTime 被回滚（它每天只更新一次，回滚后要等
-        // 下一次 crypto 整点刷新 updateTime 才会被下面的 render-key 检查带出来重渲染）。
-        // ⚠️ 2026-08-16 移除美股/ETF 后删掉了第三对 usUpdateTime 守卫（那个字段已不再
-        // 写进公开文件）。复活美股要把它加回来——**并且要连下面 paidFetchKey / renderKey /
-        // 初始化处的 lastPaidUpdateTime 一起加**，那四处必须同构。
+        // 单调性守卫：强穿之后，普通请求可能从 CDN 边缘拿回上一小时的旧体 ⇒ 旧于手头的直接丢弃。
+        // 每条管道的时间戳各查一个（ashareUpdateTime 这对现为休眠件）；增删管道时与下方 paidFetchKey、
+        // renderKey、卡密表单里的 lastPaidUpdateTime 一起改。
         const freshT = parseUpdateTime(fresh.updateTime);
         const haveT = data ? parseUpdateTime(data.updateTime) : null;
         const freshAshareT = parseUpdateTime(fresh.ashareUpdateTime);
         const haveAshareT = data ? parseUpdateTime(data.ashareUpdateTime) : null;
         const rolledBack = (haveT && freshT && freshT < haveT)
             || (haveAshareT && freshAshareT && freshAshareT < haveAshareT);
-        // 强穿退避：这次强穿真拿回更新的数据 → 复位到 2.5min；否则（同一/更旧的
-        // updateTime，线上还在陈旧）退避加倍，最多 20min 一次（bustStreak 封 3）。
         if (busted) bustStreak = (freshT != null && (haveT == null || freshT > haveT)) ? 0 : Math.min(bustStreak + 1, 3);
         if (rolledBack) {
             renderUpdatePill();   // 倒计时照常走（用手头数据）
@@ -2812,24 +1162,13 @@ async function loadData() {
             return;
         }
 
-        // 免费橱窗和付费全量来自同一批管道，所以只在任一资产的时间戳变化时才打
-        // Worker，否则每 30s 轮询会把 CF 免费额度打爆。触发键用两时间戳组合（与下方
-        // renderKey 同款）：A股 收盘后只刷新自己的时间戳，只盯 crypto 的 updateTime
-        // 会让它写进 KV 的新付费数据最多晚 ~1 小时（等下一个 crypto 整点）才被拉取。
-        // 付费墙关闭时 fresh 本身已是全量，完全不打 Worker。
-        // ⚠️ 本键与下方 renderKey、以及初始化处的 lastPaidUpdateTime **必须同构**
-        // （同样的字段、同样的顺序），改一处要三处一起改（2026-08-16 去掉 usUpdateTime
-        // 那一段时就是三处同时改的）。
+        // 有卡密且任一管道时间戳变了才打 Worker（否则 30s 轮询会打爆免费额度）；付费墙关闭时 fresh 已是全量、不打。
+        // ⚠️ 本键与下方 renderKey 前两段、卡密表单里的 lastPaidUpdateTime 必须同构（同字段同顺序）。
         const paidFetchKey = fresh.updateTime + "|" + fresh.ashareUpdateTime;
         if (PAYWALL_ENABLED && license.key && paidFetchKey !== lastPaidUpdateTime) {
             const paid = await fetchPaidData();
-            // KV 的 updateTime 是**上传时刻**（三条管道谁上传谁刷新，见 upload_paid_data
-            // 的兜底），公开文件的 updateTime 是 crypto 的 build 时刻——两者只差几百毫秒
-            // 但秒级字符串跨秒即不同、A股/美股 上传后更是整段不同，**绝不能用严格相等
-            // 判断**（2026-07-22 审计实锤：相等与否取决于 build→上传是否跨秒边界，纯靠
-            // 运气；不等时付费回访用户整小时拿不到付费数据）。守卫的本意是挡 KV 边缘
-            // 缓存回吐的**旧**付费体，解析成时间后用 >= 判断即可：上传时刻晚于（或同秒
-            // 于）手头免费数据的 build 时刻 = 新数据，采纳；早于 = 旧缓存体，拒收。
+            // KV 的 updateTime 是上传时刻、公开文件的是 build 时刻（秒级字符串可能跨秒）⇒ 绝不能用严格相等；
+            // 解析成时间后 >= 即采纳，早于免费数据的是 KV 边缘缓存回吐的旧付费体、拒收。
             const paidT = paid.data ? parseUpdateTime(paid.data.updateTime) : null;
             if (paid.data && paidT != null && (freshT == null || paidT >= freshT)) {
                 paidData = paid.data;
@@ -2838,10 +1177,8 @@ async function loadData() {
                 // 确定性鉴权失败：推进 lastPaidUpdateTime，本周期不再重试
                 lastPaidUpdateTime = paidFetchKey;
             }
-            // 其余（付费 updateTime 滞后、5xx、网络错误）：不推进，30s 轮询继续追新数据
-            // fetchPaidData 可能改变 license.valid/reason（自动校验成功 / 挂机中过期吊销），
-            // 徽标必须跟着刷新——此前只有初始化和表单提交两个调用点，回访用户自动解锁后
-            // 徽标永远停在"未解锁"、挂机中被吊销徽标永远停在"已解锁"（2026-07-22 审计）。
+            // 其余（付费数据滞后、5xx、网络错误）不推进，下一轮继续追。
+            // fetchPaidData 会改 license.valid / reason（自动解锁、挂机中过期吊销）⇒ 徽标必须在这里跟着刷新。
             renderLicenseStatus();
         }
 
@@ -2851,15 +1188,8 @@ async function loadData() {
         renderUpdatePill();   // 倒计时每轮都要走
         renderStaleBanner();
 
-        // 渲染键 = updateTime + ashareUpdateTime 组合：两条管道各自独立刷新，只看其中
-        // 一个会让另一条的更新落地却不触发重渲染——A股 数据到位后表格/导航/脉搏条会
-        // 停留在上一交易日的行，直到下一次 crypto 整点刷新才顺带带出来（此时顶部胶囊
-        // 已经先一步显示新日期，出现"胶囊新、表格旧"的错位）。
-        // ⚠️ 2026-08-16 去掉了第三段 usUpdateTime（美股/ETF 移除）；与上面 paidFetchKey、
-        // 初始化处 lastPaidUpdateTime 三处同构，改一处要三处一起改。
-        // 另加两个付费维度（2026-07-22 审计）：paidData 的到位时刻（首轮拉取失败、次轮
-        // 成功时免费时间戳没变，不加这维付费内容落地也不重渲染，锁定态要钉到下个整点）
-        // 和 license.valid（挂机中被吊销/过期时表格要重新上锁，不能冻结在旧付费内容）。
+        // 渲染键 ＝ 各管道时间戳（各自独立刷新，漏一个它的更新就不重渲染；与 paidFetchKey 同构）
+        // + paidData 到位时刻（付费数据晚一轮才拉到时免费时间戳没变）+ license.valid（挂机中失效要重新上锁）。
         const renderKey = fresh.updateTime + "|" + fresh.ashareUpdateTime
             + "|" + (paidData ? paidData.updateTime : "") + "|" + (license.valid ? "1" : "0");
         if (renderKey !== lastRenderKey) {
@@ -2869,26 +1199,20 @@ async function loadData() {
             renderTable();
         }
     } catch (e) {
-        // 失败指示染**当前资产**的胶囊：移动端只显示非 dim 的那一个,写死 freshCrypto 时
-        // 用户在 A股 视图下失败完全不可见(2026-07-20 审计修正)。当前资产的胶囊本就
-        // 无 is-dim,另一个保持原样(dim 状态由 renderUpdatePill 管理)。
-        // ⚠️ 加资产时**必须在这里给它一个胶囊 id**——2026-07-21 审计就补过一次同款漏
-        // （etf 落进兜底 freshCrypto，而 ETF 视图下它是 dim 的、移动端整个被隐藏 ⇒
-        // 加载失败在手机上完全不可见）。
+        // 失败染当前资产的胶囊（移动端只显示非 dim 的那一个）；加资产时必须在这里给它映射胶囊 id，别落进兜底。
         const pillId = currentAsset === "ashare" ? "freshAshare" : "freshCrypto";
         const pill = document.getElementById(pillId);
         if (pill) {
             pill.className = "fresh fresh--bad";
             document.getElementById(pillId + "Txt").textContent = " · 数据加载失败,稍后自动重试";
         }
-        // 只有从未成功加载过才占用表格区展示错误；
-        // 已有数据时单次轮询失败不能把用户正在看的榜单清掉。
+        // 只有从未加载成功才在表格区报错；已有数据时单次失败别清掉用户正在看的榜单。
         if (!data) {
             document.getElementById("rankBody").innerHTML =
                 '<div class="empty"><div class="empty__icon">⚠️</div><div class="empty__title">无法加载数据</div><div class="empty__desc">稍后自动重试</div></div>';
         }
     } finally {
-        loadInFlight = false;   // 见函数上方 in-flight 守卫注释；必须在 finally 里复位
+        loadInFlight = false;   // 必须在 finally 里复位，否则一次异常就把轮询永久卡死
     }
 }
 
@@ -2899,8 +1223,7 @@ function initFooterUI() {
         b.addEventListener("click", () => document.getElementById(b.dataset.dialog).showModal()));
     document.querySelectorAll(".dialog-close").forEach(b =>
         b.addEventListener("click", () => document.getElementById(b.dataset.dialog).close()));
-    // 点弹窗外部(backdrop)也能关：backdrop 的点击事件 target 是 <dialog> 元素本身,
-    // 内容区的点击 target 是子元素,借此区分,无需额外遮罩
+    // 点 backdrop 也能关：backdrop 点击的 target 是 <dialog> 本身，内容区的是子元素。
     document.querySelectorAll("dialog.modal").forEach(d =>
         d.addEventListener("click", e => { if (e.target === d) d.close(); }));
 }
@@ -2916,9 +1239,7 @@ function renderLicenseStatus() {
         const badge = document.querySelector(badgeSel);
         const btnEl = document.getElementById(btn);
         if (!badge) return;
-        // 幂等的 class 赋值：先剥掉全部三种状态 class 再加当前的。旧写法只 replace
-        // 另外两种、不剥自身，本函数进 loadData 轮询路径后（30s 一次）同状态重复调用
-        // 会无限累积重复 class。
+        // 先剥掉三种状态 class 再加当前的：本函数每轮轮询都会调，不剥自身会无限累积重复 class。
         const base = badge.className.replace(/\s*\blic-(on|off|expired)\b/g, "").trim();
         if (license.valid) {
             badge.className = base + " lic-on";
@@ -2944,8 +1265,6 @@ function openUnlockDialog(hintMsg) {
     if (input) input.value = license.key || "";
     const msg = document.getElementById("licenseMsg");
     if (msg) {
-        // 已解锁用户点"管理通行证"(无 hint)时,顺带展示到期日——header 里早已拿到 expiresAt
-        // 却从不显示;有 hint(如"付款已收到…")时不覆盖。
         let m = hintMsg || "";
         if (!m && license.valid && license.expiresAt) {
             m = `当前通行证有效期至 ${String(license.expiresAt).slice(0, 10)}`;
@@ -2987,7 +1306,6 @@ function initPaywallUI() {
         openUnlockDialog();
     });
 
-    // 套餐选择：点哪个高亮哪个，默认选中 quarterly（HTML 里 bp-best 标的那档）
     document.getElementById("buyPlans")?.addEventListener("click", e => {
         const btn = e.target.closest(".buy-plan");
         if (!btn) return;
@@ -2996,8 +1314,7 @@ function initPaywallUI() {
     });
     document.querySelector(`.buy-plan[data-plan="${selectedPlan}"]`)?.classList.add("is-selected");
 
-    // 输入通行证：本地校验格式后直接尝试拉付费数据判断有效性（Worker 是唯一真相源，
-    // 不在前端单独维护一份校验逻辑）
+    // 输入通行证：直接拉一次付费数据判有效性（Worker 是唯一真相源，前端不另写校验）。
     document.getElementById("licenseForm")?.addEventListener("submit", async e => {
         e.preventDefault();
         const raw = document.getElementById("licenseInput").value;
@@ -3017,25 +1334,17 @@ function initPaywallUI() {
         if (result.data) {
             if (sbtn) sbtn.disabled = false;
             paidData = result.data;
-            // 合并后必须恢复 updateTime：paidData 带的是 KV **上传时刻**（谁上传谁刷新），
-            // 直接盖掉免费文件的 build 时刻会让下一轮 loadData 的单调性守卫把正常新数据
-            // 误判成"回滚"整段拒收（loadData 路径有同款恢复，这里此前漏了）。
+            // 合并后恢复免费文件的 updateTime：paidData 带的是 KV 上传时刻，留着会让下一轮单调性守卫把正常数据误判为回滚。
             const freeUpdateTime = data ? data.updateTime : null;
             data = { ...data, ...paidData };
             if (freeUpdateTime) data.updateTime = freeUpdateTime;
-            // 首屏公开数据尚未到达（data 原为 null）时没有 build 时刻可恢复——必须删掉
-            // KV 带来的上传时刻，否则它可能晚于公开文件的 build 时刻（A股 上传也刷它），
-            // 下一轮 loadData 的单调性守卫会把正常公开数据误判成"回滚"整段拒收，
-            // 免费面空窗直到公开 updateTime 追过 KV 时刻（最长 ~1 小时）。
+            // 公开数据还没到（没有 build 时刻可恢复）就删掉 KV 的上传时刻，理由同上。
             else delete data.updateTime;
-            // ⚠️ 必须与 loadData 的 paidFetchKey **同构**（同字段同顺序，2026-08-16 移除
-            // 美股/ETF 后为两时间戳；连 renderKey 共三处，改一处要三处一起改）
+            // 与 loadData 的 paidFetchKey / renderKey 同构，改一处三处一起改。
             lastPaidUpdateTime = data ? (data.updateTime + "|" + data.ashareUpdateTime) : null;
             renderLicenseStatus();
             if (msg) { msg.textContent = "解锁成功！"; msg.className = "lic-msg lic-ok"; }
-            // 首屏公开数据(~8MB)还没到达时(freeUpdateTime 为空)，此刻 data 是"付费 only"
-            // 对象——直接渲会让免费榜/脉搏/命中数瞬时空白(自愈但难看)。这种竞态交由在飞/
-            // 下一轮 loadData 完成完整合并+渲染；常见路径(已在浏览、公开数据在手)立即渲染。
+            // 公开数据已在手就立即渲染；还没到时 data 只有付费部分、直接渲会瞬时空白 ⇒ 交给 loadData 合并后再渲。
             if (freeUpdateTime) { renderNav(); renderTable(); renderPulse(); }
             else loadData();
             setTimeout(() => document.getElementById("licenseDialog").close(), 700);
@@ -3078,8 +1387,7 @@ function initPaywallUI() {
         btn.textContent = "去支付";
     });
 
-    // OxaPay 付款完成后跳转回本站会带 ?unlock=1（见 worker/src/index.js 的 return_url）——
-    // 此时 webhook 是异步处理的，卡密不一定已经发到邮箱，提示语言要如实反映这一点。
+    // 付款完成跳回本站会带 ?unlock=1（Worker 的 return_url）；webhook 异步发卡，此刻卡密未必已到邮箱，提示要如实。
     if (new URLSearchParams(location.search).get("unlock") === "1") {
         openUnlockDialog("付款已收到，通行证正在发送到你的邮箱，收到后粘贴在这里");
         history.replaceState(null, "", location.pathname); // 清掉查询串，避免刷新重复弹窗
@@ -3099,7 +1407,6 @@ function updateExportBar() {
     } else {
         bar.style.display = "none";
     }
-    // 同步全选框状态
     const checks = document.querySelectorAll(".symbol-check");
     const arr = [...checks];
     const all = arr.length > 0 && arr.every(c => c.checked);
@@ -3119,7 +1426,6 @@ function exportTradingViewTxt() {
     URL.revokeObjectURL(a.href);
 }
 
-// 表格内勾选事件（事件委托）
 document.getElementById("rankBody").addEventListener("change", e => {
     if (e.target.classList.contains("symbol-check")) {
         const symbol = e.target.dataset.symbol;
@@ -3132,7 +1438,6 @@ document.getElementById("rankBody").addEventListener("change", e => {
     }
 });
 
-// 全选
 document.getElementById("checkAll").addEventListener("change", e => {
     const checks = document.querySelectorAll(".symbol-check");
     checks.forEach(c => {
@@ -3146,7 +1451,6 @@ document.getElementById("checkAll").addEventListener("change", e => {
     updateExportBar();
 });
 
-// 全选按钮
 document.getElementById("selectAllBtn").addEventListener("click", () => {
     const checks = document.querySelectorAll(".symbol-check");
     const allChecked = [...checks].every(c => c.checked);
@@ -3161,8 +1465,7 @@ document.getElementById("selectAllBtn").addEventListener("click", () => {
     updateExportBar();
 });
 
-// 清空勾选：selectedSymbols 是跨榜单累积的（换 tab 不丢）,而「全选」按钮只作用于
-// 当前榜可见行——跨 tab 勾的散选此前只能回到各 tab 逐个取消,这里一键清干净
+// 清空勾选：selectedSymbols 跨榜累积（换 tab 不丢），而「全选」只管当前榜可见行。
 document.getElementById("clearSelBtn").addEventListener("click", () => {
     selectedSymbols.clear();
     document.querySelectorAll(".symbol-check").forEach(c => { c.checked = false; });
@@ -3171,7 +1474,6 @@ document.getElementById("clearSelBtn").addEventListener("click", () => {
     updateExportBar();
 });
 
-// 导出按钮
 document.getElementById("exportBtn").addEventListener("click", exportTradingViewTxt);
 
 // === rail / 抽屉 导航事件（事件委托,nav 由 renderNav 动态生成）===
@@ -3180,8 +1482,7 @@ function bindNavEvents(rootId, closeDrawerAfter) {
     if (!root) return;
     root.addEventListener("click", e => {
         const seg = e.target.closest(".asset-seg__opt");
-        // 抽屉内切资产**不**关抽屉：移动端抽屉是唯一资产入口,切完资产要让用户接着选具体
-        // 榜单(此前立即 closeDrawer 会把用户甩回该资产默认榜)。选具体 nav-item 才关。
+        // 切资产不关抽屉（让用户接着选榜；分段控件现为休眠件），选中具体榜才关。
         if (seg) { switchAsset(seg.dataset.k); return; }
         const item = e.target.closest(".nav-item");
         if (item) { switchTab(item.dataset.tab); if (closeDrawerAfter) closeDrawer(); }
@@ -3191,9 +1492,7 @@ bindNavEvents("rail", false);
 bindNavEvents("drawer", true);
 
 // === 移动抽屉 ===
-// 抽屉焦点管理:打开时把背景(topbar/wrap/dock)设 inert——键盘 Tab 困在抽屉内、SR 也
-// 读不到背景;焦点移入抽屉;关闭时归还 inert 并把焦点还给汉堡。inert 优雅降级(旧浏览器
-// no-op),不引入 sticky/backdrop/无限动画。桌面(≥641px)抽屉 display:none,inert 无害。
+// 焦点管理：打开时背景设 inert（Tab 困在抽屉内、读屏读不到背景）并把焦点移入；关闭时撤掉 inert、焦点还给汉堡。
 const DRAWER_BG_SEL = [".topbar", ".wrap", "#exportBar"];
 function openDrawer() {
     const drawer = document.getElementById("drawer");
@@ -3214,8 +1513,7 @@ function closeDrawer() {
     document.getElementById("hamburger").setAttribute("aria-expanded", "false");
     drawer.setAttribute("inert", ""); // 关闭后抽屉本身也 inert,背景恢复可交互
     DRAWER_BG_SEL.forEach(sel => document.querySelector(sel)?.removeAttribute("inert"));
-    // 仅当确实从"打开"态关闭才归还焦点——未开时全局 Esc 触发 closeDrawer 是无害空操作,
-    // 不该抢走用户当前焦点。清 inert 必须在 focus 之前。
+    // 只有真从打开态关闭才还焦点（未打开时全局 Esc 也会调到这里，别抢焦点）；清 inert 必须在 focus 之前。
     if (wasOpen) document.getElementById("hamburger").focus();
 }
 // Esc 关抽屉(dialog 自带 Esc,抽屉是自绘的要手动补;未开时是无害空操作)
@@ -3224,13 +1522,8 @@ document.getElementById("hamburger").addEventListener("click", openDrawer);
 document.getElementById("drawerClose").addEventListener("click", closeDrawer);
 document.getElementById("drawerScrim").addEventListener("click", closeDrawer);
 
-// 抽屉体：只注入导航容器（renderNav 往 #drawerNav 里填内容）
-// 🔴🔴 **2026-09-12 A股 整族退役 ⇒ 这里原本还注入一个资产分段控件**（`.asset-seg` 里两个
-//   `.asset-seg__opt`，data-k="crypto" / "ashare"），index.html 的 rail 那一份同批删掉 ——
-//   只剩一个资产时它表达不了任何选择。`.asset-seg` 的 CSS、`switchAsset`、`.asset-seg__opt`
-//   的点击委托全部**保留为休眠件**（点击委托找不到节点 ⇒ 恒不触发），复活 A股 时把两处 DOM 加回来即可。
-// ⚠️ 写注释别把反引号放进这条模板字符串里（会当场截断模板、node --check 报奇怪的语法错）——
-//   本轮就踩了一次，注释因此挪到模板外面。
+// 抽屉体只注入导航容器（renderNav 往 #drawerNav 填）。资产分段控件已从这里与 index.html 的 rail 删除；
+// .asset-seg 的 CSS、switchAsset 与点击委托保留为休眠件，复活 A股 时把两处 DOM 加回即可。
 document.getElementById("drawerBody").innerHTML = `
     <nav class="board-nav" id="drawerNav"></nav>`;
 
@@ -3240,15 +1533,11 @@ function applyTheme(t) {
     document.documentElement.dataset.theme = t;
     const btn = document.getElementById("themeBtn");
     if (btn) btn.textContent = t === "light" ? "☀" : "◐";
-    // 手机浏览器工具栏颜色跟随主题——index.html 首屏内联脚本只管「加载时」,
-    // 这里补上「切换时」,否则亮色页面配深色地址栏。
-    // ⚠️ 两个 hex 必须跟 style.css 的 --bg1(亮 #f0eee6 骨白 / 暗 #141413 墨)保持一致——
-    // 这里是第三份独立硬编码拷贝(index.html 内联脚本 + manifest + 这里,共三处),改配色
-    // 一起改,否则每次切换/刷新会把 index.html 刚设对的值又覆盖回旧值。
+    // 切换时同步手机浏览器工具栏色（加载时由 index.html 内联脚本设）。
+    // ⚠️ 两个 hex ＝ style.css 的 --bg1；index.html 内联脚本与 manifest 各有一份硬编码，改品牌色一起改。
     const meta = document.getElementById("themeColorMeta");
     if (meta) meta.content = t === "light" ? "#f0eee6" : "#141413";
 }
-// v5 起亮色为默认底盘:除非用户显式存过 dark,否则一律亮色
 applyTheme(safeStore.get("localStorage", LS_THEME) === "dark" ? "dark" : "light");
 document.getElementById("themeBtn").addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
@@ -3256,20 +1545,15 @@ document.getElementById("themeBtn").addEventListener("click", () => {
     applyTheme(next);
 });
 
-// 收盘快照横幅关闭（永久,按当前资产分别记忆,见 renderSnapshotBanner）
+// 收盘快照横幅关闭（永久记忆，见 renderSnapshotBanner；现只有休眠的 A股 用）
 document.getElementById("snapshotBannerClose").addEventListener("click", () => {
     safeStore.set("localStorage", snapshotBannerDismissKey(), "1");
     document.getElementById("snapshotBanner").hidden = true;
 });
 
-// 顶栏新鲜度胶囊可点：点暗的那侧直接切资产（.is-dim 的胶囊本来就在邀请注意力,
-// 给它一个响应;点当前侧是无害空操作,switchAsset 自带同资产早退）。
-// ⚠️ 曾有第三个 freshUS 胶囊,它被 ETF 视图复用、需要一句显式空操作才不会把用户切离
-// ETF(2026-07-21 审计)——随 2026-08-16 移除美股/ETF 一并删除。**日后再出现"某个资产
-// 没有自己的胶囊、复用别人的"这种归并,那句空操作要一起加回来。**
+// 新鲜度胶囊可点：切到对应资产（点当前资产是空操作）；若某资产复用别人的胶囊，要补显式空操作，否则会把用户切走。
 document.getElementById("freshCrypto").addEventListener("click", () => switchAsset("crypto"));
-// 🔴🔴 2026-09-12 A股 整族退役 ⇒ 原有一行 `#freshAshare` 的点击监听（→ switchAsset("ashare")）必须同批删：
-//   DOM 节点已经不在，留着就是 `null.addEventListener` 当场抛错、后面所有监听器全不绑定。
+// 复活 A股 时把 #freshAshare 的监听加回；胶囊 DOM 不在时留着监听会抛错、后面的监听全不绑定。
 
 // 排序选择（排序条 chips + 表头共用）：点不同轴切排序键，点当前轴切升/降
 function selectSortKey(key) {
@@ -3295,8 +1579,7 @@ document.getElementById("sortStrip").addEventListener("click", e => {
     if (chip) selectSortKey(chip.dataset.sortkey);
 });
 
-// 表格搜索框（代码/名称过滤当前 tab，切 tab 自动清空）。
-// 150ms 防抖：5000+ 行的 tab 上每个按键全量重建 tbody 会卡输入。
+// 表格搜索（代码 / 名称过滤当前 tab，切 tab 清空）；150ms 防抖，大榜上每键全量重建 tbody 会卡输入。
 const searchBoxEl = document.getElementById("searchBox");
 if (searchBoxEl) {
     let searchTimer = null;
@@ -3309,20 +1592,12 @@ if (searchBoxEl) {
     });
 }
 
-// Initial load
-// 恢复上次看的榜单（key 已失效则留在默认 tab；switchTab 自带资产/排序/胶囊全套同步）
+// === 初始化 ===
 const LS_TAB = "bishuju_last_tab";
 const savedTab = safeStore.get("localStorage", LS_TAB);
 if (savedTab && TABS_CONFIG[savedTab] && savedTab !== currentTab) switchTab(savedTab);
-// ⚠️ 2026-07-27 修:**首访者的 data-asset 一直是错的**。index.html 把 `data-asset` 写死
-// 在 .app 上，而只有 switchTab() 会去纠正它 —— 上面那行在「没有 savedTab」或
-// 「savedTab 恰好等于默认 tab」时都不会触发。当时默认落地是美股，于是新访客看到的是
-// 美股榜、资产标签也写「美股」，但 CSS 作用域仍是写死的 crypto ⇒ --asset-accent、
-// nav 选中底色、tf-chip、排序 chip 选中态、行悬停装饰条全部用成加密琥珀而不是美股紫。
-// 涨跌语义碰巧没错（美股与加密同为涨绿跌红），所以它一直没被当成 bug 发现；**换成 A股
-// 做默认落地资产就会当场变成红绿颠倒**（A股 是涨红跌绿）。
-// 修法是无条件把 DOM 同步到 JS 的 currentAsset，别依赖 switchTab 的副作用——
-// 这一行现在是"改默认落地资产"唯一不需要再改一遍 index.html 的保障，别删。
+// ⚠️ 无条件把 .app 的 data-asset 同步到 currentAsset：index.html 写死了一个值，而上面那行不一定调 switchTab
+// （无 savedTab 或它就是默认 tab）⇒ 默认资产与写死值不同时 CSS 作用域会错（A股 红绿颠倒）。别依赖 switchTab 的副作用。
 const appEl = document.getElementById("app");
 if (appEl) appEl.dataset.asset = currentAsset;
 initFooterUI();
@@ -3331,7 +1606,6 @@ renderNav();
 renderSkeleton();
 loadData();
 
-// Auto refresh every 30s。后台标签页跳过轮询（回到前台立即补一轮）——
-// 交易员常年挂着几十个标签页，后台空轮询是带宽/配额的最大浪费源。
+// 每 30 秒轮询；后台标签页跳过（常开标签页的空轮询最费带宽 / 配额），回到前台立即补一轮。
 setInterval(() => { if (!document.hidden) loadData(); }, 30000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) loadData(); });

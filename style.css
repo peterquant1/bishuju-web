@@ -325,6 +325,30 @@ a:hover{color:var(--gold-hi)}
 .pulse__suffix.is-down{color:var(--price-down)}
 .pulse__suffix.is-muted{color:var(--muted-2)}
 .pulse__sub{font-size:11.5px;color:var(--muted-2);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 日线共振卡：只在解锁态显示，夹在脉搏条与榜单之间；名次 1–3 的 chip 复用 medal 配色（medal 规则在后面，覆盖 chip 的底色与描边） */
+.reso{background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);margin-bottom:16px;padding:14px 18px 6px}
+.reso__head{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px;padding-bottom:10px}
+.reso__title{font-size:18px;font-weight:650;color:var(--text);letter-spacing:-.01em}
+.reso__meta{font-size:11.5px;color:var(--muted-2)}
+.reso__row{display:grid;grid-template-columns:20px minmax(132px,auto) 56px minmax(0,1fr);align-items:center;gap:6px 14px;padding:8px 0;border-top:1px solid var(--line)}
+.reso__id{display:flex;flex-direction:column;gap:1px;min-width:0}
+.reso__rank{font-family:var(--mono);font-size:12px;color:var(--muted-2);text-align:right}
+.reso__sym{font-size:18px;font-weight:650;color:var(--text);text-decoration:none;white-space:nowrap}
+.reso__sym:hover{color:var(--gold-ink)}
+.reso__score{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted-2);white-space:nowrap}
+.reso__score b{font-size:24px;font-weight:650;color:var(--gold-ink);margin-right:1px}
+.reso__chips{display:flex;flex-wrap:wrap;gap:5px}
+.reso__chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:var(--r-sm);font-size:12px;line-height:1.3;white-space:nowrap;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line-2)}
+.reso__chip b{font-family:var(--mono);font-weight:700}
+.reso__ctx{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:11px;color:var(--muted-2);white-space:nowrap}
+.reso__ctx .is-up{color:var(--price-up)}
+.reso__ctx .is-down{color:var(--price-down)}
+.reso__empty{font-size:13px;color:var(--muted-2);padding:10px 0 12px;border-top:1px solid var(--line)}
+@media (max-width:860px){
+    .reso{padding:12px 14px 4px}
+    .reso__row{grid-template-columns:20px minmax(0,1fr) auto}
+    .reso__chips{grid-column:2 / -1}
+}
 
 /* ---------------- 市场概览全局条(免费,加密专属)---------------- */
 .mkt{background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);margin-bottom:16px;overflow:hidden}

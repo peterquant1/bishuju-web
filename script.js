@@ -1053,49 +1053,56 @@ function renderMarketOverview() {
     el.hidden = false;
 }
 
-// === 日线共振卡（脉搏条与榜单之间）===
-// 排序条上的日线轴（cryptoStrategySorts 里标签以「日」开头的，去掉日成交额——体量不是强弱）逐轴全市场降序排名，
-// 数每个币排进前 RESO_TOP 名的轴数，≥ RESO_MIN 根才上卡；同分依次比「第一的个数 → 名次之和 → 日成交额」。
-// 轴集从排序条派生：加删日线轴卡片自动跟随，不用另改。
-// 全市场 ＝ 日涨跌幅榜的全部行（与策略榜同形，只是 value 装的是日涨跌幅 ⇒ 参评前还原成日成交额）。
-// 排名规则同 getSortedItems：null / NaN 不参评、平局按日成交额降序 ⇒ 与在任意榜上点这根轴看到的先后一致。
-// 纯前端现算、不进后端产出：用的全是付费榜的行，锁定态没有 data.dailyChange ⇒ 整卡隐藏，别拿公开文件去凑。
-const RESO_TOP = 10, RESO_MIN = 3, RESO_ROWS = 10;
+// === 共振卡（脉搏条与榜单之间）：日线一张通栏，周线 / 月线两张并排（≤1080px 叠放）===
+// 每张卡：本周期涨跌幅榜排序条上的本周期轴（标签以「日 / 周 / 月」开头的，去掉本周期成交额——体量不是强弱）逐轴全市场降序排名，
+// 数每个币排进前 top 名的轴数，≥ min 根才上卡；同分依次比「第一的个数 → 名次之和 → 日成交额」。
+// 轴集从三张涨跌幅榜的排序条派生：加删轴卡片自动跟随，不用另改；⚠️ 轴标签别去掉周期前缀（会静默掉出卡片）。
+// 全市场 ＝ 对应涨跌幅榜的全部行（与策略榜同形，value 装的是本周期涨跌幅）。
+// 排名规则同策略榜上的 getSortedItems：null / NaN 不参评、平局按日成交额降序。
+// 周 / 月线各只有 4 根轴：月线取前 10 时回放里约两成月份一个都没有（一空就空一整个月）⇒ 月线放宽到前 20，「≥3 根」三张卡一致。
+// 纯前端现算、不进后端产出：用的全是付费榜的行，锁定态没有这三张榜 ⇒ 整块隐藏，别拿公开文件去凑。
+const RESO_ROWS = 10;
+const RESO_CARDS = [
+    { tab: "dailyChange", tf: "日", sorts: dailyChangeSorts, volKey: "volume", rankKey: "volumeRank",
+      top: 10, min: 3, wide: true, period: "今天", refresh: "日线每天 00:00 UTC 换一批" },
+    { tab: "weeklyChange", tf: "周", sorts: weeklyChangeSorts, volKey: "weeklyVolume", rankKey: "weeklyVolumeRank",
+      top: 10, min: 3, wide: false, period: "本周", refresh: "周线每周一 00:00 UTC 换一批" },
+    { tab: "monthlyChange", tf: "月", sorts: monthlyChangeSorts, volKey: "monthlyVolume", rankKey: "monthlyVolumeRank",
+      top: 20, min: 3, wide: false, period: "本月", refresh: "月线每月 1 号 00:00 UTC 换一批" },
+];
 
-function resonanceBoard() {
-    if (!data || !Array.isArray(data.dailyChange) || !data.dailyChange.length) return null;
-    const axes = cryptoStrategySorts.filter(a => a.label.startsWith("日") && a.key !== "volume");
-    const rec = new Map(data.dailyChange.map(r => [r.symbol, { ...r, value: r.volume, changePercent: r.value }]));
+function resonanceBoard(card) {
+    const list = data && data[card.tab];
+    if (!Array.isArray(list) || !list.length) return null;
+    const axes = card.sorts.filter(a => a.label.startsWith(card.tf) && a.key !== card.volKey);
     const hits = new Map();
     for (const ax of axes) {
-        [...rec.values()]
-            .filter(r => r[ax.key] != null && !Number.isNaN(r[ax.key]))
-            .sort((a, b) => (b[ax.key] - a[ax.key]) || ((b.value || 0) - (a.value || 0)))
-            .slice(0, RESO_TOP)
+        list.filter(r => r[ax.key] != null && !Number.isNaN(r[ax.key]))
+            .sort((a, b) => (b[ax.key] - a[ax.key]) || ((b.volume || 0) - (a.volume || 0)))
+            .slice(0, card.top)
             .forEach((r, i) => {
-                if (!hits.has(r.symbol)) hits.set(r.symbol, []);
-                hits.get(r.symbol).push({ ax, rank: i + 1 });
+                if (!hits.has(r.symbol)) hits.set(r.symbol, { item: r, hits: [] });
+                hits.get(r.symbol).hits.push({ ax, rank: i + 1 });
             });
     }
-    const rows = [...hits]
-        .map(([symbol, h]) => ({
-            item: rec.get(symbol),
-            hits: h.sort((a, b) => a.rank - b.rank),
-            top1: h.filter(x => x.rank === 1).length,
-            rankSum: h.reduce((s, x) => s + x.rank, 0),
+    const rows = [...hits.values()]
+        .filter(x => x.hits.length >= card.min)
+        .map(x => ({
+            item: x.item,
+            hits: x.hits.sort((a, b) => a.rank - b.rank),
+            top1: x.hits.filter(h => h.rank === 1).length,
+            rankSum: x.hits.reduce((s, h) => s + h.rank, 0),
         }))
-        .filter(x => x.hits.length >= RESO_MIN)
         .sort((a, b) => b.hits.length - a.hits.length || b.top1 - a.top1 || a.rankSum - b.rankSum
-            || ((b.item.value || 0) - (a.item.value || 0)));
+            || ((b.item.volume || 0) - (a.item.volume || 0)));
     return { axes, rows };
 }
 
-function renderResonance() {
-    const el = document.getElementById("resonance");
-    if (!el) return;
-    const board = resonanceBoard();
-    if (!board) { el.hidden = true; return; }
+function resonanceCardHtml(card) {
+    const board = resonanceBoard(card);
+    if (!board) return "";
     const { axes, rows } = board;
+    const tfName = `${card.tf}线`;
     const shown = rows.slice(0, RESO_ROWS);
     const body = shown.length ? shown.map((x, i) => {
         const it = x.item;
@@ -1104,25 +1111,39 @@ function renderResonance() {
             const label = escapeHtml(h.ax.label);
             return `<span class="reso__chip${medal}" title="${label} 全市场第 ${h.rank} 名：${escapeHtml(h.ax.format(it))}">${label}<b>${h.rank === 1 ? "第一" : "#" + h.rank}</b></span>`;
         }).join("");
-        const chg = it.changePercent;
+        const chg = it.value;
         const chgCls = chg == null ? "" : chg >= 0 ? "is-up" : "is-down";
-        const volRank = Number.isInteger(it.volumeRank) ? ` · 日成交额 TOP ${it.volumeRank}` : "";
-        // 名字下面一行放日涨跌幅与成交额名次，把整行宽度留给 chip（多数行一行排得下，一眼扫得完）
+        const rank = it[card.rankKey];
+        const volRank = Number.isInteger(rank) ? ` · ${card.tf}成交额 TOP ${rank}` : "";
+        // 名字下面一行放本周期涨跌幅与成交额名次，把整行宽度留给 chip（多数行一行排得下，一眼扫得完）
         return `<div class="reso__row">
             <span class="reso__rank">${i + 1}</span>
             <span class="reso__id">
                 <a class="reso__sym" href="${escapeHtml(tvUrlFor(it.symbol))}" target="_blank" rel="noopener noreferrer" title="在 TradingView 打开 ${escapeHtml(it.symbol)} 图表">${escapeHtml(symbolDisplayParts(it.symbol).base)}</a>
-                <span class="reso__ctx" title="日涨跌幅${volRank ? "，日成交额全市场名次" : ""}"><span class="${chgCls}">${fmtGapVal(chg)}</span>${volRank}</span>
+                <span class="reso__ctx" title="${card.tf}涨跌幅${volRank ? `，${card.tf}成交额全市场名次` : ""}"><span class="${chgCls}">${fmtGapVal(chg)}</span>${volRank}</span>
             </span>
-            <span class="reso__score" title="${axes.length} 根日线轴里排进全市场前 ${RESO_TOP} 的根数（其中第一 ${x.top1} 根）"><b>${x.hits.length}</b>/${axes.length}</span>
+            <span class="reso__score" title="${axes.length} 根${tfName}轴里排进全市场前 ${card.top} 的根数（其中第一 ${x.top1} 根）"><b>${x.hits.length}</b>/${axes.length}</span>
             <span class="reso__chips">${chips}</span>
         </div>`;
-    }).join("") : `<div class="reso__empty">今天没有标的在 ${RESO_MIN} 根以上日线轴同时排进全市场前 ${RESO_TOP}。</div>`;
+    }).join("") : `<div class="reso__empty">${card.period}没有标的在 ${card.min} 根以上${tfName}轴同时排进全市场前 ${card.top}。</div>`;
     const more = rows.length > shown.length ? `，下面是前 ${shown.length} 个` : "";
-    el.innerHTML = `<div class="reso__head">
-            <span class="reso__title">日线共振</span>
-            <span class="reso__meta" title="${escapeHtml(axes.map(a => a.label).join("、"))}">${axes.length} 根日线排序轴里，全市场排进前 ${RESO_TOP} 名的根数 ≥ ${RESO_MIN} · 共 ${rows.length} 个${more} · 日线每天 00:00 UTC 换一批</span>
-        </div>${body}`;
+    return `<div class="reso ${card.wide ? "reso--wide" : "reso--half"}">
+        <div class="reso__head">
+            <span class="reso__title">${tfName}共振</span>
+            <span class="reso__meta" title="${escapeHtml(axes.map(a => a.label).join("、"))}">${axes.length} 根${tfName}排序轴里，全市场排进前 ${card.top} 名的根数 ≥ ${card.min} · 共 ${rows.length} 个${more} · ${card.refresh}</span>
+        </div>${body}
+    </div>`;
+}
+
+function renderResonance() {
+    const el = document.getElementById("resonance");
+    if (!el) return;
+    // 逐张 try：一张出错不连累另外两张
+    const cards = RESO_CARDS.map(card => {
+        try { return resonanceCardHtml(card); } catch (e) { console.warn(`${card.tf}线共振卡渲染失败`, e); return ""; }
+    }).filter(Boolean);
+    if (!cards.length) { el.hidden = true; return; }
+    el.innerHTML = cards.join("");
     el.hidden = false;
 }
 
@@ -1130,7 +1151,7 @@ function renderResonance() {
 function renderPulse() {
     // 概览条搭脉搏的调用点一起刷新；try 包住，它出错不能连累脉搏与主渲染链。
     try { renderMarketOverview(); } catch (e) { console.warn("市场概览渲染失败", e); }
-    try { renderResonance(); } catch (e) { console.warn("日线共振卡渲染失败", e); }
+    try { renderResonance(); } catch (e) { console.warn("共振卡渲染失败", e); }
     const el = document.getElementById("pulse");
     if (!el || !data) return;
     const tiles = cryptoPulseTiles();

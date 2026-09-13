@@ -325,8 +325,9 @@ a:hover{color:var(--gold-hi)}
 .pulse__suffix.is-down{color:var(--price-down)}
 .pulse__suffix.is-muted{color:var(--muted-2)}
 .pulse__sub{font-size:11.5px;color:var(--muted-2);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* 日线共振卡：只在解锁态显示，夹在脉搏条与榜单之间；名次 1–3 的 chip 复用 medal 配色（medal 规则在后面，覆盖 chip 的底色与描边） */
-.reso{background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);margin-bottom:16px;padding:14px 18px 6px}
+/* 共振卡（日线通栏 + 周线 / 月线两张）：只在解锁态显示，夹在脉搏条与榜单之间；名次 1–3 的 chip 复用 medal 配色（medal 规则在后面，覆盖 chip 的底色与描边） */
+.resos{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;margin-bottom:16px}
+.reso{background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);padding:14px 18px 6px;min-width:0}
 .reso__head{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px;padding-bottom:10px}
 .reso__title{font-size:18px;font-weight:650;color:var(--text);letter-spacing:-.01em}
 .reso__meta{font-size:11.5px;color:var(--muted-2)}
@@ -348,6 +349,17 @@ a:hover{color:var(--gold-hi)}
     .reso{padding:12px 14px 4px}
     .reso__row{grid-template-columns:20px minmax(0,1fr) auto}
     .reso__chips{grid-column:2 / -1}
+}
+/* ≥1081px 周线 / 月线两张并排：半宽卡只剩约 400px，chip 挪到名字下面一行（同 ≤860px 档的行布局），
+   涨跌幅与名次挪到币名右边、分数字号降一档，把每行压回两行高。
+   半宽行布局只能写在这个 min-width 档里：写到外面会以更高优先级压过 ≤1080px 叠放时的通栏行布局 */
+@media (min-width:1081px){
+    .resos{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .reso--wide{grid-column:1 / -1}
+    .reso--half .reso__row{grid-template-columns:20px minmax(0,1fr) auto}
+    .reso--half .reso__chips{grid-column:2 / -1}
+    .reso--half .reso__id{flex-direction:row;flex-wrap:wrap;align-items:baseline;column-gap:10px}
+    .reso--half .reso__score b{font-size:20px}
 }
 
 /* ---------------- 市场概览全局条(免费,加密专属)---------------- */

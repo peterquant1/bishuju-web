@@ -5,6 +5,14 @@
 // CVD强弱 ＝ 归一化买卖失衡比 ∈ [−1,+1]（后端 calc_cvd_strength）。不排原始 CVD：它随成交量缩放，跨标的排序≈排成交量。
 // 带符号两位小数、不带 %（与涨跌幅共用值列，免得 +0.58 与 +5% 混淆）；中性不上色。
 function fmtCvdVal(x) { return x == null ? "—" : (x >= 0 ? "+" : "") + x.toFixed(2); }
+// 订单流三轴（同一个失衡比，量的是真实主动成交）刻意例外：值天然挤在 0 附近、绝大多数是个位数百分比的负值，
+//   toFixed(2) 会把几百个币压成十几档、还冒出「+0.00 / −0.00」⇒ ×100 按百分比两位小数显示（% 在这里有实义：净主动买占成交量）。
+// ⚠️ 别复用 fmtCvdVal，也别反过来把 CVD强弱 改成百分比（它分布宽、两位小数够用）。舍入后为 0 一律显示「0.00%」，不带正负号。
+function fmtTakerVal(x) {
+    if (x == null) return "—";
+    const s = (x * 100).toFixed(2);
+    return (s === "0.00" || s === "-0.00" ? "0.00" : (x > 0 ? "+" : "") + s) + "%";
+}
 function fmtRsiVal(x) { return x == null ? "N/A" : x.toFixed(2); }
 function fmtVolVal(v) { return v.volumeFormatted != null ? v.volumeFormatted : "N/A"; }
 // 周 / 月成交额读各自的显示串。⚠️ 别复用 fmtVolVal（写死读日成交额的 volumeFormatted）：
@@ -60,7 +68,7 @@ function axesSub(item, sf, volLabel, extra) {
     if (sf !== "cvdStrength") seg.push(`${axisLabelFor("cvdStrength", "CVD强弱")} ${fmtCvdVal(item.cvdStrength)}`);
     if ("weeklyRsi" in item && sf !== "weeklyRsi") seg.push(`${axisLabelFor("weeklyRsi", "周线RSI")} ${fmtRsiVal(item.weeklyRsi)}`);
     if ("monthlyRsi" in item && sf !== "monthlyRsi") seg.push(`${axisLabelFor("monthlyRsi", "月线RSI")} ${fmtRsiVal(item.monthlyRsi)}`);
-    if ("takerStrength" in item && sf !== "takerStrength") seg.push(`${axisLabelFor("takerStrength", "订单流")} ${fmtCvdVal(item.takerStrength)}`);
+    if ("takerStrength" in item && sf !== "takerStrength") seg.push(`${axisLabelFor("takerStrength", "订单流")} ${fmtTakerVal(item.takerStrength)}`);
     // 距前高：现役行都不带这个 key（休眠段）。
     if ("highDist" in item && sf !== "highDist") seg.push(`${axisLabelFor("highDist", "距前高")} ${fmtGapVal(item.highDist)}`);
     if ("adx" in item && sf !== "adx") seg.push(`${axisLabelFor("adx", "ADX")} ${fmtDmiVal(item.adx)}`);
@@ -75,9 +83,9 @@ function axesSub(item, sf, volLabel, extra) {
     if ("monthlyVolume" in item && sf !== "monthlyVolume") seg.push(`${axisLabelFor("monthlyVolume", "月成交额")} ${fmtMonthlyVolVal(item)}`);
     if ("weeklyCvdStrength" in item && sf !== "weeklyCvdStrength") seg.push(`${axisLabelFor("weeklyCvdStrength", "周CVD强弱")} ${fmtCvdVal(item.weeklyCvdStrength)}`);
     // 只在对应周期涨跌幅榜的行上有（策略榜行不带）。
-    if ("weeklyTakerStrength" in item && sf !== "weeklyTakerStrength") seg.push(`${axisLabelFor("weeklyTakerStrength", "周订单流")} ${fmtCvdVal(item.weeklyTakerStrength)}`);
+    if ("weeklyTakerStrength" in item && sf !== "weeklyTakerStrength") seg.push(`${axisLabelFor("weeklyTakerStrength", "周订单流")} ${fmtTakerVal(item.weeklyTakerStrength)}`);
     if ("monthlyCvdStrength" in item && sf !== "monthlyCvdStrength") seg.push(`${axisLabelFor("monthlyCvdStrength", "月CVD强弱")} ${fmtCvdVal(item.monthlyCvdStrength)}`);
-    if ("monthlyTakerStrength" in item && sf !== "monthlyTakerStrength") seg.push(`${axisLabelFor("monthlyTakerStrength", "月订单流")} ${fmtCvdVal(item.monthlyTakerStrength)}`);
+    if ("monthlyTakerStrength" in item && sf !== "monthlyTakerStrength") seg.push(`${axisLabelFor("monthlyTakerStrength", "月订单流")} ${fmtTakerVal(item.monthlyTakerStrength)}`);
     // 振幅：现役行都不带这个 key（休眠段）。
     if ("amplitude" in item && sf !== "amplitude") seg.push(`振幅 ${fmtAmpVal(item.amplitude)}`);
     const shown = seg.slice(0, SUB_AXES_MAX);
@@ -125,8 +133,9 @@ const AXIS_D_VOLRATIO = { key: "volRatio", label: "日量比", format: v => fmtR
 const AXIS_D_EMAGAP = { key: "emaGap", label: "日EMA间距", format: v => fmtGapVal(v.emaGap) };
 // 日订单流：币安 K 线自带的真实 taker 归边（k[9]），加密独有（股票系日线没有归边字段）。与 CVD强弱 互为对照，
 // 但别在文案里说"两者背离是信号"（审计不支持）。绝对值常态偏负（hint 已说明）；排序只看相对位置，别动公式。
-const AXIS_D_TAKER = { key: "takerStrength", label: "日订单流", format: v => fmtCvdVal(v.takerStrength),
-                       hint: "真实成交归边（币安taker数据）。全市场只有约7%为正、常态在−0.02附近，负值是常态不是异常" };
+// 显示走 fmtTakerVal（百分比）；hint 别写具体占比 / 中位数（会发霉），「与之后涨跌几乎无关」是 360 天回放的结论。
+const AXIS_D_TAKER = { key: "takerStrength", label: "日订单流", format: v => fmtTakerVal(v.takerStrength),
+                       hint: "真实主动成交（币安taker数据）：日线EMA14平滑后的（主动买−主动卖）÷成交量。全市场绝大多数为负，负值是常态；只看相对排名，回放里与之后涨跌几乎无关，不是买卖信号" };
 
 // === ADX / DMI（后端 calc_adx_dmi，对齐 TV `ta.dmi(14, 14)`）：纯排序轴，不参与任何筛选 ===
 // 只留 日ADX + 日+DI（−DI / DI差 已砍，别自行加回；后端仍在算 diMinus / diSpread，复活只需加行字段与轴）。
@@ -212,12 +221,12 @@ const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD, 
 const AXIS_D_CHG = { key: "value", label: "日涨跌幅", format: v => fmtGapVal(v.value) };
 const AXIS_W_CHG = { key: "value", label: "周涨跌幅", format: v => fmtGapVal(v.value) };
 const AXIS_M_CHG = { key: "value", label: "月涨跌幅", format: v => fmtGapVal(v.value) };
-const AXIS_W_TAKER = { key: "weeklyTakerStrength", label: "周订单流", format: v => fmtCvdVal(v.weeklyTakerStrength),
-                       hint: "真实成交归边（币安taker数据），喂最新已收盘周K。全市场绝大多数为负，负值是常态不是异常" };
+const AXIS_W_TAKER = { key: "weeklyTakerStrength", label: "周订单流", format: v => fmtTakerVal(v.weeklyTakerStrength),
+                       hint: "真实主动成交（币安taker数据）：周线EMA14平滑后的（主动买−主动卖）÷成交量。全市场绝大多数为负，负值是常态；只看相对排名，不是买卖信号" };
 const AXIS_M_CVD = { key: "monthlyCvdStrength", label: "月CVD强弱", format: v => fmtCvdVal(v.monthlyCvdStrength),
                      hint: "按月K线形态推断的买卖失衡，不是真实成交归边；想看真钱流向用「月订单流」" };
-const AXIS_M_TAKER = { key: "monthlyTakerStrength", label: "月订单流", format: v => fmtCvdVal(v.monthlyTakerStrength),
-                       hint: "真实成交归边（币安taker数据），喂最新已收盘月K。负值是常态不是异常" };
+const AXIS_M_TAKER = { key: "monthlyTakerStrength", label: "月订单流", format: v => fmtTakerVal(v.monthlyTakerStrength),
+                       hint: "真实主动成交（币安taker数据）：月线EMA14平滑后的（主动买−主动卖）÷成交量。全市场绝大多数为负，负值是常态；只看相对排名，不是买卖信号" };
 const dailyChangeSorts = [AXIS_D_CHG, AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
                           ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
                           AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_CVD,
@@ -296,7 +305,7 @@ const TAB_GROUPS = [
         label: "加密行情", asset: "加密",
         tabs: [
             { key: "dailyChange", name: "日线", full: "涨跌幅", tf: "日线",
-              desc: "最新已收盘日 K 的涨跌幅（当根收盘 ÷ 当根开盘，币安日 K 每天 00:00 UTC 收盘，所以看的是昨天那一整根）。没有任何筛选条件——全部加密 USDT 永续合约都在里面，谁涨谁跌一眼看全，是先看清全市场在发生什么、再去策略榜里筛的入口。默认按涨幅从高到低；排序条和策略榜是同一套（日线、周线、月线各轴，按钮上都写明了周期），比如切成日成交额看涨得多是不是也有人接、日线RSI 看是不是已经超买、日CVD强弱与日订单流看这波是买盘推的还是卖盘砸的。上市当天、还没有一根已收盘日 K 的新合约不入榜；上市不足约 23 天的合约涨跌幅和日成交额照常显示，但 RSI、CVD强弱、订单流、ADX、MACD 这类要暖机的轴会显示「—」，排序时自动沉底。" },
+              desc: "最新已收盘日 K 的涨跌幅（当根收盘 ÷ 当根开盘，币安日 K 每天 00:00 UTC 收盘，所以看的是昨天那一整根）。没有任何筛选条件——全部加密 USDT 永续合约都在里面，谁涨谁跌一眼看全，是先看清全市场在发生什么、再去策略榜里筛的入口。默认按涨幅从高到低；排序条和策略榜是同一套（日线、周线、月线各轴，按钮上都写明了周期），比如切成日成交额看涨得多是不是也有人接、日线RSI 看是不是已经超买、日CVD强弱与日订单流看近期买卖力量在全市场里谁相对更强。上市当天、还没有一根已收盘日 K 的新合约不入榜；上市不足约 23 天的合约涨跌幅和日成交额照常显示，但 RSI、CVD强弱、订单流、ADX、MACD 这类要暖机的轴会显示「—」，排序时自动沉底。" },
             { key: "weeklyChange", name: "周线", full: "涨跌幅", tf: "周线",
               desc: "最新已收盘周 K 的涨跌幅（周 K 每周一 00:00 UTC 收盘，所以整周之内这张榜的数值是不变的，下周一才换一批）。没有任何筛选条件，全部加密 USDT 永续合约。它比日线那张钝得多，正好用来分辨「这几天的涨只是反弹」还是「整周都在往上走」。排序条和策略榜是同一套，日线、周线、月线各轴都在、按钮上写明了周期：「周线RSI」「周CVD强弱」「周订单流」看的是那一根周 K，「日线RSI」「日成交额」这些是最新那根日 K 的值；「周成交额」是那一根周 K 的成交额，不是 7 天滚动也不是日均。只要有 1 根已收盘周 K 就入榜，所以刚上市一两周的新合约也在；但它们的周线 RSI 要 16 根周 K 才算得出来，不够的显示「—」并在排序时沉底。" },
             { key: "monthlyChange", name: "月线", full: "涨跌幅", tf: "月线",

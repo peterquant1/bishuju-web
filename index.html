@@ -408,7 +408,7 @@
     <!-- 自托管 Geist 变量字体(Latin);预加载避免首屏 FOUT。CJK 走系统栈不预载 -->
     <link rel="preload" as="font" type="font/woff2" href="fonts/geist-latin.woff2" crossorigin>
     <link rel="preload" as="font" type="font/woff2" href="fonts/geist-mono-latin.woff2" crossorigin>
-    <link rel="stylesheet" href="style.css?v=53">
+    <link rel="stylesheet" href="style.css?v=54">
 </head>
 <body>
 <div class="app" id="app" data-asset="crypto">
@@ -486,8 +486,8 @@
                      已整体退役、不再有"加密视图"可以 gate），条内第一块自报是加密市场的数。 -->
                 <section class="mkt" id="marketOverview" hidden></section>
                 <section class="pulse" id="pulse" hidden></section>
-                <!-- 日线共振卡：只在付费数据到位时由 renderResonance 现算显示，锁定态保持 hidden -->
-                <section class="reso" id="resonance" aria-label="日线共振" hidden></section>
+                <!-- 共振卡（日 / 周 / 月）：只在付费数据到位时由 renderResonance 现算显示，锁定态保持 hidden -->
+                <section class="resos" id="resonance" aria-label="日线、周线、月线共振" hidden></section>
 
                 <section class="board">
                     <div class="board-head" id="boardHead" hidden>
@@ -636,6 +636,6 @@
     </ol>
 </dialog>
 
-<script src="script.js?v=291"></script>
+<script src="script.js?v=292"></script>
 </body>
 </html>

@@ -408,7 +408,7 @@
     <!-- 自托管 Geist 变量字体(Latin);预加载避免首屏 FOUT。CJK 走系统栈不预载 -->
     <link rel="preload" as="font" type="font/woff2" href="fonts/geist-latin.woff2" crossorigin>
     <link rel="preload" as="font" type="font/woff2" href="fonts/geist-mono-latin.woff2" crossorigin>
-    <link rel="stylesheet" href="style.css?v=54">
+    <link rel="stylesheet" href="style.css?v=55">
 </head>
 <body>
 <div class="app" id="app" data-asset="crypto">
@@ -487,7 +487,7 @@
                 <section class="mkt" id="marketOverview" hidden></section>
                 <section class="pulse" id="pulse" hidden></section>
                 <!-- 共振卡（日 / 周 / 月）：只在付费数据到位时由 renderResonance 现算显示，锁定态保持 hidden -->
-                <section class="resos" id="resonance" aria-label="日线、周线、月线共振" hidden></section>
+                <section class="reso-wrap" id="resonance" aria-label="日线、周线、月线共振" hidden></section>
 
                 <section class="board">
                     <div class="board-head" id="boardHead" hidden>
@@ -496,8 +496,10 @@
                                 <span class="asset-tag" id="bhAsset">加密</span>
                                 <span class="tf-badge" id="bhTf">日线</span>
                                 <h1 class="board-head__name" id="bhName">涨跌幅</h1>
+                                <span class="board-head__hit" id="bhHit" hidden></span>
                             </div>
                             <div class="board-head__note" id="bhNote"></div>
+                            <button type="button" class="note-toggle" id="bhNoteToggle" aria-controls="bhNote" aria-expanded="false" hidden>展开说明</button>
                         </div>
                         <div class="search">
                             <svg class="search__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m13.5 13.5-3.2-3.2"/></svg>
@@ -636,6 +638,6 @@
     </ol>
 </dialog>
 
-<script src="script.js?v=297"></script>
+<script src="script.js?v=298"></script>
 </body>
 </html>

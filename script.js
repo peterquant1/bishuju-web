@@ -88,9 +88,11 @@ function axesSub(item, sf, volLabel, extra) {
     if ("monthlyTakerStrength" in item && sf !== "monthlyTakerStrength") seg.push(`${axisLabelFor("monthlyTakerStrength", "月订单流")} ${fmtTakerVal(item.monthlyTakerStrength)}`);
     // 振幅：现役行都不带这个 key（休眠段）。
     if ("amplitude" in item && sf !== "amplitude") seg.push(`振幅 ${fmtAmpVal(item.amplitude)}`);
-    const shown = seg.slice(0, SUB_AXES_MAX);
-    if (extra) shown.push(extra);
-    return shown.join(" | ");
+    const shown = seg.slice(0, SUB_AXES_MAX).map(s => `<span class="sub__seg">${s}</span>`);
+    // extra（涨跌幅榜的价格上下文 / 当前轴不是涨跌幅时的涨跌幅）带 --ctx：≤860px 排到最前，两行放不下时先让掉的是末尾的轴。
+    if (extra) shown.push(`<span class="sub__seg sub__seg--ctx">${extra}</span>`);
+    // 每段包一层 span：桌面照旧用「 | 」连成一行；≤860px 的 CSS 隐藏分隔符、按整段折成最多两行（不再截在数字中间）。
+    return shown.join('<span class="sub__sep"> | </span>');
 }
 // 零消费者保留：周线 RSI 动能上下文（rsiPrev → rsiCurr 箭头），供复活 weeklyRsi 榜时作 axesSub 的 extra。
 function momentumStr(v) {
@@ -398,6 +400,12 @@ let bustStreak = 0; // 连续强穿仍拿到同一 updateTime 的次数，驱动
 let license = { key: safeStore.get("localStorage", LS_LICENSE) || "", valid: false, expiresAt: null, plan: null, reason: null };
 let paidData = null; // Worker 返回的全量付费数据（未解锁或未拉到时为 null）
 let lastPaidUpdateTime = null; // 上次拉付费数据时的 paidFetchKey（与 loadData 同构），避免每 30s 轮询都打 Worker
+// 页面折叠状态（本机记忆、全站共用、不分榜）：榜单说明默认收起、共振卡默认收成速览条 ——
+// 两块全展开时手机上表格在四屏以下、桌面近三屏以下。按钮见 #bhNoteToggle / #resoToggle。
+const LS_NOTE_OPEN = "bishuju_note_open";
+const LS_RESO_OPEN = "bishuju_reso_open";
+let noteOpen = safeStore.get("localStorage", LS_NOTE_OPEN) === "1";
+let resoOpen = safeStore.get("localStorage", LS_RESO_OPEN) === "1";
 
 function formatPercent(val) {
     const sign = val >= 0 ? "+" : "";
@@ -595,13 +603,31 @@ function renderBoardHead() {
     tfEl.textContent = m.tf || "";
     tfEl.style.display = m.tf ? "" : "none";
     document.getElementById("bhName").textContent = m.full;
-    // 说明行 ＝ desc（完整规则，导航名可以短）+ 命中数。
+    // 命中数挂在标题旁（说明收起时也看得到）；说明行只放 desc（完整规则，导航名可以短）。
     const note = document.getElementById("bhNote");
+    const hitEl = document.getElementById("bhHit");
     const n = tabCount(currentTab);
     // 量词随榜的语义：策略榜说「命中」；行情榜无筛选，说「共」（与表尾同一判据）。
     const hit = n != null ? `${isStrategyTab(currentTab) ? "命中" : "共"} ${n} 个标的` : "";
-    note.textContent = m.desc ? (hit ? `${m.desc} · ${hit}` : m.desc) : hit;
+    hitEl.textContent = hit;
+    hitEl.hidden = !hit;
+    note.textContent = m.desc || "";
+    note.hidden = !m.desc;
     head.hidden = false;
+    syncNoteClamp();
+}
+
+// 说明收起 ＝ 桌面两行、手机三行（CSS line-clamp）。收起时没溢出（说明本来就短）不出按钮；展开时一律给「收起说明」。
+// 要在 head 可见之后量高度；换宽度（转屏、拖窗口）会改变是否溢出 ⇒ resize 时重算。
+function syncNoteClamp() {
+    const note = document.getElementById("bhNote");
+    const btn = document.getElementById("bhNoteToggle");
+    if (!note || !btn) return;
+    note.classList.toggle("is-clamped", !noteOpen);
+    const overflow = note.scrollHeight > note.clientHeight + 1;
+    btn.hidden = note.hidden || (!noteOpen && !overflow);
+    btn.textContent = noteOpen ? "收起说明" : "展开说明";
+    btn.setAttribute("aria-expanded", String(noteOpen));
 }
 
 // 排序条：选轴在表格上方的 chip 条（真按钮、键盘可达、移动端横向滑动）；表头只标当前轴 + 方向，点击切升 / 降序。
@@ -1002,7 +1028,7 @@ function fmtMktPct(x, dp) {
 function mktAnchor(name, a) {
     if (!a) return "";
     const cls = a.change >= 0 ? "is-up" : "is-down";
-    return `<div class="mkt__item" title="${name} 最新价与 24h 涨跌幅">
+    return `<div class="mkt__item mkt__item--anchor" title="${name} 最新价与 24h 涨跌幅">
         <span class="mkt__k">${name}</span>
         <span class="mkt__v">${fmtMktPrice(a.price)} <span class="${cls}">${fmtMktPct(a.change)}</span></span>
     </div>`;
@@ -1021,7 +1047,7 @@ function renderMarketOverview() {
     const items = [];
 
     // 第一块自报「加密市场」+ 刷新时刻：概览条对所有资产可见，不写明会被当成当前资产的指标。
-    if (data.updateTime) items.push(`<div class="mkt__item" title="加密 USDT 永续合约全市场，每小时更新">
+    if (data.updateTime) items.push(`<div class="mkt__item mkt__item--time" title="加密 USDT 永续合约全市场，每小时更新">
         <span class="mkt__k">加密市场</span>
         <span class="mkt__v"><b>${data.updateTime.slice(11, 16)}</b> UTC<span class="mkt__sub">每小时</span></span>
     </div>`);
@@ -1101,9 +1127,7 @@ function resonanceBoard(card) {
     return { axes, rows };
 }
 
-function resonanceCardHtml(card) {
-    const board = resonanceBoard(card);
-    if (!board) return "";
+function resonanceCardHtml(card, board) {
     const { axes, rows } = board;
     const tfName = `${card.tf}线`;
     const shown = rows.slice(0, RESO_ROWS);
@@ -1138,15 +1162,33 @@ function resonanceCardHtml(card) {
     </div>`;
 }
 
+// 速览条每个周期列出的币名个数（多了在手机上一行放不下，后面的看展开的卡片）
+const RESO_BAR_NAMES = 6;
+
+// 默认只显示速览条：每个周期一行「N 个 + 前几个币名」；点「展开共振卡」才显示三张完整卡片（resoOpen，本机记忆）。
+// 卡片 DOM 照常渲染、只切 hidden ⇒ 展开 / 收起不重算，也不影响排名口径。
 function renderResonance() {
     const el = document.getElementById("resonance");
     if (!el) return;
     // 逐张 try：一张出错不连累另外两张
-    const cards = RESO_CARDS.map(card => {
-        try { return resonanceCardHtml(card); } catch (e) { console.warn(`${card.tf}线共振卡渲染失败`, e); return ""; }
+    const parts = RESO_CARDS.map(card => {
+        try {
+            const board = resonanceBoard(card);
+            return board ? { card, board, html: resonanceCardHtml(card, board) } : null;
+        } catch (e) { console.warn(`${card.tf}线共振卡渲染失败`, e); return null; }
     }).filter(Boolean);
-    if (!cards.length) { el.hidden = true; return; }
-    el.innerHTML = cards.join("");
+    if (!parts.length) { el.hidden = true; return; }
+    const lines = parts.map(({ card, board }) => {
+        const names = board.rows.slice(0, RESO_BAR_NAMES).map(x => escapeHtml(symbolDisplayParts(x.item.symbol).base));
+        const more = board.rows.length > names.length ? "、…" : "";
+        const txt = names.length ? names.join("、") + more : `${card.period}没有`;
+        return `<div class="reso-bar__line"><span class="reso-bar__tf">${card.tf}线共振</span><b class="reso-bar__n">${board.rows.length}</b><span class="reso-bar__names">${txt}</span></div>`;
+    }).join("");
+    el.innerHTML = `<div class="reso-bar">
+        <div class="reso-bar__lines">${lines}</div>
+        <button type="button" class="btn btn--ghost btn--sm reso-bar__toggle" id="resoToggle" aria-controls="resoCards" aria-expanded="${resoOpen}">${resoOpen ? "收起共振卡" : "展开共振卡"}</button>
+    </div>
+    <div class="resos" id="resoCards"${resoOpen ? "" : " hidden"}>${parts.map(p => p.html).join("")}</div>`;
     el.hidden = false;
 }
 
@@ -1659,6 +1701,30 @@ document.getElementById("themeBtn").addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
     safeStore.set("localStorage", LS_THEME, next);
     applyTheme(next);
+});
+
+// 榜单说明展开 / 收起（全站共用、本机记忆，见 syncNoteClamp）
+document.getElementById("bhNoteToggle").addEventListener("click", () => {
+    noteOpen = !noteOpen;
+    safeStore.set("localStorage", LS_NOTE_OPEN, noteOpen ? "1" : "0");
+    syncNoteClamp();
+});
+// 共振卡展开 / 收起：#resonance 每轮重渲染 innerHTML ⇒ 委托在外层；只切 hidden 与按钮文字，不重算。
+document.getElementById("resonance").addEventListener("click", e => {
+    const btn = e.target.closest("#resoToggle");
+    if (!btn) return;
+    resoOpen = !resoOpen;
+    safeStore.set("localStorage", LS_RESO_OPEN, resoOpen ? "1" : "0");
+    const cards = document.getElementById("resoCards");
+    if (cards) cards.hidden = !resoOpen;
+    btn.textContent = resoOpen ? "收起共振卡" : "展开共振卡";
+    btn.setAttribute("aria-expanded", String(resoOpen));
+});
+// 宽度变了（转屏 / 拖窗口）说明是否溢出会变 ⇒ 重算「展开说明」按钮要不要出
+let noteResizeTimer = 0;
+window.addEventListener("resize", () => {
+    clearTimeout(noteResizeTimer);
+    noteResizeTimer = setTimeout(syncNoteClamp, 150);
 });
 
 // 收盘快照横幅关闭（永久记忆，见 renderSnapshotBanner；现只有休眠的 A股 用）

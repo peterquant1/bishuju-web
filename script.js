@@ -73,6 +73,7 @@ function axesSub(item, sf, volLabel, extra) {
     // 周 / 月成交额用各自的 fmt*VolVal；涨跌幅榜的行没有这两个 key（那边成交额就是 `volume`）。
     if ("weeklyVolume" in item && sf !== "weeklyVolume") seg.push(`${axisLabelFor("weeklyVolume", "周成交额")} ${fmtWeeklyVolVal(item)}`);
     if ("monthlyVolume" in item && sf !== "monthlyVolume") seg.push(`${axisLabelFor("monthlyVolume", "月成交额")} ${fmtMonthlyVolVal(item)}`);
+    if ("weeklyCvdStrength" in item && sf !== "weeklyCvdStrength") seg.push(`${axisLabelFor("weeklyCvdStrength", "周CVD强弱")} ${fmtCvdVal(item.weeklyCvdStrength)}`);
     // 振幅：现役行都不带这个 key（休眠段）。
     if ("amplitude" in item && sf !== "amplitude") seg.push(`振幅 ${fmtAmpVal(item.amplitude)}`);
     const shown = seg.slice(0, SUB_AXES_MAX);
@@ -171,6 +172,11 @@ const AXIS_M_VOL = { key: "monthlyVolume", label: "月成交额", format: v => f
 // 其余同 AXIS_D_CHGPCT：只挂策略榜、两资产口径不同别统一、hint 只写口径。
 const AXIS_W_CHGPCT = { key: "weeklyChangePercent", label: "周涨跌幅", format: v => fmtGapVal(v.weeklyChangePercent),
                         hint: "最新已收盘那一根周K的涨跌幅，一周只更新一次。加密＝K线实体(收−开)/开；A股＝相对上周收盘" };
+// 周CVD强弱：同「日CVD强弱」的算法（K 线形态拆买卖量 → EMA14 → 归一化失衡比 ∈ [−1,+1]），喂已收盘周 K；≥15 根周 K 才有值、
+// 不够显示「—」并在两个方向都沉底。与周涨跌幅榜排序条上的「周CVD强弱」是同一个数（后端取同一份周线缓存字段）。
+// 形态推断、不是真实归边 ⇒ 横截面上主要在读周线级「最近在涨」；hint 只写口径，别写成资金流信号。
+const AXIS_W_CVD = { key: "weeklyCvdStrength", label: "周CVD强弱", format: v => fmtCvdVal(v.weeklyCvdStrength),
+                     hint: "按周K线形态推断的买卖失衡（约14周平滑），不是真实成交归边；上市不足15周显示「—」" };
 // 周线EMA间距 ＝ (周EMA9 − 周EMA21)/周EMA21 × 100，可正可负；零消费者保留，复活方式同上。
 // 文案里别断言哪一端更强（审计显示方向性只是跌市 beta）。
 const AXIS_W_EMAGAP = { key: "weeklyEmaGap", label: "周线EMA间距", format: v => fmtGapVal(v.weeklyEmaGap) };
@@ -179,7 +185,7 @@ const AXIS_W_EMAGAP = { key: "weeklyEmaGap", label: "周线EMA间距", format: v
 // 别并进加密那套、也别硬凑（会成永远全 null 的幽灵轴）；首轴日成交额须与 fetch_ashare.py 行构造的 `value` 一致。
 const singleStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD,
                              ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
-                             AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI,
+                             AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_CVD,
                              AXIS_M_VOL, AXIS_MRSI];
 // 加密全部策略榜共用的轴集（行统一由后端 `_strategy_row` 产出）。别拆成几份近亲常量：选错一个不报错、只能肉眼发现。
 // ⚠️ 首轴即默认排序，必须与后端 `value`（日成交额）一致 ⇒ 别把新轴插到最前。按「日 → 周 → 月」分块，新轴加在所属周期块内、
@@ -188,7 +194,7 @@ const singleStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD,
 // 已移除的轴后端行字段照发 ⇒ audit A 项把它们列成「行上未挂轴的字段」是预期提示，不是失败。
 const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
                              ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
-                             AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI,
+                             AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_CVD,
                              AXIS_M_VOL, AXIS_MRSI];
 
 /** 涨跌幅榜的轴集工厂：tf ＝ 周期前缀（"日" / "周" / "月"），rsiLabel 单列（站内写「日线RSI」不写「日RSI」）。

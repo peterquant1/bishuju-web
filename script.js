@@ -86,6 +86,7 @@ function axesSub(item, sf, volLabel, extra) {
     if ("weeklyTakerStrength" in item && sf !== "weeklyTakerStrength") seg.push(`${axisLabelFor("weeklyTakerStrength", "周订单流")} ${fmtTakerVal(item.weeklyTakerStrength)}`);
     if ("monthlyCvdStrength" in item && sf !== "monthlyCvdStrength") seg.push(`${axisLabelFor("monthlyCvdStrength", "月CVD强弱")} ${fmtCvdVal(item.monthlyCvdStrength)}`);
     if ("monthlyTakerStrength" in item && sf !== "monthlyTakerStrength") seg.push(`${axisLabelFor("monthlyTakerStrength", "月订单流")} ${fmtTakerVal(item.monthlyTakerStrength)}`);
+    if ("weeklyDiPlus" in item && sf !== "weeklyDiPlus") seg.push(`${axisLabelFor("weeklyDiPlus", "周+DI")} ${fmtDmiVal(item.weeklyDiPlus)}`);
     // 振幅：现役行都不带这个 key（休眠段）。
     if ("amplitude" in item && sf !== "amplitude") seg.push(`振幅 ${fmtAmpVal(item.amplitude)}`);
     const shown = seg.slice(0, SUB_AXES_MAX).map(s => `<span class="sub__seg">${s}</span>`);
@@ -167,10 +168,11 @@ const AXIS_D_SARBARS = { key: "sarBullBars", label: "日SAR多头根数",
                          format: v => fmtBarsVal(v.sarBullBars),
                          hint: "日线SAR翻多至今第几根K线（翻多那根算第1根）。升序＝刚翻多最新鲜，降序＝这轮多头跑最久；SAR 空头显示「—」" };
 
-// === 周ADX / 周+DI（同一个 calc_adx_dmi，喂最新已收盘周 K）：零消费者保留，复活时连同 weeklyDmiSorts 加回轴集 ===
+// === 周ADX / 周+DI（同一个 calc_adx_dmi，喂最新已收盘周 K，≥28 根）：周+DI 在役（各轴集周线块、周CVD强弱之后）；周ADX 零消费者保留 ===
+// 复活周ADX ＝ 各轴集在 AXIS_W_DIPLUS 前补 AXIS_W_ADX ＋ axesSub 段（别再建一个把两根一起展开的数组：周+DI 会出现两次）。
 const AXIS_W_ADX = { key: "weeklyAdx", label: "周ADX", format: v => fmtDmiVal(v.weeklyAdx) };
-const AXIS_W_DIPLUS = { key: "weeklyDiPlus", label: "周+DI", format: v => fmtDmiVal(v.weeklyDiPlus) };
-const weeklyDmiSorts = [AXIS_W_ADX, AXIS_W_DIPLUS];
+const AXIS_W_DIPLUS = { key: "weeklyDiPlus", label: "周+DI", format: v => fmtDmiVal(v.weeklyDiPlus),
+                        hint: "最新已收盘周K的+DI（DMI 14，对齐TV）：多方方向压力，0–100；上市不足28周显示「—」" };
 
 // === 周MACD强弱 ＝ (PPO线 + 5×PPO柱)/6（权重依据见后端 calc_macd_strength）：零消费者保留，复活方式同上 ===
 // 百分比量 ⇒ 用 fmtGapVal（别用不带 % 的 fmtDmiVal）。
@@ -200,7 +202,7 @@ const AXIS_W_EMAGAP = { key: "weeklyEmaGap", label: "周线EMA间距", format: v
 // 别并进加密那套、也别硬凑（会成永远全 null 的幽灵轴）；首轴日成交额须与 fetch_ashare.py 行构造的 `value` 一致。
 const singleStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD,
                              ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
-                             AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_CVD,
+                             AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_CVD, AXIS_W_DIPLUS,
                              AXIS_M_VOL, AXIS_MRSI];
 // 加密全部策略榜共用的轴集（行统一由后端 `_strategy_row` 产出）。别拆成几份近亲常量：选错一个不报错、只能肉眼发现。
 // ⚠️ 首轴即默认排序，必须与后端 `value`（日成交额）一致 ⇒ 别把新轴插到最前。按「日 → 周 → 月」分块，新轴加在所属周期块内、
@@ -210,7 +212,7 @@ const singleStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD,
 // 已移除的轴后端行字段照发 ⇒ audit A 项把它们列成「行上未挂轴的字段」是预期提示，不是失败。
 const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
                              ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
-                             AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_CVD,
+                             AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_CVD, AXIS_W_DIPLUS,
                              AXIS_M_VOL, AXIS_MRSI];
 
 // === 三张涨跌幅榜的轴集：与策略榜对齐 ===
@@ -231,15 +233,15 @@ const AXIS_M_TAKER = { key: "monthlyTakerStrength", label: "月订单流", forma
                        hint: "真实主动成交（币安taker数据）：月线EMA14平滑后的（主动买−主动卖）÷成交量。全市场绝大多数为负，负值是常态；只看相对排名，不是买卖信号" };
 const dailyChangeSorts = [AXIS_D_CHG, AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
                           ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
-                          AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_CVD,
+                          AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_CVD, AXIS_W_DIPLUS,
                           AXIS_M_VOL, AXIS_MRSI];
 const weeklyChangeSorts = [AXIS_W_CHG, AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
                            ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
-                           AXIS_W_VOL, AXIS_WRSI, AXIS_W_CVD, AXIS_W_TAKER,
+                           AXIS_W_VOL, AXIS_WRSI, AXIS_W_CVD, AXIS_W_DIPLUS, AXIS_W_TAKER,
                            AXIS_M_VOL, AXIS_MRSI];
 const monthlyChangeSorts = [AXIS_M_CHG, AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
                             ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
-                            AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_CVD,
+                            AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_CVD, AXIS_W_DIPLUS,
                             AXIS_M_VOL, AXIS_MRSI, AXIS_M_CVD, AXIS_M_TAKER];
 // A股 涨跌幅榜轴集工厂（休眠件）：仍是旧形 —— 通用 key 装本周期的值、比加密少「订单流」（tushare 日线无归边字段）。
 // 复活 A股 时要么照加密这样对齐（后端 fetch_ashare.py 行构造一起改），要么保持旧形，别混用。
@@ -309,7 +311,7 @@ const TAB_GROUPS = [
             { key: "dailyChange", name: "日线", full: "涨跌幅", tf: "日线",
               desc: "最新已收盘日 K 的涨跌幅（当根收盘 ÷ 当根开盘，币安日 K 每天 00:00 UTC 收盘，所以看的是昨天那一整根）。没有任何筛选条件——全部加密 USDT 永续合约都在里面，谁涨谁跌一眼看全，是先看清全市场在发生什么、再去策略榜里筛的入口。默认按涨幅从高到低；排序条和策略榜是同一套（日线、周线、月线各轴，按钮上都写明了周期），比如切成日成交额看涨得多是不是也有人接、日线RSI 看是不是已经超买、日CVD强弱与日订单流看近期买卖力量在全市场里谁相对更强。上市当天、还没有一根已收盘日 K 的新合约不入榜；上市不足约 23 天的合约涨跌幅和日成交额照常显示，但 RSI、CVD强弱、订单流、ADX、MACD 这类要暖机的轴会显示「—」，排序时自动沉底。" },
             { key: "weeklyChange", name: "周线", full: "涨跌幅", tf: "周线",
-              desc: "最新已收盘周 K 的涨跌幅（周 K 每周一 00:00 UTC 收盘，所以整周之内这张榜的数值是不变的，下周一才换一批）。没有任何筛选条件，全部加密 USDT 永续合约。它比日线那张钝得多，正好用来分辨「这几天的涨只是反弹」还是「整周都在往上走」。排序条和策略榜是同一套，日线、周线、月线各轴都在、按钮上写明了周期：「周线RSI」「周CVD强弱」「周订单流」看的是那一根周 K，「日线RSI」「日成交额」这些是最新那根日 K 的值；「周成交额」是那一根周 K 的成交额，不是 7 天滚动也不是日均。只要有 1 根已收盘周 K 就入榜，所以刚上市一两周的新合约也在；但它们的周线 RSI 要 16 根周 K 才算得出来，不够的显示「—」并在排序时沉底。" },
+              desc: "最新已收盘周 K 的涨跌幅（周 K 每周一 00:00 UTC 收盘，所以整周之内这张榜的数值是不变的，下周一才换一批）。没有任何筛选条件，全部加密 USDT 永续合约。它比日线那张钝得多，正好用来分辨「这几天的涨只是反弹」还是「整周都在往上走」。排序条和策略榜是同一套，日线、周线、月线各轴都在、按钮上写明了周期：「周线RSI」「周CVD强弱」「周+DI」「周订单流」看的是那一根周 K，「日线RSI」「日成交额」这些是最新那根日 K 的值；「周成交额」是那一根周 K 的成交额，不是 7 天滚动也不是日均。只要有 1 根已收盘周 K 就入榜，所以刚上市一两周的新合约也在；但它们的周线 RSI 要 16 根周 K、周+DI 要 28 根才算得出来，不够的显示「—」并在排序时沉底。" },
             { key: "monthlyChange", name: "月线", full: "涨跌幅", tf: "月线",
               desc: "最新已收盘月 K 的涨跌幅（月 K 每月 1 号 00:00 UTC 收盘，所以整个月之内这张榜是不动的——那是正确行为，不是数据卡住了）。没有任何筛选条件，全部加密 USDT 永续合约。这是站内周期最长的一张行情榜，看的是「这个月谁真的走出来了」，短线噪音基本被抹平。排序条和策略榜是同一套，日线、周线、月线各轴都在、按钮上写明了周期：「月线RSI」「月CVD强弱」「月订单流」「月成交额」看的是那一根月 K，其余是日线、周线的值。只要有 1 根已收盘月 K 就入榜（上市当月的新合约还没有，暂不入榜）；月线 RSI 需要 16 根月 K、约一年半才算得出来，所以有四成左右的合约月线RSI、月CVD强弱、月订单流这几根轴会显示「—」并在排序时沉底——这本身也是一种信息：显示「—」的就是还没走完一轮周期的品种。" },
         ],
@@ -1088,7 +1090,7 @@ function renderMarketOverview() {
 // 轴集从三张涨跌幅榜的排序条派生：加删轴卡片自动跟随，不用另改；⚠️ 轴标签别去掉周期前缀（会静默掉出卡片）。
 // 全市场 ＝ 对应涨跌幅榜的全部行（与策略榜同形，value 装的是本周期涨跌幅）。
 // 排名规则同策略榜上的 getSortedItems：null / NaN 不参评、平局按日成交额降序。
-// 周 / 月线各只有 4 根轴：月线取前 10 时回放里约两成月份一个都没有（一空就空一整个月）⇒ 月线放宽到前 20，「≥3 根」三张卡一致。
+// 周 / 月线的轴比日线少得多：月线取前 10 时回放里约两成月份一个都没有（一空就空一整个月）⇒ 月线放宽到前 20，「≥3 根」三张卡一致。
 // 纯前端现算、不进后端产出：用的全是付费榜的行，锁定态没有这三张榜 ⇒ 整块隐藏，别拿公开文件去凑。
 const RESO_ROWS = 10;
 const RESO_CARDS = [

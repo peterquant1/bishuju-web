@@ -44,6 +44,8 @@ function fmtGapVal(x) { return x == null ? "—" : (x >= 0 ? "+" : "") + x.toFix
 function fmtAmpVal(x) { return x == null ? "—" : x.toFixed(2) + "%"; }
 // ADX / +DI：0–100 的无量纲指数，不带 %（同 TV 显示口径）。
 function fmtDmiVal(x) { return x == null ? "—" : x.toFixed(2); }
+// 日RSI缺口：RSI 点数之差、有正有负 ⇒ 带符号两位小数、不带 %（与 fmtCvdVal 同格式，分开写免得两边口径一改互相牵连）。
+function fmtRsiGapVal(x) { return x == null ? "—" : (x >= 0 ? "+" : "") + x.toFixed(2); }
 // 整数根数（日SAR多头根数）：带「根」不写「天」（A股 一根是交易日）。别复用 toFixed(2) 的格式化，会显示成「3.00」。
 function fmtBarsVal(x) { return x == null ? "—" : x + " 根"; }
 
@@ -89,6 +91,8 @@ function axesSub(item, sf, volLabel, extra) {
     if ("weeklyDiPlus" in item && sf !== "weeklyDiPlus") seg.push(`${axisLabelFor("weeklyDiPlus", "周+DI")} ${fmtDmiVal(item.weeklyDiPlus)}`);
     // 振幅：现役行都不带这个 key（休眠段）。
     if ("amplitude" in item && sf !== "amplitude") seg.push(`振幅 ${fmtAmpVal(item.amplitude)}`);
+    // 日RSI缺口：排在末尾（超出 SUB_AXES_MAX，默认副行不变）。
+    if ("rsiSmaGap" in item && sf !== "rsiSmaGap") seg.push(`${axisLabelFor("rsiSmaGap", "RSI缺口")} ${fmtRsiGapVal(item.rsiSmaGap)}`);
     const shown = seg.slice(0, SUB_AXES_MAX).map(s => `<span class="sub__seg">${s}</span>`);
     // extra（涨跌幅榜的价格上下文 / 当前轴不是涨跌幅时的涨跌幅）带 --ctx：≤860px 排到最前，两行放不下时先让掉的是末尾的轴。
     if (extra) shown.push(`<span class="sub__seg sub__seg--ctx">${extra}</span>`);
@@ -118,6 +122,8 @@ const asharePriceCtx = (preLabel, curLabel) => v => `${preLabel} ${fmtCnyPrice(v
 const AXIS_WRSI = { key: "weeklyRsi", label: "周线RSI", format: v => fmtRsiVal(v.weeklyRsi) };
 const AXIS_MRSI = { key: "monthlyRsi", label: "月线RSI", format: v => fmtRsiVal(v.monthlyRsi) };
 const AXIS_D_RSI = { key: "rsi", label: "日线RSI", format: v => fmtRsiVal(v.rsi) };
+const AXIS_D_RSIGAP = { key: "rsiSmaGap", label: "日RSI缺口", format: v => fmtRsiGapVal(v.rsiSmaGap),
+                        hint: "日线RSI(14)减去它自己的14日SMA（TV的RSI指标里那条均线）：正值＝RSI站在均线上方，越大＝这几天动能冲得越急。只看相对排名；回放360天里缺口最大的一成次日收涨40.8%、全市场45.7%，更像短线过热、不是买点；上市不足28天显示「—」" };
 // 日成交额：最新已收盘那根日 K 的单日成交额（不是累计、不是均值）；badge ＝ 全市场名次「TOP N」，见 volRankBadgeFor。
 const AXIS_D_VOL = { key: "volume", label: "日成交额", format: v => fmtVolVal(v), badge: volRankBadge };
 // 日涨跌幅：只挂策略榜；涨跌幅榜刻意不挂（首轴 `value` 本身就是涨跌幅，挂了就是同一个量出现两次）。
@@ -210,7 +216,7 @@ const singleStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD,
 // 加轴要后端 `_strategy_row` 先补字段（只加轴＝永远全 null 的幽灵轴），并同批加 axesSub 段；一改就是全部加密策略榜一起变，
 //   下方三张涨跌幅榜的轴集照抄本数组 ⇒ 同批改那三份。
 // 已移除的轴后端行字段照发 ⇒ audit A 项把它们列成「行上未挂轴的字段」是预期提示，不是失败。
-const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
+const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
                              ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
                              AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_CVD, AXIS_W_DIPLUS,
                              AXIS_M_VOL, AXIS_MRSI];
@@ -231,15 +237,15 @@ const AXIS_M_CVD = { key: "monthlyCvdStrength", label: "月CVD强弱", format: v
                      hint: "按月K线形态推断的买卖失衡，不是真实成交归边；想看真钱流向用「月订单流」" };
 const AXIS_M_TAKER = { key: "monthlyTakerStrength", label: "月订单流", format: v => fmtTakerVal(v.monthlyTakerStrength),
                        hint: "真实主动成交（币安taker数据）：月线EMA14平滑后的（主动买−主动卖）÷成交量。全市场绝大多数为负，负值是常态；只看相对排名，不是买卖信号" };
-const dailyChangeSorts = [AXIS_D_CHG, AXIS_D_VOL, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
+const dailyChangeSorts = [AXIS_D_CHG, AXIS_D_VOL, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
                           ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
                           AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_CVD, AXIS_W_DIPLUS,
                           AXIS_M_VOL, AXIS_MRSI];
-const weeklyChangeSorts = [AXIS_W_CHG, AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
+const weeklyChangeSorts = [AXIS_W_CHG, AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
                            ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
                            AXIS_W_VOL, AXIS_WRSI, AXIS_W_CVD, AXIS_W_DIPLUS, AXIS_W_TAKER,
                            AXIS_M_VOL, AXIS_MRSI];
-const monthlyChangeSorts = [AXIS_M_CHG, AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD, AXIS_D_TAKER,
+const monthlyChangeSorts = [AXIS_M_CHG, AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
                             ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
                             AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_CVD, AXIS_W_DIPLUS,
                             AXIS_M_VOL, AXIS_MRSI, AXIS_M_CVD, AXIS_M_TAKER];

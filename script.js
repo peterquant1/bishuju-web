@@ -186,10 +186,19 @@ const AXIS_D_SARBARS = { key: "sarBullBars", label: "日SAR多头根数",
                          format: v => fmtBarsVal(v.sarBullBars),
                          hint: "日线SAR翻多至今第几根K线（翻多那根算第1根）。升序＝刚翻多最新鲜，降序＝这轮多头跑最久；SAR 空头显示「—」" };
 
-// === 日线 TV 内置指标十根（后端 calc_bb_pctb … calc_ultimate_osc：TV 内置脚本的默认参数与写法，上线前在 TV 上逐项对过数）===
+// === 日线 TV 内置指标十四根（后端 calc_bb_pctb … calc_ppo_hist：TV 内置脚本的默认参数与写法，上线前在 TV 上逐项对过数）===
 // 入选口径：回放里本轴全市场第一与「日CVD强弱 / 日线RSI / 日RSI缺口」任一全市场第一是同一个币的比例够高（口径见后端常量块）⇒ 与那三根高度相关是
 // 选它们的理由、不是删它们的理由。标签「日」开头 ⇒ 自动进日线共振卡。回放里各轴第一名次日多半回落 ⇒ hint 只写口径与回放实数，别写成买点。
-// 四份轴集都用 ...tvDailySorts 挂在「日SAR多头根数」之后；axesSub 也逐根跟着它 ⇒ 增删这十根只改这个数组（+ 后端行字段）。
+// 四份轴集都用 ...tvDailySorts 挂在「日SAR多头根数」之后；axesSub 也逐根跟着它 ⇒ 增删这些轴只改这个数组（+ 后端行字段）。
+// 数组顺序 ＝ 回放一年的共振率从高到低（新增时按这个插，既有几根的相对位置不变）。
+const AXIS_D_SMIO = { key: "smio", label: "日SMIO", format: v => fmtOscVal(v.smio, 4),
+                      hint: "TV「SMI Ergodic Oscillator」(20, 5, 5)：快速TSI（SMII）减去它自己的5日信号线——这几天动能冲得多急，与日RSI缺口同一类读数。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占76%（与日RSI缺口第一名同币71%）；第一名次日收涨37%（全市场45%），不是买点" };
+const AXIS_D_SMII = { key: "smii", label: "日SMII", format: v => fmtOscVal(v.smii, 4),
+                      hint: "TV「SMI Ergodic Indicator」(20, 5, 5)：快速TSI（价格变化先20日、再5日EMA平滑后的正负占比），−1～+1。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占67%（与日线RSI第一名同币65%）；第一名次日收涨45%（全市场45%）" };
+const AXIS_D_WCCI = { key: "wcci", label: "日Woodies CCI", format: v => fmtOscVal(v.wcci, 2),
+                      hint: "TV「Woodies CCI」(6, 14) 里的CCI 14：用收盘价算的14日CCI（「日CCI」用的是(高+低+收)/3、20日）。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占52%；第一名次日收涨36%（全市场45%）" };
+const AXIS_D_PPOH = { key: "ppoHist", label: "日PPO柱", format: v => fmtGapVal(v.ppoHist),
+                      hint: "TV「Percentage Price Oscillator」(12, 26, 9) 的柱：PPO（EMA12比EMA26高出的百分比）减去它的9日信号线；看的是这几天的加速，第一名当天不一定收涨。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占39%；第一名次日收涨40%（全市场45%）" };
 const AXIS_D_BBR = { key: "bbPctB", label: "日布林%B", format: v => fmtLevelVal(v.bbPctB, 2),
                      hint: "TV「Bollinger Bands %B」(20, 2)：收盘价在布林带里的位置，1＝上轨、0＝下轨，大于1＝收在上轨之外。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占61%；第一名次日收涨34%（全市场45%），不是买点" };
 const AXIS_D_CCI = { key: "cci", label: "日CCI", format: v => fmtOscVal(v.cci, 2),
@@ -210,7 +219,8 @@ const AXIS_D_CMO = { key: "cmo", label: "日CMO", format: v => fmtOscVal(v.cmo, 
                      hint: "TV「Chande Momentum Oscillator」(9)：9天里上涨幅度之和减下跌幅度之和、再除以两者之和，−100～+100。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占40%；第一名次日收涨44%（全市场45%）" };
 const AXIS_D_UO = { key: "uo", label: "日UO", format: v => fmtLevelVal(v.uo, 2),
                     hint: "TV「Ultimate Oscillator」(7, 14, 28)：7、14、28天三段的买压占比按4:2:1加权，0–100。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占39%；第一名次日收涨46%（全市场45%）" };
-const tvDailySorts = [AXIS_D_BBR, AXIS_D_CCI, AXIS_D_MFI, AXIS_D_CMF, AXIS_D_TSI, AXIS_D_CRSI, AXIS_D_ROC, AXIS_D_RVGI, AXIS_D_CMO, AXIS_D_UO];
+const tvDailySorts = [AXIS_D_SMIO, AXIS_D_SMII, AXIS_D_BBR, AXIS_D_CCI, AXIS_D_WCCI, AXIS_D_MFI, AXIS_D_CMF, AXIS_D_TSI, AXIS_D_CRSI,
+                      AXIS_D_ROC, AXIS_D_RVGI, AXIS_D_CMO, AXIS_D_UO, AXIS_D_PPOH];
 
 // === 周ADX / 周+DI（同一个 calc_adx_dmi，喂最新已收盘周 K，≥28 根）：两根都在役，各轴集周线块「周CVD强弱 → 周ADX → 周+DI」（同日线 ADX 在 +DI 前）===
 // 别再建一个把两根一起展开的数组（各轴集是逐个挂的，一起展开会重复）。周ADX 不含方向 ⇒ hint 写明降序＝趋势最强（涨跌都算）、别写成看涨信号。

@@ -48,6 +48,9 @@ function fmtDmiVal(x) { return x == null ? "—" : x.toFixed(2); }
 function fmtRsiGapVal(x) { return x == null ? "—" : (x >= 0 ? "+" : "") + x.toFixed(2); }
 // 整数根数（日SAR多头根数）：带「根」不写「天」（A股 一根是交易日）。别复用 toFixed(2) 的格式化，会显示成「3.00」。
 function fmtBarsVal(x) { return x == null ? "—" : x + " 根"; }
+// 日线 TV 内置指标十根：照 TV 的读数习惯 —— 零轴两侧都有值的（CCI / CMF / TSI / RVGI / CMO）带符号，0–100 与布林%B 不带；位数由轴常量传。
+function fmtOscVal(x, d) { return x == null ? "—" : (x >= 0 ? "+" : "") + x.toFixed(d); }
+function fmtLevelVal(x, d) { return x == null ? "—" : x.toFixed(d); }
 
 // 副行：当前排序轴之外的其余轴摘要（快览、不承诺穷尽）；extra 是可选的价格上下文，永远保留、不占轴额度。
 // 轴摘要封顶 SUB_AXES_MAX 段：桌面端 .sub 会折行，段数一多行高就乱；被裁掉的轴切到对应排序 chip 即可在值列看到。
@@ -95,6 +98,10 @@ function axesSub(item, sf, volLabel, extra) {
     // 日 / 周RSI缺口：排在末尾（超出 SUB_AXES_MAX，默认副行不变）。
     if ("rsiSmaGap" in item && sf !== "rsiSmaGap") seg.push(`${axisLabelFor("rsiSmaGap", "RSI缺口")} ${fmtRsiGapVal(item.rsiSmaGap)}`);
     if ("weeklyRsiSmaGap" in item && sf !== "weeklyRsiSmaGap") seg.push(`${axisLabelFor("weeklyRsiSmaGap", "周RSI缺口")} ${fmtRsiGapVal(item.weeklyRsiSmaGap)}`);
+    // 日线 TV 内置指标十根：排在最末（超出 SUB_AXES_MAX，默认副行不变）；逐根跟着 tvDailySorts 走 ⇒ 从那个数组删轴，这里的段自动跟着没。
+    for (const ax of tvDailySorts) {
+        if (ax.key in item && sf !== ax.key) seg.push(`${axisLabelFor(ax.key, ax.label)} ${ax.format(item)}`);
+    }
     const shown = seg.slice(0, SUB_AXES_MAX).map(s => `<span class="sub__seg">${s}</span>`);
     // extra（涨跌幅榜的价格上下文 / 当前轴不是涨跌幅时的涨跌幅）带 --ctx：≤860px 排到最前，两行放不下时先让掉的是末尾的轴。
     if (extra) shown.push(`<span class="sub__seg sub__seg--ctx">${extra}</span>`);
@@ -179,6 +186,32 @@ const AXIS_D_SARBARS = { key: "sarBullBars", label: "日SAR多头根数",
                          format: v => fmtBarsVal(v.sarBullBars),
                          hint: "日线SAR翻多至今第几根K线（翻多那根算第1根）。升序＝刚翻多最新鲜，降序＝这轮多头跑最久；SAR 空头显示「—」" };
 
+// === 日线 TV 内置指标十根（后端 calc_bb_pctb … calc_ultimate_osc：TV 内置脚本的默认参数与写法，上线前在 TV 上逐项对过数）===
+// 入选口径：回放里本轴全市场第一与「日CVD强弱 / 日线RSI / 日RSI缺口」任一全市场第一是同一个币的比例够高（口径见后端常量块）⇒ 与那三根高度相关是
+// 选它们的理由、不是删它们的理由。标签「日」开头 ⇒ 自动进日线共振卡。回放里各轴第一名次日多半回落 ⇒ hint 只写口径与回放实数，别写成买点。
+// 四份轴集都用 ...tvDailySorts 挂在「日SAR多头根数」之后；axesSub 也逐根跟着它 ⇒ 增删这十根只改这个数组（+ 后端行字段）。
+const AXIS_D_BBR = { key: "bbPctB", label: "日布林%B", format: v => fmtLevelVal(v.bbPctB, 2),
+                     hint: "TV「Bollinger Bands %B」(20, 2)：收盘价在布林带里的位置，1＝上轨、0＝下轨，大于1＝收在上轨之外。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占61%；第一名次日收涨34%（全市场45%），不是买点" };
+const AXIS_D_CCI = { key: "cci", label: "日CCI", format: v => fmtOscVal(v.cci, 2),
+                     hint: "TV「Commodity Channel Index」(20)：典型价（高+低+收）/3 偏离20日均值多远，以平均偏差为单位，+100以上算强。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占57%；第一名次日收涨35%（全市场45%）" };
+const AXIS_D_MFI = { key: "mfi", label: "日MFI", format: v => fmtLevelVal(v.mfi, 2),
+                     hint: "TV「Money Flow Index」(14)：带成交量的RSI，0–100，上涨日的资金流占得越多越大。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占49%；第一名次日收涨42%（全市场45%）" };
+const AXIS_D_CMF = { key: "cmf", label: "日CMF", format: v => fmtOscVal(v.cmf, 3),
+                     hint: "TV「Chaikin Money Flow」(20)：20天里收在当天高位的成交量减去收在低位的、占总量的比例，−1～+1，正＝资金偏流入。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占49%；第一名次日收涨45%（全市场45%）" };
+const AXIS_D_TSI = { key: "tsi", label: "日TSI", format: v => fmtOscVal(v.tsi, 2),
+                     hint: "TV「True Strength Index」(25, 13)：双重平滑的价格动量，−100～+100；比RSI慢，看的是这几周的趋势，第一名当天不一定收涨。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占45%；第一名次日收涨47%（全市场45%）" };
+const AXIS_D_CRSI = { key: "crsi", label: "日CRSI", format: v => fmtLevelVal(v.crsi, 2),
+                      hint: "TV「Connors RSI」(3, 2, 100)：RSI(3)、连涨天数的RSI(2)、当天涨幅在前100天里的百分位，三者平均，0–100；上市不足102天显示「—」。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占44%；第一名次日收涨41%（全市场45%）" };
+const AXIS_D_ROC = { key: "roc", label: "日ROC", format: v => fmtGapVal(v.roc),
+                     hint: "TV「Rate Of Change」(9)：收盘价比9天前涨了百分之几。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占41%；第一名次日收涨39%（全市场45%）" };
+const AXIS_D_RVGI = { key: "rvgi", label: "日RVGI", format: v => fmtOscVal(v.rvgi, 3),
+                      hint: "TV「Relative Vigor Index」(10)：收盘比开盘高出的幅度占当天振幅的比例（四根加权、十天合计），正＝这几天普遍收得比开得高；第一名当天不一定收涨。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占40%；第一名次日收涨46%（全市场45%）" };
+const AXIS_D_CMO = { key: "cmo", label: "日CMO", format: v => fmtOscVal(v.cmo, 2),
+                     hint: "TV「Chande Momentum Oscillator」(9)：9天里上涨幅度之和减下跌幅度之和、再除以两者之和，−100～+100。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占40%；第一名次日收涨44%（全市场45%）" };
+const AXIS_D_UO = { key: "uo", label: "日UO", format: v => fmtLevelVal(v.uo, 2),
+                    hint: "TV「Ultimate Oscillator」(7, 14, 28)：7、14、28天三段的买压占比按4:2:1加权，0–100。回放一年：第一名与日CVD强弱、日线RSI、日RSI缺口任一的第一名是同一个币占39%；第一名次日收涨46%（全市场45%）" };
+const tvDailySorts = [AXIS_D_BBR, AXIS_D_CCI, AXIS_D_MFI, AXIS_D_CMF, AXIS_D_TSI, AXIS_D_CRSI, AXIS_D_ROC, AXIS_D_RVGI, AXIS_D_CMO, AXIS_D_UO];
+
 // === 周ADX / 周+DI（同一个 calc_adx_dmi，喂最新已收盘周 K，≥28 根）：两根都在役，各轴集周线块「周CVD强弱 → 周ADX → 周+DI」（同日线 ADX 在 +DI 前）===
 // 别再建一个把两根一起展开的数组（各轴集是逐个挂的，一起展开会重复）。周ADX 不含方向 ⇒ hint 写明降序＝趋势最强（涨跌都算）、别写成看涨信号。
 const AXIS_W_ADX = { key: "weeklyAdx", label: "周ADX", format: v => fmtDmiVal(v.weeklyAdx),
@@ -211,7 +244,7 @@ const AXIS_W_CVD = { key: "weeklyCvdStrength", label: "周CVD强弱", format: v 
 const AXIS_W_EMAGAP = { key: "weeklyEmaGap", label: "周线EMA间距", format: v => fmtGapVal(v.weeklyEmaGap) };
 
 // A股 策略榜轴集（休眠件）：与 cryptoStrategySorts 逐根对齐，少「日订单流」（tushare 日线无 taker 归边，数据源硬边界）——
-// 另少「日 / 周RSI缺口」（加轴时 A股 已休眠、没同补，见 fetch_ashare.py 复活清单 ⑦）——
+// 另少「日 / 周RSI缺口」与日线 TV 指标十根 tvDailySorts（加轴时 A股 已休眠、没同补，见 fetch_ashare.py 复活清单 ⑦）——
 // 别并进加密那套、也别硬凑（会成永远全 null 的幽灵轴）；首轴日成交额须与 fetch_ashare.py 行构造的 `value` 一致。
 const singleStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD,
                              ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
@@ -224,7 +257,7 @@ const singleStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD,
 //   下方三张涨跌幅榜的轴集照抄本数组 ⇒ 同批改那三份。
 // 已移除的轴后端行字段照发 ⇒ audit A 项把它们列成「行上未挂轴的字段」是预期提示，不是失败。
 const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
-                             ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
+                             ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS, ...tvDailySorts,
                              AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_RSIGAP, AXIS_W_CVD, AXIS_W_ADX, AXIS_W_DIPLUS,
                              AXIS_M_VOL, AXIS_MRSI];
 
@@ -245,15 +278,15 @@ const AXIS_M_CVD = { key: "monthlyCvdStrength", label: "月CVD强弱", format: v
 const AXIS_M_TAKER = { key: "monthlyTakerStrength", label: "月订单流", format: v => fmtTakerVal(v.monthlyTakerStrength),
                        hint: "真实主动成交（币安taker数据）：月线EMA14平滑后的（主动买−主动卖）÷成交量。全市场绝大多数为负，负值是常态；只看相对排名，不是买卖信号" };
 const dailyChangeSorts = [AXIS_D_CHG, AXIS_D_VOL, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
-                          ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
+                          ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS, ...tvDailySorts,
                           AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_RSIGAP, AXIS_W_CVD, AXIS_W_ADX, AXIS_W_DIPLUS,
                           AXIS_M_VOL, AXIS_MRSI];
 const weeklyChangeSorts = [AXIS_W_CHG, AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
-                           ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
+                           ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS, ...tvDailySorts,
                            AXIS_W_VOL, AXIS_WRSI, AXIS_W_RSIGAP, AXIS_W_CVD, AXIS_W_ADX, AXIS_W_DIPLUS, AXIS_W_TAKER,
                            AXIS_M_VOL, AXIS_MRSI];
 const monthlyChangeSorts = [AXIS_M_CHG, AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
-                            ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
+                            ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS, ...tvDailySorts,
                             AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_RSIGAP, AXIS_W_CVD, AXIS_W_ADX, AXIS_W_DIPLUS,
                             AXIS_M_VOL, AXIS_MRSI, AXIS_M_CVD, AXIS_M_TAKER];
 // A股 涨跌幅榜轴集工厂（休眠件）：仍是旧形 —— 通用 key 装本周期的值、比加密少「订单流」（tushare 日线无归边字段）。

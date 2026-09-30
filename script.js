@@ -14,15 +14,18 @@ function fmtTakerVal(x) {
     return (s === "0.00" || s === "-0.00" ? "0.00" : (x > 0 ? "+" : "") + s) + "%";
 }
 function fmtRsiVal(x) { return x == null ? "N/A" : x.toFixed(2); }
-function fmtVolVal(v) { return v.volumeFormatted != null ? v.volumeFormatted : "N/A"; }
+// 成交额显示串是后端拼好的字符串、原样进 innerHTML ⇒ 转义（其余格式化都对数字做 toFixed，混不进标记；
+// 付费 KV 凭上传 token 可写，别让那把 token 顺带变成往付费用户页面里塞脚本的口子）。
+function fmtVolVal(v) { return v.volumeFormatted != null ? escapeHtml(v.volumeFormatted) : "N/A"; }
 // 周 / 月成交额读各自的显示串。⚠️ 别复用 fmtVolVal（写死读日成交额的 volumeFormatted）：
 // 套上去会显示日成交额、却按周 / 月成交额排序，不报错。
-function fmtWeeklyVolVal(v) { return v.weeklyVolumeFormatted != null ? v.weeklyVolumeFormatted : "N/A"; }
-function fmtMonthlyVolVal(v) { return v.monthlyVolumeFormatted != null ? v.monthlyVolumeFormatted : "N/A"; }
+function fmtWeeklyVolVal(v) { return v.weeklyVolumeFormatted != null ? escapeHtml(v.weeklyVolumeFormatted) : "N/A"; }
+function fmtMonthlyVolVal(v) { return v.monthlyVolumeFormatted != null ? escapeHtml(v.monthlyVolumeFormatted) : "N/A"; }
 // 全市场成交额名次「TOP N」徽标（写成工厂，别拆成三份近亲函数）：只在按对应「X成交额」轴排序时挂在值列数字左侧
 // （renderTable 读轴定义上的 `badge`）。名次字段：日 volumeRank / 周 weeklyVolumeRank / 月 monthlyVolumeRank，
 // 「全市场」＝ 同周期涨跌幅榜的全部行。
-// ⚠️ 一个周期一个名次 key，别合并成 volumeRank：涨跌幅榜的 `volume` 装的是本周期成交额，共用 key 会让徽标说错周期。
+// ⚠️ 一个周期一个名次 key，别合并成 volumeRank：行上的通用 key（`volume` / `volumeRank`）在所有榜里都是日线值，
+//    周 / 月线值带前缀（`weeklyVolume` / `monthlyVolume`）；共用 key 会让徽标说错周期。
 // 数据驱动：行上没有该整数字段就不渲染（名次进 innerHTML，只认整数）。A股 行不带名次字段 ⇒ ashareUniverseTab 是休眠参数
 // （真给 A股 挂名次时，四位数名次要重测窄屏值列宽度）。
 function volRankBadgeFor(rankKey, tf, universeTab, ashareUniverseTab) {
@@ -47,7 +50,7 @@ function fmtDmiVal(x) { return x == null ? "—" : x.toFixed(2); }
 // 日 / 周RSI缺口：RSI 点数之差、有正有负 ⇒ 带符号两位小数、不带 %（与 fmtCvdVal 同格式，分开写免得两边口径一改互相牵连）。
 function fmtRsiGapVal(x) { return x == null ? "—" : (x >= 0 ? "+" : "") + x.toFixed(2); }
 // 整数根数（日SAR多头根数）：带「根」不写「天」（A股 一根是交易日）。别复用 toFixed(2) 的格式化，会显示成「3.00」。
-function fmtBarsVal(x) { return x == null ? "—" : x + " 根"; }
+function fmtBarsVal(x) { return x == null ? "—" : escapeHtml(x) + " 根"; }
 // 日线 TV 内置指标十根：照 TV 的读数习惯 —— 零轴两侧都有值的（CCI / CMF / TSI / RVGI / CMO）带符号，0–100 与布林%B 不带；位数由轴常量传。
 function fmtOscVal(x, d) { return x == null ? "—" : (x >= 0 ? "+" : "") + x.toFixed(d); }
 function fmtLevelVal(x, d) { return x == null ? "—" : x.toFixed(d); }
@@ -143,8 +146,9 @@ const AXIS_D_VOL = { key: "volume", label: "日成交额", format: v => fmtVolVa
 // ⚠️ key 是 `changePercent` 不是 `value`（策略榜的 `value` 是日成交额）⇒ 按它排序时值列不上红绿（上色要求 tab 在
 //    CHANGE_PCT_TABS 且 `sortField === "value"`），靠正负号区分，是知情取舍。
 // 两资产口径不同是刻意的（加密 K 线实体、A股 相对前收含跳空），别"统一"。hint 只写口径、不写策略断言。
+// hint 现只写加密口径（A股 休眠，悬停提示里不该出现）；复活 A股 时补回「A股＝相对上一根收盘、含跳空」，周涨跌幅那根同理。
 const AXIS_D_CHGPCT = { key: "changePercent", label: "日涨跌幅", format: v => fmtGapVal(v.changePercent),
-                        hint: "最新已收盘那根日K的涨跌幅。加密＝K线实体(收−开)/开；A股＝相对上一根收盘、含跳空" };
+                        hint: "最新已收盘那根日K的涨跌幅：K线实体(收−开)/开，不含跳空" };
 // 日CVD强弱：买卖量按 K 线形态推断（对齐 TV 上那个 CVD 指标），不是真实成交归边，横截面上更接近价格动能；
 // 真钱流向看「日订单流」。别删、也别改公式（换成 k[9] 就与订单流逐字相同，等于删轴）。
 const AXIS_D_CVD = { key: "cvdStrength", label: "日CVD强弱", format: v => fmtCvdVal(v.cvdStrength),
@@ -240,7 +244,7 @@ const AXIS_M_DIPLUS = { key: "monthlyDiPlus", label: "月+DI", format: v => fmtD
 const AXIS_W_MACD = { key: "weeklyMacdStrength", label: "周MACD强弱",
                       format: v => fmtGapVal(v.weeklyMacdStrength) };
 
-// === 周 / 月成交额：最新已收盘那一根周 / 月 K 的成交额（与周 / 月涨跌幅榜同 symbol 那行的 volume 同一个数），不是滚动累计 ===
+// === 周 / 月成交额：最新已收盘那一根周 / 月 K 的成交额（与周 / 月涨跌幅榜同 symbol 那行的 weeklyVolume / monthlyVolume 同一个数），不是滚动累计 ===
 // 各挂本周期的全市场名次徽标。周成交额在役（与日成交额高度相关是已知的，别拿冗余度删）；月成交额 2026-09-22 站长删了、常量保留。
 const AXIS_W_VOL = { key: "weeklyVolume", label: "周成交额", format: v => fmtWeeklyVolVal(v), badge: weeklyVolRankBadge,
                      hint: "最新已收盘那一根周K的成交额（不是近7天滚动累计），一周只更新一次" };
@@ -249,7 +253,7 @@ const AXIS_M_VOL = { key: "monthlyVolume", label: "月成交额", format: v => f
 // 周涨跌幅：最新已收盘那一根周 K 的涨跌幅，与周涨跌幅榜同 symbol 那行的 `value` 是同一个数（后端取同一份缓存字段、别另算）。
 // 其余同 AXIS_D_CHGPCT：只挂策略榜、两资产口径不同别统一、hint 只写口径。
 const AXIS_W_CHGPCT = { key: "weeklyChangePercent", label: "周涨跌幅", format: v => fmtGapVal(v.weeklyChangePercent),
-                        hint: "最新已收盘那一根周K的涨跌幅，一周只更新一次。加密＝K线实体(收−开)/开；A股＝相对上周收盘" };
+                        hint: "最新已收盘那一根周K的涨跌幅：K线实体(收−开)/开，一周只更新一次" };
 // 周CVD强弱：同「日CVD强弱」的算法（K 线形态拆买卖量 → EMA14 → 归一化失衡比 ∈ [−1,+1]），喂已收盘周 K；≥15 根周 K 才有值、
 // 不够显示「—」并在两个方向都沉底。与周涨跌幅榜排序条上的「周CVD强弱」是同一个数（后端取同一份周线缓存字段）。
 // 形态推断、不是真实归边 ⇒ 横截面上主要在读周线级「最近在涨」；hint 只写口径，别写成资金流信号。
@@ -409,7 +413,7 @@ const TAB_GROUPS = [
             { key: "monthlySecondLowDailyEmaSarBull", name: "月线突破SAR空头第二根低点＋日线9/21扩张＋SAR多头", tf: "日线/月线",
               desc: "三个条件：第一个看最新已收盘的那根月线，后两个看最新已收盘的那根日线。一是月线的收盘价站上了最近一轮月线 SAR 空头段里第 2 根 K 线的最低价（和「月线突破SAR空头第二根低点」那张榜的条件一字不差）；二是日线 EMA9 在 EMA21 上方、而且两条均线的间距比前一天更大（结构正在张开）；三是这根日线的 Parabolic SAR 站在多头一侧（圆点在价格下方，不管已经多头了几天）。三条合起来找的是：在月线级别已经从最近一轮下跌里抬起头的标的里，日线趋势朝上、均线也正在张开的那一批。有三处要先说清楚。第一，月线那一条的细节和那张榜完全相同：「最近一轮」不要求那一段已经结束，参照价取那一段第 2 根的最低价，段里只有 1 根、或者可用历史里一次空头都没出现过的标的没有参照线，不入榜；这一条每月 1 号 00:00（UTC）新月线收盘后才换一次，同一个月之内能入选的范围不变，每天变的只是日线那两条。第二，扩张是两半合起来才算：光是间距在变大还不够，EMA9 必须已经站到 EMA21 上方；一个标的的间距从 −6.2% 收窄到 −5.9%，数字确实变大了，但那时 EMA9 还在下面，不算扩张。第三，SAR 这一条不限第几根：刚翻多的第一天和已经多头一个月的都算——表格里的「日SAR多头根数」在本榜上一定有数字、不会显示「—」，想只看刚翻多的，按它升序排；上线这一天的 21 个里有 10 个是刚翻多的第一根。三条里真正卡人的是日线 9/21 扩张：回放过去 360 天，月线那一条每天中位约 100 个，再要求日线 SAR 多头剩 40 个左右，再要求 9/21 扩张就只剩 13 个左右，约占月线那一批的一成三。和站内其他榜的关系：本榜的每一个标的必然都在「月线突破SAR空头第二根低点」上（月线那一条一字不差），反过来远不是；和「日线SAR空头首根＋SAR点高于前一轮空头首根＋月线突破SAR空头第二根低点」一定不会同时出现（那张要求最新一根日线的 SAR 刚翻到空头）；和「日线9/21扩张＋SAR多头首根＋最近一轮空头首根SAR点高于前一轮」没有包含关系（那张里月线那一条也满足的标的，一定也在本榜上）。命中数：回放过去 360 天，每天中位 13 个、最少 0 个、最多 59 个，有 2 天一个都没有；上线这一天（最新已收盘的是 2026 年 9 月 18 日那根日线）是 21 个。这是一张状态清单（再叠一道月线门槛）：日线 9/21 还在扩张、SAR 还在多头就一直在，间距一停止变大、或者 SAR 翻空就离开——回放里前一天的成员第二天还在的比例中位约 70%，已经结束的在榜段中位 3 天、最长 15 天。也要如实说一句：它不是买入信号。回放里成员次日收涨的比例是 44.7%（5291 个样本），全市场 45.8%；5 天后收盘比入榜那天更高的比例 41.1%，全市场 42.6%——都略低于大盘。加上月线这一条比只看日线两条（9/21 扩张＋SAR 多头、不看月线）好一点，那样是 43.1% 和 38.7%。它更适合当成「月线已经抬头、日线结构正在走强」的观察名单，而不是追进去的理由。表格里的各轴都不参与筛选，用来在这批标的里再分强弱。门槛：日线要至少 23 根已收盘日 K、月线要至少 3 根已收盘月 K，所以上市不足三个月的新合约不入榜；日线数据每天 00:00（UTC）收盘后才换一批，同一天之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。范围是全部加密 USDT 永续合约。" },
             { key: "monthlyOrWeeklyOrDailyFourBull", name: "月线或周线或日线四连阳", tf: "日线/周线/月线",
-              desc: "日线、周线、月线三个周期各看各自最新已收盘的那根 K 线，只要有一个周期恰好走到了连涨的第 4 根——这一根和前面三根都收阳、再往前那一根不是阳线——就入榜，三个周期都不满足才不入榜。阳线指收盘高于开盘；收盘正好等于开盘的十字星不算阳线，也会把连阳打断。有五处要先说清楚。第一，是「恰好」第 4 根：已经连涨到第 5 根、第 6 根的不在本榜，这个周期再收一根阳线它就离开本榜；想找连涨更久的，可以用表格里的涨跌幅各轴排序。第二，三个周期之间是「或」，表格里看不出是哪个周期满足的，要点开图表看日线、周线、月线。第三，三个周期换批的节奏不同：日线那一支每天 00:00（UTC）日线收盘后换一批，周线那一支要到每周一 00:00（UTC）、月线那一支要到每月 1 号 00:00（UTC）才换——所以本榜每天都在变，但有一部分成员整周、整月都不动，这是正确行为不是数据卡住了。第四，本榜只数 K 线阴阳，不看均线、SAR、RSI 和成交量。第五，门槛：日线那一支要至少 23 根已收盘日 K，周线、月线那一支各要至少 5 根已收盘的周 K、月 K，所以上市不足 23 天的新合约不入榜。命中数：回放过去 360 天（2025 年 9 月 26 日到 2026 年 9 月 20 日），每天中位 13 个、最少 2 个、最多 204 个，没有一天是空的；按周期拆开，日线那一支每天中位 4 个（有 28 天一个都没有，普涨时能到一百多个），周线那一支中位 4 个，月线那一支中位 3 个（每个月 0 到 8 个，最近 12 个月里有两个月一个都没有，这个月就是）。上线这一天（最新已收盘的是 2026 年 9 月 20 日那根日线）是 40 个：日线 35 个、周线 5 个、月线 0 个，偏多是因为这几天普涨、连涨四天的标的特别多，别当常态。前一天的成员第二天还在的比例中位约 56%。次期去向：日线那一支第二天接着收阳（走成五连阳、离开本榜）的比例 41.2%，低于全市场任意一天收阳的 45.9%——连涨四天之后第五天更容易歇一歇；周线那一支下一周接着收阳 45.0%（全市场 42.5%），月线那一支下个月接着收阳 39.1%（全市场 36.9%）。也要如实说一句：它不是买入信号。回放里成员次日收涨的比例 44.0%（7176 个样本），全市场 45.8%；5 天后收盘比入榜那天更高的比例 45.7%，全市场 42.8%，涨跌幅中位数 −1.01%（全市场 −1.44%）。差别出在周期上：日线那一支次日 41.2%、5 天后 39.0%，都低于大盘；周线、月线那两支次日 47.0%、5 天后 52.4%，都高于大盘。所以它更适合当观察名单：日线那一支偏短线过热，周线、月线那两支更像趋势已经走出来了。和站内其他榜没有判据上的包含关系：月线那一支的标的都至少连涨了两个月，但「月线突破SAR空头第二根低点＋至少二连阳」另要求收盘价站上参照线，本榜另有日线、周线两支。表格里的各轴都不参与筛选，用来在这批标的里再分强弱。范围是全部加密 USDT 永续合约。" },
+              desc: "日线、周线、月线三个周期各看各自最新已收盘的那根 K 线，只要有一个周期恰好走到了连涨的第 4 根——这一根和前面三根都收阳、再往前那一根不是阳线——就入榜，三个周期都不满足才不入榜。阳线指收盘高于开盘；收盘正好等于开盘的十字星不算阳线，也会把连阳打断。有五处要先说清楚。第一，是「恰好」第 4 根：已经连涨到第 5 根、第 6 根的不在本榜，这个周期再收一根阳线它就离开本榜；想找连涨更久的，可以用表格里的涨跌幅各轴排序。第二，三个周期之间是「或」，表格里看不出是哪个周期满足的，要点开图表看日线、周线、月线。第三，三个周期换批的节奏不同：日线那一支每天 00:00（UTC）日线收盘后换一批，周线那一支要到每周一 00:00（UTC）、月线那一支要到每月 1 号 00:00（UTC）才换——所以本榜每天都在变，但有一部分成员整周、整月都不动，这是正确行为不是数据卡住了。第四，本榜只数 K 线阴阳，不看均线、SAR、RSI 和成交量。第五，门槛：日线那一支要至少 23 根已收盘日 K，周线、月线那一支各要至少 5 根已收盘的周 K、月 K，所以上市不足 23 天的新合约不入榜。命中数：回放过去 360 天（2025 年 9 月 26 日到 2026 年 9 月 20 日），每天中位 13 个、最少 2 个、最多 204 个，没有一天是空的；按周期拆开，日线那一支每天中位 4 个（有 28 天一个都没有，普涨时能到一百多个），周线那一支中位 4 个，月线那一支中位 3 个（每个月 0 到 8 个，最近 12 个月里有两个月一个都没有，上线时最新已收盘的 2026 年 8 月那根月线就是其中一个）。上线这一天（最新已收盘的是 2026 年 9 月 20 日那根日线）是 40 个：日线 35 个、周线 5 个、月线 0 个，偏多是因为这几天普涨、连涨四天的标的特别多，别当常态。前一天的成员第二天还在的比例中位约 56%。次期去向：日线那一支第二天接着收阳（走成五连阳、离开本榜）的比例 41.2%，低于全市场任意一天收阳的 45.9%——连涨四天之后第五天更容易歇一歇；周线那一支下一周接着收阳 45.0%（全市场 42.5%），月线那一支下个月接着收阳 39.1%（全市场 36.9%）。也要如实说一句：它不是买入信号。回放里成员次日收涨的比例 44.0%（7176 个样本），全市场 45.8%；5 天后收盘比入榜那天更高的比例 45.7%，全市场 42.8%，涨跌幅中位数 −1.01%（全市场 −1.44%）。差别出在周期上：日线那一支次日 41.2%、5 天后 39.0%，都低于大盘；周线、月线那两支次日 47.0%、5 天后 52.4%，都高于大盘。所以它更适合当观察名单：日线那一支偏短线过热，周线、月线那两支更像趋势已经走出来了。和站内其他榜没有判据上的包含关系：月线那一支的标的都至少连涨了两个月，但「月线突破SAR空头第二根低点＋至少二连阳」另要求收盘价站上参照线，本榜另有日线、周线两支。表格里的各轴都不参与筛选，用来在这批标的里再分强弱。范围是全部加密 USDT 永续合约。" },
             { key: "dailyCvdEmaChangeRising", name: "日线CVD递增＋9/21扩张＋涨幅递增", tf: "日线",
               desc: "三个条件都看最新已收盘的那根日线：一是 CVD 比前一天走强；二是 EMA9 在 EMA21 上方、而且两条均线的间距比前一天更大（结构正在张开）；三是这根日线的涨幅比前一天大——今天收涨，而且涨得比昨天多。涨幅和表格里「日涨跌幅」那一列是同一个算法：这根 K 线收盘相对开盘涨了多少，比的是今天和昨天这两根。有五处要先说清楚。第一，CVD 用的是站内一贯口径：当根为正、而且比前一天大，不是单纯看方向。第二，第一条已经保证今天收阳——CVD 是按 K 线形态拆出买量和卖量再平滑的，当根为正又比前一天大，只可能发生在收阳的那天——所以第三条里「今天收涨」在本榜永远成立，第三条真正筛掉的只有「今天涨得没昨天多」的那些。第三，昨天可以是跌的：昨天跌 3%、今天涨 2% 也算涨幅递增；如果要求两天都涨、而且一天比一天多，回放里每天中位只剩 11 个，之后的表现也没有更好。第四，几处比较都是严格大于，一样大不算。第五，扩张是两半合起来才算：光是间距在变大还不够，EMA9 必须已经站到 EMA21 上方；EMA 的算法和 TradingView 自带的 EMA 一致。三条都是拿最新两根日线比，所以这是一张天天大换血的清单：回放里今天的成员第二天还在的比例中位只有 12%。和站内其他榜的关系：「日线9/21扩张＋SAR多头前两根＋CVD递增＋RSI≥60」和本榜共用 9/21 扩张与 CVD 递增两条，其余条件各不相同，两张互不包含（回放 2025 年 10 月 4 日到 2026 年 9 月 28 日这 360 天，那张累计 2079 个成员（按天计），有 1444 个当天也在本榜上）。命中数：回放过去 360 天（2025 年 9 月 27 日到 2026 年 9 月 21 日），每天中位 21 个、最少 1 个、最多 307 个，没有一天是空的，中位约占全市场的 4%；只看前两条（CVD 递增＋9/21 扩张）每天中位 28 个，第三条每天留下其中的八成左右。上线这一天（最新已收盘的是 2026 年 9 月 21 日那根日线）是 307 个，占全市场 527 个的一半多，也是这 360 天里最多的一天——普涨日会一次进来大半个市场，别当常态。也要如实说一句：它不是买入信号，加上「涨幅递增」也没有让它更会挑。回放里成员次日收涨的比例是 44.0%（12961 个样本），全市场 45.7%；5 天后收盘比入榜那天更高的比例 39.6%，全市场 42.3%，5 天后涨跌幅的中位数 −2.50%（全市场 −1.55%）；只看前两条是 43.9%、39.7% 和 −2.46%，几乎一样；按天比，成员次日涨跌幅的中位数跑赢当天全市场的只有 36% 的天数。它更适合当成「资金、均线、涨幅同时在加速」的观察名单，而不是追进去的理由。表格里的各轴都不参与筛选，用来在这批标的里再分强弱。日线每天 00:00（UTC）收盘后才换一批，同一天之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。上市不足 23 天的新合约日线数据不够，不入榜。范围是全部加密 USDT 永续合约。" },
             { key: "weeklyEmaSarBearishCvd", name: "周线阴K＋9/21扩张＋SAR多头＋CVD>0", tf: "周线",
@@ -464,11 +468,16 @@ let lastRenderKey = null; // loadData 上次重渲染时的 updateTime，用于�
 // 默认落地榜 ＝ TEASER_TAB（未解锁的新访客一进来就看到那行免费内容 + 转化位）；改这里要同步 currentAsset 默认值。
 let currentTab = "weeklyEmaSarBull";
 let sortAsc = false; // false=降序, true=升序
-let sortField = "value"; // 当前排序字段（切 tab 时重置为该 tab 首轴）
+// 当前排序字段（切 tab 时重置为该 tab 首轴）。初值也必须是默认落地榜的首轴：首访不走 switchTab，写死 "value" 会让
+// 排序条上没有一个高亮 chip、副行多重复一段首轴、第一次点表头不翻方向（策略榜首轴的 key 是 volume 不是 value）。
+let sortField = TABS_CONFIG[currentTab].sorts[0].key;
 let searchQuery = ""; // 表格搜索（代码/名称子串），切 tab 时清空
 let lastBustAt = 0; // 上次带 cache-buster 强拉的时间（限流用，见 loadData）
 let bustStreak = 0; // 连续强穿仍拿到同一 updateTime 的次数，驱动 loadData 的指数退避（线上抓取中断时省带宽）
 let license = { key: safeStore.get("localStorage", LS_LICENSE) || "", valid: false, expiresAt: null, plan: null, reason: null };
+// 卡密三态：valid（Worker 认了）/ 确定失效（401 · 402，reason 有值）/ 待验证（本机有 key、还没拿到 Worker 的明确答复：
+// 刚开页，或 Worker 5xx / 网络不通）。待验证不是失效 ⇒ 不挂锁、不出「已失效…续费」，只说正在验证；每轮轮询照常重试。
+const licensePending = () => !!license.key && !license.valid && !license.reason;
 let paidData = null; // Worker 返回的全量付费数据（未解锁或未拉到时为 null）
 let lastPaidUpdateTime = null; // 上次拉付费数据时的 paidFetchKey（与 loadData 同构），避免每 30s 轮询都打 Worker
 // 页面折叠状态（本机记忆、全站共用、不分榜）：榜单说明默认收起、共振卡默认收成速览条 ——
@@ -493,7 +502,8 @@ function normalizeKey(raw) {
  * 反过来锁定态会显示「命中 1 个」。data 未就绪或两边都没有时返回 null。 */
 function tabCount(key) {
     if (!data) return null;
-    if (data.paidMeta && key in data.paidMeta) return data.paidMeta[key];
+    // 只认数字：命中数会原样进 innerHTML 与 title（导航、锁定卡片、脉搏），理由同 fmtVolVal
+    if (data.paidMeta && key in data.paidMeta) return Number.isFinite(data.paidMeta[key]) ? data.paidMeta[key] : null;
     if (Array.isArray(data[key])) return data[key].length;
     return null;
 }
@@ -617,6 +627,23 @@ function navGroupLabel(g) {
     return g.label.replace(/^(A股)/, "") || g.label;
 }
 
+// 榜名分两层包 inline-block，让折行落在读得通的地方（rail 与榜头标题共用；纯展示，榜名本身不动）：
+// ① 按「＋」分段（.nm-seg）：整段放得下就不在段内折，「＋」领起下一行；
+// ② 段内在「汉字后接拉丁缩写 / 数字」处再切一刀（.nm-part，如「…空头首根|SAR点高于前一轮」「月线突破|SAR空头…」）：
+//    一行放不下整段时先折在缩写前。缩写后面不再跟两个以上汉字的（句尾的「SAR」「K」）不切，免得它单独掉到下一行。
+// 再放不下才在 part 内逐字折（CSS balance 匀成两行）。tailHtml（rail 的锁图标）并进最后一块，免得单独掉行。
+// ⚠️ 正则别改写成后行断言 (?<=…)：旧 Safari 不认、整份脚本会在解析期报错。
+function nameSegHtml(name, tailHtml = "") {
+    const segs = name.split("＋");
+    return segs.map((seg, i) => {
+        const parts = ((i ? "＋" : "") + seg)
+            .replace(/([\u4e00-\u9fff])(?=[A-Za-z0-9][A-Za-z0-9/.%]*[\u4e00-\u9fff]{2})/g, "$1\u0000").split("\u0000");
+        const tail = i === segs.length - 1 ? tailHtml : "";
+        return `<span class="nm-seg">` + parts.map((p, j) =>
+            `<span class="nm-part">${escapeHtml(p)}${j === parts.length - 1 ? tail : ""}</span>`).join("") + `</span>`;
+    }).join("");
+}
+
 function navHtml() {
     const assetCn = ASSET_CN[currentAsset];
     return TAB_GROUPS.filter(g => g.asset === assetCn).map(g => `
@@ -627,11 +654,11 @@ function navHtml() {
                 const tf = TF_SHORT[m.tf] || "";
                 // 策略榜挂命中数（锁定态也挂，走 paidMeta）；涨跌幅榜恒为全市场数量、不挂。数据未到时不渲染，loadData 后补上。
                 const hits = isStrategyTab(t.key) ? tabCount(t.key) : null;
-                const locked = PAYWALL_ENABLED && !license.valid && t.key !== TEASER_TAB && !FREE_TABS.has(t.key);
+                const locked = PAYWALL_ENABLED && !license.valid && !licensePending() && t.key !== TEASER_TAB && !FREE_TABS.has(t.key);
                 return `<button class="nav-item${t.key === currentTab ? " is-active" : ""}" data-tab="${t.key}"${t.key === currentTab ? ' aria-current="page"' : ''} title="${g.label} · ${t.name}${hits != null ? ` · 命中 ${hits}` : ""}${locked ? " · 未解锁" : ""}">
                     <span class="nav-item__bar"></span>
                     ${tf ? `<span class="tf-chip${tf.length > 1 ? " tf-chip--wide" : ""}">${tf}</span>` : ""}
-                    <span class="nav-item__name">${t.name}${locked ? " " + LOCK_SVG : ""}</span>
+                    <span class="nav-item__name">${nameSegHtml(t.name, locked ? " " + LOCK_SVG : "")}</span>
                     ${hits != null ? `<span class="nav-item__count${hits === 0 ? " is-zero" : ""}">${hits}</span>` : ""}
                 </button>`;
             }).join("")}
@@ -645,10 +672,15 @@ function renderNav() {
         b.classList.toggle("is-active", on);
         b.setAttribute("aria-pressed", String(on)); // SR 能读出当前选中的是哪个资产
     });
+    // 两份导航都是整块重建 ⇒ 焦点在某个榜名上时记下它（哪一份、哪张榜），渲染后还回去（否则键盘焦点掉到 body）
+    const act = document.activeElement;
+    const focusRootId = act && act.classList.contains("nav-item") ? (act.closest("#boardNav,#drawerNav") || {}).id : null;
+    const focusTab = focusRootId ? act.dataset.tab : null;
     const nav = document.getElementById("boardNav");
     if (nav) nav.innerHTML = navHtml();
     const dnav = document.getElementById("drawerNav");
     if (dnav) dnav.innerHTML = navHtml();
+    if (focusRootId) document.querySelector(`#${focusRootId} .nav-item[data-tab="${focusTab}"]`)?.focus({ preventScroll: true });
     // rail 底部统计
     const foot = document.getElementById("railFoot");
     if (foot && data) {
@@ -673,7 +705,7 @@ function renderBoardHead() {
     const tfEl = document.getElementById("bhTf");
     tfEl.textContent = m.tf || "";
     tfEl.style.display = m.tf ? "" : "none";
-    document.getElementById("bhName").textContent = m.full;
+    document.getElementById("bhName").innerHTML = nameSegHtml(m.full);
     // 命中数挂在标题旁（说明收起时也看得到）；说明行只放 desc（完整规则，导航名可以短）。
     const note = document.getElementById("bhNote");
     const hitEl = document.getElementById("bhHit");
@@ -682,10 +714,19 @@ function renderBoardHead() {
     const hit = n != null ? `${isStrategyTab(currentTab) ? "命中" : "共"} ${n} 个标的` : "";
     hitEl.textContent = hit;
     hitEl.hidden = !hit;
-    note.textContent = m.desc || "";
+    note.innerHTML = noteHtml(m.desc || "");
     note.hidden = !m.desc;
     head.hidden = false;
     syncNoteClamp();
+}
+
+// 说明分段（纯展示，desc 原文一字不改）：在下面这些句首之前另起一段。站内 desc 的固定写法是
+// 「判据 → 有 N 处要先说清楚（第一…第二…）→ 和其他榜的关系 → 命中数 / 回放 → 也要如实说一句 → 表格里的各轴 / 范围」，
+// 一千多字连成一段读不动。句首对不上就少分几段、整段照旧；新写 desc 沿用这些句首就自动分段。
+// 收起态（.is-clamped）下 CSS 把 <p> 压回 inline，两行截断照旧按一整段算。
+const NOTE_BREAK_RE = /。(?=有[一二三四五六七八九十两]处(?:要)?先说清楚|第[一二三四五六七八九十]，|和站内其他榜|和另外两张|命中数|也要如实说一句|代价也要说清楚|表格里的)/g;
+function noteHtml(desc) {
+    return desc ? "<p>" + escapeHtml(desc).replace(NOTE_BREAK_RE, "。</p><p>") + "</p>" : "";
 }
 
 // 说明收起 ＝ 桌面两行、手机三行（CSS line-clamp）。收起时没溢出（说明本来就短）不出按钮；展开时一律给「收起说明」。
@@ -710,16 +751,25 @@ function renderSortStrip() {
     if (!config || !config.sorts) { strip.hidden = true; return; }
     const prevChips = strip.querySelector(".sort-strip__chips");
     const keepScroll = lastStripTab === currentTab && prevChips ? prevChips.scrollLeft : 0;
+    // 重建 innerHTML 会把焦点丢到 body（键盘用户在 chip 上回车后，再按 Tab 又回到页首）⇒ 记下焦点所在的轴，渲染后还回去
+    const act = document.activeElement;
+    const focusKey = act && strip.contains(act) ? act.dataset.sortkey : null;
     const arrow = sortAsc ? "▲" : "▼";
+    // 标签首字（日 / 周 / 月）一变就插一道分隔：把三十多根轴按周期分成组
+    let prevTf = null;
     strip.innerHTML = `<span class="sort-strip__label">排序</span><div class="sort-strip__chips">` +
         config.sorts.map(s => {
             const act = s.key === sortField;
-            return `<button type="button" class="sort-chip${act ? " is-active" : ""}" data-sortkey="${s.key}"
+            const tf = "日周月".includes(s.label[0]) ? s.label[0] : null;
+            const sep = prevTf && tf && tf !== prevTf ? `<span class="sort-strip__sep" aria-hidden="true"></span>` : "";
+            prevTf = tf || prevTf;
+            return `${sep}<button type="button" class="sort-chip${act ? " is-active" : ""}" data-sortkey="${s.key}"
                 aria-pressed="${act}" title="${(act ? "再点一次切换升/降序" : `按${s.label}排序`) + (s.hint ? "　·　" + s.hint : "")}">${s.label}${act ? `<span class="sort-chip__arrow">${arrow}</span>` : ""}</button>`;
         }).join("") + `</div>`;
     // 重建 innerHTML 会把横向滚动位归零（刚点的右侧轴会滚出视野），同 tab 内重渲染时手动还原
     const chips = strip.querySelector(".sort-strip__chips");
     if (chips && keepScroll) chips.scrollLeft = keepScroll;
+    if (focusKey) strip.querySelector(`.sort-chip[data-sortkey="${focusKey}"]`)?.focus({ preventScroll: true });
     lastStripTab = currentTab;
     strip.hidden = false;
 }
@@ -729,9 +779,10 @@ const LOCK_PREVIEW_ROWS = [
     { sym: 82, bar: 96 }, { sym: 104, bar: 78 }, { sym: 66, bar: 64 }, { sym: 92, bar: 55 },
     { sym: 74, bar: 47 }, { sym: 110, bar: 39 }, { sym: 70, bar: 30 }, { sym: 88, bar: 23 },
 ];
-function lockPreviewRowsHtml() {
+// firstRank：预览行的起始名次（橱窗榜的预览接在免费那一行后面，从第 2 名起）。
+function lockPreviewRowsHtml(firstRank = 1) {
     return `<div class="lockgate__rows" aria-hidden="true">` + LOCK_PREVIEW_ROWS.map((r, i) => {
-        const rank = i + 1;
+        const rank = i + firstRank;
         const rankCell = rank <= 3
             ? `<span class="medal medal--${rank}">${rank}</span>`
             : `<span class="rank-num">${rank}</span>`;
@@ -743,11 +794,12 @@ function lockPreviewRowsHtml() {
         </div>`;
     }).join("") + `</div>`;
 }
-// 锁定卡片：预览行 + 锁图标 + 命中数 + CTA。n ＝ 命中数（paidMeta，可为 null）；CTA 的 #emptyUnlockBtn 由调用方绑定动作。
+// 锁定卡片：预览行 + 锁图标 + 命中数 + CTA。n ＝ 命中数（paidMeta，可为 null）；opts.countHtml 可整句替换标题（橱窗榜用）。
+// 文案与动作走 lockGateCopy / bindLockGate，全锁榜与未解锁的橱窗榜共用同一张卡。
 function lockGateHtml(n, opts) {
-    const count = n != null ? `已找到 <b>${n}</b> 个标的` : (opts.fallbackTitle || "该榜已锁定");
+    const count = opts.countHtml || (n != null ? `已找到 <b>${n}</b> 个标的` : "该榜已锁定");
     return `<div class="lockgate">
-        ${lockPreviewRowsHtml()}
+        ${lockPreviewRowsHtml(opts.firstRank)}
         <div class="lockgate__veil">
             <div class="lockgate__card">
                 <div class="lockgate__icon">${LOCK_SVG}</div>
@@ -759,10 +811,31 @@ function lockGateHtml(n, opts) {
         </div>
     </div>`;
 }
+// 没有 key → 去购买，另给「已有通行证」入口（回访用户直接输码，不必先进购买弹窗）；有 key 但 !valid（过期 / 吊销）→ 重新输入 / 续费。
+function lockGateCopy() {
+    const expired = !!license.key;
+    return {
+        expired,
+        desc: expired
+            ? "通行证已失效（过期或被停用）<br>续费后即可继续查看完整名单"
+            // 写「全部榜单」不写「全部策略榜」：涨跌幅榜同样付费
+            : "购买通行证，解锁本站全部榜单的完整名单与多轴排序",
+        ctaLabel: expired ? "重新输入 / 续费" : "立即解锁",
+        hintHtml: expired ? ""
+            : `<button type="button" class="lockgate__link" id="lockgateEnterBtn">已有通行证？点此输入</button>`,
+    };
+}
+function bindLockGate(expired) {
+    const cta = document.getElementById("emptyUnlockBtn");
+    if (cta) cta.addEventListener("click", expired ? () => openUnlockDialog() : openPurchaseDialog);
+    const enter = document.getElementById("lockgateEnterBtn");
+    if (enter) enter.addEventListener("click", () => openUnlockDialog());
+}
 // 锁定态收起无数据可操作的搜索框 / 排序条 / 表头，让 CTA 卡片顶到首屏；非锁定态恢复显示。
-function setLockedChrome(hide) {
+// hideSearchOnly：未解锁的橱窗榜只收搜索框（排序条与表头留着，那一行免费内容还要用）。
+function setLockedChrome(hide, hideSearchOnly) {
     const search = document.querySelector(".board-head .search");
-    if (search) search.hidden = hide;
+    if (search) search.hidden = hide || !!hideSearchOnly;
     // renderSortStrip 已按 config 置 hidden=false;锁定时在其之后覆盖为收起
     if (hide) { const strip = document.getElementById("sortStrip"); if (strip) strip.hidden = true; }
     const thead = document.querySelector(".table .thead");
@@ -781,14 +854,26 @@ function renderTable() {
 
     const foot = document.getElementById("tableFoot");
 
-    const items = getSortedItems();
     const tbody = document.getElementById("rankBody");
     const header = document.getElementById("valueHeader");
     if (!tbody || !header) return;
 
     // 锁定态 ＝ 公开 JSON 不含该 key（undefined，不是空数组）。提前判定：收起假控件，下方空状态渲染橱窗卡片。
     const locked = PAYWALL_ENABLED && data[currentTab] === undefined && currentTab !== TEASER_TAB && !FREE_TABS.has(currentTab);
-    setLockedChrome(locked);
+    const pending = licensePending();
+    // 未解锁的橱窗榜：公开文件里只有免费那 1 行，行下面接锁定卡片（见渲染行那段）。pending 时不出卡片（理由见 licensePending）。
+    const teaserLocked = PAYWALL_ENABLED && currentTab === TEASER_TAB && !license.valid && !pending;
+    // 搜索框：全锁榜没有行可搜；未解锁的橱窗榜只有 1 行，搜别的币只会得到「没有匹配」—— 而它其实在榜上、只是没解锁 ⇒ 两种都收起，
+    // 并清掉残留的搜索词（必须在 getSortedItems 之前）。排序条与表头只在全锁时收起。
+    setLockedChrome(locked, teaserLocked);
+    if ((locked || teaserLocked) && searchQuery) {
+        searchQuery = "";
+        const sb = document.getElementById("searchBox");
+        if (sb) sb.value = "";
+    }
+    // 锁定卡片在场时表体不限高（卡片别被内滚动切掉）
+    tbody.classList.toggle("tbody--gated", locked || teaserLocked);
+    const items = getSortedItems();
 
     const arrow = sortAsc ? " ▲" : " ▼";
     if (config.sorts) {
@@ -805,39 +890,31 @@ function renderTable() {
         // 日更资产（A股，休眠件）用「收盘后重算」文案；再加日更资产要并进 dailyAsset，否则落进加密的「整点后重算」。
         const dailyAsset = isAshareTab(currentTab);
         const strict = isStrategyTab(currentTab);
-        // 锁定态优先：未解锁 / 通行证失效 → 橱窗卡片；通行证有效只是付费数据没拉到 → 加载态（别催已付费的人重复付款）。
-        if (locked && !license.valid) {
-            const n = tabCount(currentTab);
-            const expired = !!license.key; // 有 key 但 !valid = 过期/吊销
-            const desc = expired
-                ? "通行证已失效（过期或被停用）<br>续费后即可继续查看完整名单"
-                // 写「全部榜单」不写「全部策略榜」：涨跌幅榜同样付费
-                : "购买通行证，解锁本站全部榜单的完整名单与多轴排序";
-            const ctaLabel = expired ? "重新输入 / 续费" : "立即解锁";
-            const ctaAction = expired ? () => openUnlockDialog() : openPurchaseDialog;
-            // 未解锁时额外给一条"已有通行证？"入口(回访用户直接输码,不必先进购买弹窗)
-            const hintHtml = expired ? ""
-                : `<button type="button" class="lockgate__link" id="lockgateEnterBtn">已有通行证？点此输入</button>`;
-            tbody.innerHTML = lockGateHtml(n, { desc, ctaLabel, hintHtml });
-            const cta = document.getElementById("emptyUnlockBtn");
-            if (cta) cta.addEventListener("click", ctaAction);
-            const enter = document.getElementById("lockgateEnterBtn");
-            if (enter) enter.addEventListener("click", () => openUnlockDialog());
-            // 页脚（role=status / aria-live）给读屏用户播报一句状态（#rankBody 不设 live）
-            if (foot) { foot.textContent = expired ? "通行证已失效，续费后可继续查看" : "该策略榜需通行证解锁"; foot.hidden = false; }
+        // 锁定态优先：未解锁 / 通行证确定失效 → 橱窗卡片；通行证有效（或还在等 Worker 答复）只是付费数据没拉到 → 加载态
+        // （别催已付费的人重复付款：Worker 一抖就对持有效卡的人显示「已失效…续费」，是这里出过的真问题）。
+        if (locked && !license.valid && !pending) {
+            const copy = lockGateCopy();
+            tbody.innerHTML = lockGateHtml(tabCount(currentTab), copy);
+            bindLockGate(copy.expired);
+            // 页脚（role=status / aria-live）给读屏用户播报一句状态（#rankBody 不设 live）；行情榜同样付费 ⇒ 说「该榜」不说「该策略榜」
+            if (foot) { foot.textContent = copy.expired ? "通行证已失效，续费后可继续查看" : "该榜需通行证解锁"; foot.hidden = false; }
             updateExportBar();  // 锁定态也要刷：否则切榜后导出坞仍显示上一榜的「已选 N 个」+ 表头勾选态残留
             return;
         }
         let ico, title, desc;
-        if (locked && license.valid) {
+        if (locked) {   // 走到这里 ＝ license.valid 或 pending（确定失效的上面已 return）
             const n = tabCount(currentTab);
-            // 两种情况分开说：a) paidData == null（整包没拉到）：fetchPaidData 失败不推进 lastPaidUpdateTime，下一轮确会重试；
-            // b) 整包有但缺这个 key（服务端没产出）：paidFetchKey 不变、数据更新前不再打 Worker ⇒ 别许诺「30 秒重试」，也别自动重试。
-            const missingKey = paidData && !(currentTab in paidData);
+            // 三种情况分开说：a) paidData == null（整包没拉到）：fetchPaidData 失败不推进 lastPaidUpdateTime，下一轮确会重试；
+            // b) 整包有但缺这个 key（服务端没产出）：paidFetchKey 不变、数据更新前不再打 Worker ⇒ 别许诺「30 秒重试」，也别自动重试；
+            // c) pending：本机有卡、Worker 还没给出明确答复 ⇒ 不说「有效」也不说「失效」，同样每轮重试。
+            const missingKey = license.valid && paidData && !(currentTab in paidData);
             ico = missingKey ? "🛠️" : "⏳";
             if (missingKey) {
                 title = n != null ? `该榜暂时缺数据（命中 ${n} 个）` : "该榜暂时缺数据";
                 desc = "通行证有效，但服务端本次未提供这个榜<br>下次数据更新后自动恢复，无需重新解锁";
+            } else if (pending) {
+                title = "正在验证通行证…";
+                desc = "验证服务暂时没连上<br>30 秒内自动重试，无需任何操作";
             } else {
                 title = n != null ? `已找到 ${n} 个标的，解锁数据加载中…` : "解锁数据加载中…";
                 desc = "通行证有效，付费数据暂时拉取失败<br>30 秒内自动重试，无需任何操作";
@@ -886,6 +963,17 @@ function renderTable() {
     const barKey = sortDef ? sortField : "value";
     const maxAbs = Math.max(...shown.map(x => Math.abs(x[barKey] ?? 0)), 1e-9);
 
+    // 未解锁的橱窗榜：免费那一行下面接模糊预览 + 锁定卡片（与全锁榜同一张卡，预览名次接着往下排）——
+    // 新访客的落地页就是这张榜，整张表只剩孤零零一行会被当成「就这么点内容」。
+    const total = (data[currentTab] || []).length;
+    const teaserHits = tabCount(currentTab); // paidMeta 的真实命中数（不是被截成 1 行的数组长度）
+    const teaserRest = teaserHits != null && teaserHits > total ? teaserHits - total : null;
+    const gateCopy = teaserLocked ? lockGateCopy() : null;
+    const gateHtml = gateCopy ? lockGateHtml(null, {
+        ...gateCopy, firstRank: shown.length + 1,
+        countHtml: teaserRest != null ? `还有 <b>${teaserRest}</b> 个标的` : "完整榜单已锁定",
+    }) : "";
+
     tbody.innerHTML = shown
         .map((item, i) => {
             const rank = i + 1;
@@ -917,7 +1005,7 @@ function renderTable() {
                 ? `${symBase} <span class="sym__suffix">${escapeHtml(item.name)}</span>`
                 : `${symBase} <span class="sym__suffix">/ ${symSuffix}</span>`;
             return `<div class="tr" role="row">
-                <div class="c-check" role="cell"><span class="row-accent"></span><input type="checkbox" class="chk chk--row symbol-check" data-symbol="${symSafe}" aria-label="选择 ${symSafe}" ${checked}></div>
+                <div class="c-check" role="cell"><span class="row-accent"></span><input type="checkbox" class="chk symbol-check" data-symbol="${symSafe}" aria-label="选择 ${symSafe}" ${checked}></div>
                 <div class="c-rank" role="cell">${rankCell}</div>
                 <div class="c-sym" role="cell">
                     <a class="sym" href="${escapeHtml(tvUrl)}" target="_blank" rel="noopener noreferrer" title="在 TradingView 打开 ${symSafe} 图表">
@@ -930,24 +1018,23 @@ function renderTable() {
                 </div>
             </div>`;
         })
-        .join("");
+        .join("") + gateHtml;
+    if (gateCopy) bindLockGate(gateCopy.expired);
 
     if (foot) {
-        // 表尾：搜索给「匹配 / 总数」· 截断提示 · 橱窗未解锁给解锁 CTA（别只写「共 1 个」）· 平常「共 N」
-        const total = (data[currentTab] || []).length;
-        const teaserLocked = PAYWALL_ENABLED && currentTab === TEASER_TAB && !license.valid;
+        // 表尾：橱窗未解锁说清「免费 1 行 + 其余上锁」（别只写「共 1 个」；解锁入口在行下面那张卡片上）· 搜索给「匹配 / 总数」· 截断提示 · 平常「共 N」
         // 量词随榜的语义走（与 renderBoardHead 同一判据）：策略榜「命中」、行情榜「共」
         const q = isStrategyTab(currentTab) ? "命中" : "共";
-        if (searchQuery) {
+        if (teaserLocked) {
+            // 排在搜索分支之前：这时 total 是被截成 1 行的数组长度，写成「匹配 1 / 命中 1 个」会与标题旁的命中数打架
+            foot.textContent = `免费预览第 1 名，${teaserRest != null ? `其余 ${teaserRest} 个标的` : "完整榜单"}需通行证解锁`;
+        } else if (pending && currentTab === TEASER_TAB) {
+            // 同样是被截成 1 行的橱窗榜，只是还在等 Worker 答复：别写成「共 1 个标的」
+            foot.textContent = "正在验证通行证，完整榜单稍后自动出现";
+        } else if (searchQuery) {
             foot.textContent = `匹配 ${items.length} / ${q} ${total} 个${capped ? ` · 仅渲染前 ${RENDER_CAP} 行` : ""}`;
         } else if (capped) {
             foot.textContent = `显示 ${RENDER_CAP} / ${q} ${total} 个 · 单榜最多渲染 ${RENDER_CAP} 行,其余可用搜索定位`;
-        } else if (teaserLocked) {
-            const hits = tabCount(currentTab); // paidMeta 的真实命中数（不是被截成 1 行的数组长度）
-            const rest = hits != null && hits > total ? `其余 ${hits - total} 个标的` : "完整榜单";
-            foot.innerHTML = `免费预览第 1 名，${rest}需通行证解锁<button type="button" class="foot-cta" id="teaserUnlockBtn">立即解锁</button>`;
-            const btn = document.getElementById("teaserUnlockBtn");
-            if (btn) btn.addEventListener("click", openPurchaseDialog);
         } else {
             foot.textContent = `共 ${total} 个标的`;
         }
@@ -1070,7 +1157,7 @@ function strategyHits(asset) {
     if (!data || !data.paidMeta) return null;
     return Object.keys(data.paidMeta)
         .filter(k => isStrategyTab(k) && TAB_META[k] && TAB_META[k].asset === asset)
-        .reduce((s, k) => s + data.paidMeta[k], 0);
+        .reduce((s, k) => s + (tabCount(k) || 0), 0);
 }
 
 function pulseTile(k, v, sub) {
@@ -1116,34 +1203,36 @@ function renderMarketOverview() {
     const s = mo.sentiment;
     const zone = s < 25 ? "fear2" : s < 45 ? "fear" : s < 55 ? "neutral" : s < 75 ? "greed" : "greed2";
     const items = [];
+    // 概览里直接印出来的值一律转义：付费包的同名 key 会盖过公开文件那份（loadData 的合并顺序），理由同 fmtVolVal。
+    const e = escapeHtml;
 
     // 第一块自报「加密市场」+ 刷新时刻：概览条对所有资产可见，不写明会被当成当前资产的指标。
     if (data.updateTime) items.push(`<div class="mkt__item mkt__item--time" title="加密 USDT 永续合约全市场，每小时更新">
         <span class="mkt__k">加密市场</span>
-        <span class="mkt__v"><b>${data.updateTime.slice(11, 16)}</b> UTC<span class="mkt__sub">每小时</span></span>
+        <span class="mkt__v"><b>${e(data.updateTime.slice(11, 16))}</b> UTC<span class="mkt__sub">每小时</span></span>
     </div>`);
 
     items.push(`<div class="mkt__item mkt__item--senti" title="市场情绪指数（0-100）：基于全市场涨跌宽度与平均涨跌幅自算，非第三方指数">
         <span class="mkt__k">市场情绪</span>
         <span class="mkt__senti">
-            <span class="mkt__gauge"><i class="mkt__marker" style="left:${Math.max(0, Math.min(100, s))}%"></i></span>
-            <span class="mkt__score mkt-z--${zone}">${s}<em>${mo.sentimentLabel}</em></span>
+            <span class="mkt__gauge"><i class="mkt__marker" style="left:${Math.max(0, Math.min(100, Number(s) || 0))}%"></i></span>
+            <span class="mkt__score mkt-z--${zone}">${e(s)}<em>${e(mo.sentimentLabel)}</em></span>
         </span>
     </div>`);
 
     if (b.total) items.push(`<div class="mkt__item" title="全市场 24h 上涨/下跌合约家数（市场宽度）">
         <span class="mkt__k">涨跌家数</span>
-        <span class="mkt__v"><span class="is-up">${b.up}↑</span> <span class="is-down">${b.down}↓</span><span class="mkt__sub">${b.upPct}% 上涨</span></span>
+        <span class="mkt__v"><span class="is-up">${e(b.up)}↑</span> <span class="is-down">${e(b.down)}↓</span><span class="mkt__sub">${e(b.upPct)}% 上涨</span></span>
     </div>`);
 
     items.push(`<div class="mkt__item" title="全市场加密 USDT 永续合约 24h 总成交额">
         <span class="mkt__k">24h 合约成交额</span>
-        <span class="mkt__v">$${mo.totalVolumeFormatted}</span>
+        <span class="mkt__v">$${e(mo.totalVolumeFormatted)}</span>
     </div>`);
 
     if (mo.funding) items.push(`<div class="mkt__item" title="全市场平均资金费率 + 正费率占比（正=多头付费，反映杠杆持仓偏向）">
         <span class="mkt__k">资金费率</span>
-        <span class="mkt__v">均 <span class="${mo.funding.avg >= 0 ? "is-up" : "is-down"}">${fmtMktPct(mo.funding.avg, 4)}</span><span class="mkt__sub">正 ${mo.funding.positivePct}%</span></span>
+        <span class="mkt__v">均 <span class="${mo.funding.avg >= 0 ? "is-up" : "is-down"}">${fmtMktPct(mo.funding.avg, 4)}</span><span class="mkt__sub">正 ${e(mo.funding.positivePct)}%</span></span>
     </div>`);
 
     items.push(mktAnchor("BTC", mo.btc));
@@ -1283,8 +1372,8 @@ function renderPulse() {
 function lockedPulseTile(asset, totalTabs) {
     const hits = strategyHits(asset);
     if (hits == null) return null;
-    // 锁图标与「解锁查看」CTA 只在锁定态出（别对已付费用户喊去解锁）；命中数两态共用。
-    const locked = PAYWALL_ENABLED && !license.valid;
+    // 锁图标与「解锁查看」CTA 只在锁定态出（别对已付费用户喊去解锁；pending 同理）；命中数两态共用。
+    const locked = PAYWALL_ENABLED && !license.valid && !licensePending();
     const sub = locked ? "解锁查看完整榜单与领涨标的" : unlockedPulseSub(asset);
     return [pulseTile("策略命中" + (locked ? " " + LOCK_SVG : ""), `<span class="is-gold">${hits}</span><span class="pulse__suffix is-muted">次 · ${totalTabs} 榜</span>`, sub)];
 }
@@ -1296,10 +1385,10 @@ function unlockedPulseSub(asset) {
     const keys = Object.keys(data.paidMeta)
         .filter(k => isStrategyTab(k) && TAB_META[k] && TAB_META[k].asset === asset);
     if (!keys.length) return "";
-    const top = keys.reduce((a, k) => (data.paidMeta[k] > data.paidMeta[a] ? k : a), keys[0]);
+    const top = keys.reduce((a, k) => ((tabCount(k) || 0) > (tabCount(a) || 0) ? k : a), keys[0]);
     return keys.length === 1
         ? `全部来自「${TAB_META[top].name}」`
-        : `命中最多：${TAB_META[top].name} ${data.paidMeta[top]} 个`;
+        : `命中最多：${TAB_META[top].name} ${tabCount(top) || 0} 个`;
 }
 
 // ⚠️ 别为了凑满磁贴去 data[某个榜] 里取行：那是筛选结果不是全市场，写成「监控 N 个」会把命中数说成标的总数。
@@ -1322,6 +1411,10 @@ function renderSkeleton() {
     }).join("");
 }
 
+// fetch 超时信号：连接挂起（对端黑洞、半开连接）时 fetch 自己不会失败 ⇒ loadData 一直停在 await 上、页面停在骨架屏，
+// loadInFlight 还把之后的轮询全挡掉。超时按「整个请求含读完响应体」算；没有 AbortSignal.timeout 的旧浏览器不设（行为照旧）。
+const timeoutSignal = ms => (typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
+
 /** 拉付费全量数据，返回 {data, authFailed}。authFailed=true ＝ 确定性鉴权失败（401/402）：
  *  调用方据此推进 lastPaidUpdateTime，免得失效卡密的常开标签页每 30s 空打 Worker。 */
 async function fetchPaidData() {
@@ -1333,6 +1426,7 @@ async function fetchPaidData() {
     try {
         const resp = await fetch(WORKER_API + "/api/data", {
             headers: { "X-License-Key": normalizeKey(license.key) },
+            signal: timeoutSignal(30000),
         });
         if (resp.ok) {
             license.valid = true;
@@ -1375,7 +1469,7 @@ async function loadData() {
             lastBustAt = Date.now();
             busted = true;
         }
-        const resp = await fetch(url, { cache: "no-cache" });
+        const resp = await fetch(url, { cache: "no-cache", signal: timeoutSignal(20000) });
         const fresh = await resp.json();
 
         // 单调性守卫：强穿之后，普通请求可能从 CDN 边缘拿回上一小时的旧体 ⇒ 旧于手头的直接丢弃。
@@ -1421,14 +1515,16 @@ async function loadData() {
         renderStaleBanner();
 
         // 渲染键 ＝ 各管道时间戳（各自独立刷新，漏一个它的更新就不重渲染；与 paidFetchKey 同构）
-        // + paidData 到位时刻（付费数据晚一轮才拉到时免费时间戳没变）+ license.valid（挂机中失效要重新上锁）。
+        // + paidData 到位时刻（付费数据晚一轮才拉到时免费时间戳没变）+ 卡密三态（挂机中失效要重新上锁；
+        //   待验证 → 确定失效时 valid 一直是 false，只看它就不会重渲染、页面停在「正在验证」）。
         const renderKey = fresh.updateTime + "|" + fresh.ashareUpdateTime
-            + "|" + (paidData ? paidData.updateTime : "") + "|" + (license.valid ? "1" : "0");
+            + "|" + (paidData ? paidData.updateTime : "") + "|" + (license.valid ? "1" : licensePending() ? "p" : "0");
         if (renderKey !== lastRenderKey) {
-            lastRenderKey = renderKey;
             renderPulse();
             renderNav();
             renderTable();
+            // 渲染成功后才记键：先记的话，渲染中途抛一次错（某行字段类型不对）就整小时不再重试，屏上留着旧行、胶囊却显示新时刻
+            lastRenderKey = renderKey;
         }
     } catch (e) {
         // 失败染当前资产的胶囊（移动端只显示非 dim 的那一个）；加资产时必须在这里给它映射胶囊 id，别落进兜底。
@@ -1455,9 +1551,21 @@ function initFooterUI() {
         b.addEventListener("click", () => document.getElementById(b.dataset.dialog).showModal()));
     document.querySelectorAll(".dialog-close").forEach(b =>
         b.addEventListener("click", () => document.getElementById(b.dataset.dialog).close()));
-    // 点 backdrop 也能关：backdrop 点击的 target 是 <dialog> 本身，内容区的是子元素。
-    document.querySelectorAll("dialog.modal").forEach(d =>
-        d.addEventListener("click", e => { if (e.target === d) d.close(); }));
+    // 点 backdrop 关闭：必须按坐标判「落在对话框外」。dialog 自带 28px 内距，点到内距或子元素之间的缝，target 同样是
+    // <dialog> 本身 ⇒ 只判 target 会在框内误关（购买弹窗里套餐卡与邮箱之间那道缝就中招）。按下时也得在框外：
+    // 在输入框里拖选文字、松手落到框外不该关。键盘触发的 click 的 target 是按钮本身，走不到这里。
+    document.querySelectorAll("dialog.modal").forEach(d => {
+        const outside = e => {
+            const r = d.getBoundingClientRect();
+            return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+        };
+        let downOutside = false;
+        d.addEventListener("mousedown", e => { downOutside = e.target === d && outside(e); });
+        d.addEventListener("click", e => {
+            if (e.target === d && downOutside && outside(e)) d.close();
+            downOutside = false;
+        });
+    });
 }
 
 // === 付费墙：通行证状态 / 输入 / 购买 三块 UI ===
@@ -1477,6 +1585,11 @@ function renderLicenseStatus() {
             badge.className = base + " lic-on";
             const planLabel = PLAN_LABEL[license.plan] || "";
             badge.textContent = `已解锁${planLabel ? " · " + planLabel : ""}`;
+            if (btnEl) btnEl.textContent = "管理通行证";
+        } else if (licensePending()) {
+            // 本机有卡、Worker 还没答复（刚开页 / 验证服务没连上）：中性样式，别先挂红色的「失效」
+            badge.className = base + " lic-off";
+            badge.textContent = "验证中…";
             if (btnEl) btnEl.textContent = "管理通行证";
         } else if (license.key) {
             badge.className = base + " lic-expired";
@@ -1542,9 +1655,15 @@ function initPaywallUI() {
         const btn = e.target.closest(".buy-plan");
         if (!btn) return;
         selectedPlan = btn.dataset.plan;
-        document.querySelectorAll(".buy-plan").forEach(b => b.classList.toggle("is-selected", b === btn));
+        syncPlanButtons();
     });
-    document.querySelector(`.buy-plan[data-plan="${selectedPlan}"]`)?.classList.add("is-selected");
+    // 选中态同时写 class 与 aria-pressed（只有 class 时读屏器听不出选的是哪一档）
+    const syncPlanButtons = () => document.querySelectorAll(".buy-plan").forEach(b => {
+        const on = b.dataset.plan === selectedPlan;
+        b.classList.toggle("is-selected", on);
+        b.setAttribute("aria-pressed", String(on));
+    });
+    syncPlanButtons();
 
     // 输入通行证：直接拉一次付费数据判有效性（Worker 是唯一真相源，前端不另写校验）。
     document.getElementById("licenseForm")?.addEventListener("submit", async e => {
@@ -1556,8 +1675,10 @@ function initPaywallUI() {
             if (msg) { msg.textContent = LOCK_REASON.missing; msg.className = "lic-msg lic-err"; }
             return;
         }
+        // 先验后存：fetchPaidData 会就地改 license，留一份原状 —— 输错一位不该把本机原来那张有效卡冲掉（见下面失败分支）。
+        const prev = { ...license };
         license.key = key;
-        safeStore.set("localStorage", LS_LICENSE, key);
+        license.reason = null;
         if (msg) { msg.textContent = "校验中…"; msg.className = "lic-msg"; }
         const sbtn = document.querySelector("#licenseForm .btn-primary");
         if (sbtn) sbtn.disabled = true; // 校验期间禁用"解锁",防慢网并发重复提交(与 checkout 一致)
@@ -1565,6 +1686,7 @@ function initPaywallUI() {
         const result = await fetchPaidData();
         if (result.data) {
             if (sbtn) sbtn.disabled = false;
+            safeStore.set("localStorage", LS_LICENSE, key);
             paidData = result.data;
             // 合并后恢复免费文件的 updateTime：paidData 带的是 KV 上传时刻，留着会让下一轮单调性守卫把正常数据误判为回滚。
             const freeUpdateTime = data ? data.updateTime : null;
@@ -1582,9 +1704,19 @@ function initPaywallUI() {
             setTimeout(() => document.getElementById("licenseDialog").close(), 700);
         } else {
             if (sbtn) sbtn.disabled = false;
+            // reason：这把新 key 的失败原因；null ＝ 网络 / 5xx，没验出结果。
+            const reason = license.reason;
+            // 退回原状的两种情况：原来那张是有效的（新 key 不管为什么没过，都别动它）；新 key 查无此卡（多半是输错，
+            // 存下来只会让页面一直挂着「通行证失效」）。其余 ＝ 原来没有有效卡、且新 key 是过期 / 吊销（状态如实挂出来）
+            // 或没验出结果（存下来让轮询接着验）⇒ 这时才落盘。
+            const keepPrev = prev.valid || reason === "not_found";
+            if (keepPrev) Object.assign(license, prev);
+            else safeStore.set("localStorage", LS_LICENSE, key);
             renderLicenseStatus();
+            if (data) { renderNav(); renderTable(); renderPulse(); }
             if (msg) {
-                msg.textContent = LOCK_REASON[license.reason] || "校验失败，请稍后重试";
+                msg.textContent = LOCK_REASON[reason]
+                    || (keepPrev ? "暂时连不上验证服务，请稍后再试（原通行证不受影响）" : "暂时连不上验证服务，通行证已记下，稍后自动重试");
                 msg.className = "lic-msg lic-err";
             }
         }
@@ -1605,6 +1737,7 @@ function initPaywallUI() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ plan: selectedPlan, email }),
+                signal: timeoutSignal(30000),
             });
             const body = await resp.json().catch(() => null);
             if (resp.ok && body && body.payment_url) {
@@ -1617,6 +1750,11 @@ function initPaywallUI() {
         }
         btn.disabled = false;
         btn.textContent = "去支付";
+    });
+    // 从 OxaPay 收银台点浏览器「返回」、页面走 bfcache 原样恢复时，按钮还停在「跳转中…」且禁用 ⇒ 复位
+    window.addEventListener("pageshow", e => {
+        const btn = document.getElementById("checkoutSubmitBtn");
+        if (e.persisted && btn) { btn.disabled = false; btn.textContent = "去支付"; }
     });
 
     // 付款完成跳回本站会带 ?unlock=1（Worker 的 return_url）；webhook 异步发卡，此刻卡密未必已到邮箱，提示要如实。

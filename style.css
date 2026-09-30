@@ -100,6 +100,11 @@
     --dock-bg:#161512; --dock-ink:#faf9f5; --dock-accent:#e8977a; --dock-line:rgba(250,249,245,.16);
     --group-dash:rgba(20,20,19,.09);
     --modal-bg:#faf9f5;
+    /* 自绘勾选框：未选中的描边（压在 --panel 与 --th-bg 上都 ≥3:1）＋ 选中后的对勾与半选横杠
+       （笔画色 ＝ 压在 --gold 上的那一色，亮暗各一份；改 --gold 要重测这一对）*/
+    --chk-line:#86837b;
+    --chk-tick:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23faf9f5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.6 6.3l2.3 2.4 4.5-5.2'/%3E%3C/svg%3E");
+    --chk-dash:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23faf9f5' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 6h6'/%3E%3C/svg%3E");
     /* 卡片纯平面 + hairline,无高光叠层——但 background:var(--panel-hi),var(--panel) 是多层
        背景简写,非末层必须是合法 <image>；纯色/transparent 关键字在此位非法会让整条
        background 被丢弃(真实踩过:board-head/pulse/mkt/rail 背景全消失)。用「全透明渐变」占位。*/
@@ -153,6 +158,9 @@
     --dock-bg:#242320; --dock-ink:#faf9f5; --dock-accent:#e8977a; --dock-line:rgba(250,249,245,.18);
     --group-dash:rgba(250,249,245,.08);
     --modal-bg:#1c1b19;
+    --chk-line:#77746c;
+    --chk-tick:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23141413' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.6 6.3l2.3 2.4 4.5-5.2'/%3E%3C/svg%3E");
+    --chk-dash:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23141413' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 6h6'/%3E%3C/svg%3E");
     --panel-hi:linear-gradient(transparent,transparent);
     --chip-wash:rgba(250,249,245,.045);
     --shadow-1:0 1px 2px rgba(0,0,0,.3);
@@ -194,13 +202,16 @@ a:hover{color:var(--gold-hi)}
 
 /* ---------------- app 骨架(纸墨:留白再放一档)---------------- */
 .app{min-height:100vh;padding-bottom:96px;color:var(--text)}
-.wrap{max-width:1240px;margin:0 auto;padding:34px 28px 0}
-.layout{display:grid;grid-template-columns:252px minmax(0,1fr);gap:32px;align-items:start}
+/* 总宽上限 1360；rail 在 252–328px 之间随可用宽度伸缩：主栏先保住 900px（概览七块排成一行的下限，932 ＝ 900 + 32 列距），
+   多出来的宽度先全给 rail，rail 到 328px 后才轮到主栏（最宽 944px）。328px 时 rail 上的榜名除最长那一段外每段都能
+   整段排一行（锁定态段尾还挂着锁图标）；改这两个数或榜名字号，先量最长几段 .nm-seg 的宽度。 */
+.wrap{max-width:1360px;margin:0 auto;padding:34px 28px 0}
+.layout{display:grid;grid-template-columns:clamp(252px,calc(100% - 932px),328px) minmax(0,1fr);gap:32px;align-items:start}
 .main{min-width:0}
 
 /* ---------------- topbar(实底填充,永不 blur/sticky)---------------- */
 .topbar{background:var(--header-bg);border-bottom:1px solid var(--line)}
-.topbar__inner{max-width:1240px;margin:0 auto;padding:0 28px;min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.topbar__inner{max-width:1360px;margin:0 auto;padding:0 28px;min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .brand{display:flex;align-items:center;gap:12px}
 .brand__logo{width:34px;height:34px;flex:none}
 .brand__name{font-size:18px;font-weight:600;letter-spacing:-.01em;line-height:1.15;white-space:nowrap}
@@ -296,7 +307,11 @@ a:hover{color:var(--gold-hi)}
    只有 crypto 正常。见 tokens 里 -rgb 三兄弟的注释,别写回字面 rgba)*/
 [data-asset="crypto"] .nav-item.is-active{background:rgba(var(--asset-crypto-rgb),.12)}
 [data-asset="ashare"] .nav-item.is-active{background:rgba(var(--asset-ashare-rgb),.12)}
-.nav-item__name{font-weight:500}
+/* 榜名分两层 inline-block（script.js nameSegHtml，rail 与榜头标题共用）：seg ＝ 按「＋」分的条件，part ＝ 段内在拉丁缩写前
+   再切的一块。整块放得下就不在块内折行 ⇒ 折行点先落在条件之间（「＋」领起下一行），其次落在缩写前；再放不下才逐字折，
+   balance 把两行匀开、不留单字尾行。 */
+.nm-seg,.nm-part{display:inline-block;max-width:100%;text-wrap:balance}
+.nav-item__name{flex:1 1 auto;min-width:0;font-weight:500;text-wrap:balance}
 .nav-item.is-active .nav-item__name{font-weight:600}
 .tab-lock{width:11px;height:11px;flex:none;opacity:.7;vertical-align:-1px}
 .nav-item__count{margin-left:auto;flex:none;font-family:var(--mono);font-size:11px;color:var(--muted-2);font-variant-numeric:tabular-nums}
@@ -305,7 +320,8 @@ a:hover{color:var(--gold-hi)}
 .nav-item__bar{position:absolute;left:0;top:50%;transform:translateY(-50%);height:0;width:2.5px;border-radius:3px;background:var(--asset-accent);opacity:0;transition:height .16s,opacity .16s}
 .nav-item.is-active .nav-item__bar{height:62%;opacity:1}
 .tf-chip{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:4px;font-size:10px;font-weight:700;flex:none}
-.tf-chip--wide{width:auto;min-width:15px;padding:0 4px;letter-spacing:.2px}
+/* 跨周期榜（「日月」「日周月」）竖排成一枚窄药丸：徽标列恒为 15px ⇒ 各行榜名左缘对齐（横排的宽徽标会把榜名顶出去一截） */
+.tf-chip--wide{height:auto;padding:2px 0;line-height:12px;text-align:center;word-break:break-all}
 [data-asset="crypto"] .tf-chip{background:rgba(var(--asset-crypto-rgb),.16);color:var(--asset-crypto-ink)}
 [data-asset="ashare"] .tf-chip{background:rgba(var(--asset-ashare-rgb),.16);color:var(--asset-ashare-ink)}
 /* 暗色下资产色变亮,tf-chip 底/字跟随(靠 token 自动翻,无需逐一覆盖)*/
@@ -375,6 +391,20 @@ a:hover{color:var(--gold-hi)}
     .reso--half .reso__id{flex-direction:row;flex-wrap:wrap;align-items:baseline;column-gap:10px}
     .reso--half .reso__score b{font-size:20px}
 }
+/* 通栏行布局（≥861px 的日线卡、861–1080px 叠放时的周线 / 月线卡）：各行共用卡片这一套列轨（subgrid）⇒ 「币名」列取
+   全卡最宽的那一行，分数与 chip 的左缘逐行对齐。不支持 subgrid 的旧浏览器落回上面每行各算各的列宽（只是对不齐）。 */
+@supports (grid-template-columns:subgrid){
+    @media (min-width:861px){
+        .reso--wide{display:grid;grid-template-columns:20px minmax(132px,auto) 56px minmax(0,1fr);column-gap:14px}
+        .reso--wide>*{grid-column:1 / -1}
+        .reso--wide .reso__row{grid-template-columns:subgrid}
+    }
+    @media (min-width:861px) and (max-width:1080px){
+        .reso--half{display:grid;grid-template-columns:20px minmax(132px,auto) 56px minmax(0,1fr);column-gap:14px}
+        .reso--half>*{grid-column:1 / -1}
+        .reso--half .reso__row{grid-template-columns:subgrid}
+    }
+}
 
 /* ---------------- 市场概览全局条(免费,加密专属)---------------- */
 .mkt{background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-1);margin-bottom:16px;overflow:hidden}
@@ -405,22 +435,28 @@ a:hover{color:var(--gold-hi)}
 @media (min-width:641px) and (max-width:1239px){ .mkt__item--time{display:none} }
 
 /* ---------------- board 头(标识 + 搜索)---------------- */
-.board-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px 22px;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:16px}
+/* 搜索框顶对齐标题行（flex-start）：说明展开后有十几行高，居中会让搜索框悬在说明中段 */
+.board-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:18px 22px;background:var(--panel-hi),var(--panel);border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:16px}
+.board-head__main{flex:1 1 auto;min-width:0}
 .board-head__title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 /* 其站 h2/h3 实测 = Sans 600 / 24px / 无字距。标题放大一档、字重反而收一档:
    纸墨体系里「大而不重」才是编辑感,700 会显得像后台管理系统。*/
 .board-head__name{font-size:24px;font-weight:600;margin:0;letter-spacing:-.015em;line-height:1.25;text-wrap:balance}
 /* 说明行是全站最像「正文」的一处 ⇒ 走衬线(Latin 部分为 Georgia,CJK 无衬线) */
-.board-head__note{font-family:var(--font-serif);font-size:13.5px;color:var(--muted);margin-top:8px;font-variant-numeric:tabular-nums;line-height:1.6}
+/* max-width ＝ 行长上限（约 46 个汉字）：锁定态搜索框收起后说明会横贯整栏，一行 60 多个字读不动 */
+.board-head__note{font-family:var(--font-serif);font-size:13.5px;color:var(--muted);margin-top:8px;max-width:46em;font-variant-numeric:tabular-nums;line-height:1.65;text-wrap:pretty}
 /* 说明默认收起（桌面两行、手机三行）：line-clamp 只动排版、不引入合成层；展开 / 收起走 #bhNoteToggle，状态记在本机 */
 .board-head__note.is-clamped{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+/* 展开后按段落排（script.js noteHtml 分的段）；收起时把 <p> 压回 inline —— line-clamp 要的是一整段连续的行 */
+.board-head__note p+p{margin-top:.55em}
+.board-head__note.is-clamped p{display:inline}
 .note-toggle{display:inline-flex;align-items:center;margin-top:4px;padding:3px 0;background:none;border:none;font-family:var(--font-sans);font-size:12.5px;font-weight:600;color:var(--gold-ink);cursor:pointer}
 .note-toggle:hover{text-decoration:underline}
 .board-head__hit{font-family:var(--font-sans);font-size:12.5px;color:var(--muted-2);font-variant-numeric:tabular-nums;white-space:nowrap}
 .asset-tag{font-size:11.5px;font-weight:600;padding:3.5px 9px;border-radius:6px;letter-spacing:0;color:var(--asset-crypto-ink);background:rgba(var(--asset-crypto-rgb),.14);white-space:nowrap}
 .asset-tag.is-ashare{color:var(--asset-ashare-ink);background:rgba(var(--asset-ashare-rgb),.14)}
 .tf-badge{font-size:11.5px;font-weight:600;padding:3.5px 9px;border-radius:6px;color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);white-space:nowrap;letter-spacing:0}
-.search{display:flex;align-items:center;gap:8px;width:250px;flex:none;padding:8.5px 12px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-btn);transition:border-color var(--dur),box-shadow var(--dur)}
+.search{display:flex;align-items:center;gap:8px;width:250px;flex:none;margin-top:-3px;padding:8.5px 12px;background:var(--panel-2);border:1px solid var(--line);border-radius:var(--r-btn);transition:border-color var(--dur),box-shadow var(--dur)}
 .search:focus-within{border-color:rgba(var(--gold-rgb),.55);box-shadow:0 0 0 3px rgba(var(--gold-rgb),.12)}
 .search__icon{width:14px;height:14px;color:var(--muted-2);flex:none}
 .search__input{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font-size:13.5px;font-family:inherit}
@@ -446,15 +482,22 @@ a:hover{color:var(--gold-hi)}
 .sort-chip{flex:none;display:inline-flex;align-items:center;gap:4px;padding:6.5px 13px;font-size:12.5px;font-weight:500;font-family:var(--font-sans);color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);border-radius:var(--r-pill);cursor:pointer;white-space:nowrap;transition:color .14s,border-color .14s,background .14s}
 .sort-chip:hover{color:var(--text);border-color:var(--muted)}
 .sort-chip__arrow{font-size:9px;line-height:1}
+/* 周期分隔：日 / 周 / 月三组轴之间一道 hairline（renderSortStrip 在标签首字变化处插入），三十多根轴不再连成一片 */
+.sort-strip__sep{flex:none;align-self:center;width:1px;height:16px;margin:0 3px;background:var(--line-2)}
 .sort-chip.is-active{font-weight:600}
 [data-asset="crypto"] .sort-chip.is-active{background:rgba(var(--asset-crypto-rgb),.14);border-color:rgba(var(--asset-crypto-rgb),.5);color:var(--asset-crypto-ink)}
 [data-asset="ashare"] .sort-chip.is-active{background:rgba(var(--asset-ashare-rgb),.13);border-color:rgba(var(--asset-ashare-rgb),.5);color:var(--asset-ashare-ink)}
 
 /* ---------------- 表格(表头/表体分离——表体内滚动,绝不 sticky)---------------- */
 .table{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-1);overflow:hidden}
-.thead{display:flex;align-items:stretch;background:var(--th-bg);border-bottom:1px solid var(--line);overflow-y:hidden;scrollbar-gutter:stable}
+/* 表体滚动条走标准属性（细条 + 透明轨道）：html 上的 scrollbar-color 会继承下来，而一旦标准属性生效，下面的
+   ::-webkit-scrollbar 在新版 Chromium 里就不再起作用（那几条只剩旧 Safari 在用）。表头要一起写 thin ——
+   它靠 scrollbar-gutter 预留与表体同宽的槽，两边宽度不一致列就对不齐。 */
+.thead{display:flex;align-items:stretch;background:var(--th-bg);border-bottom:1px solid var(--line);overflow-y:hidden;scrollbar-gutter:stable;scrollbar-width:thin}
 .th{display:flex;align-items:center;font-size:11.5px;font-weight:600;letter-spacing:0;color:var(--muted);user-select:none;padding:13px 0}
-.tbody{max-height:min(70vh,760px);overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;overscroll-behavior:contain}
+.tbody{max-height:min(70vh,760px);overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent;overscroll-behavior:contain}
+/* 锁定卡片在场时（全锁榜、未解锁的橱窗榜）不限高：卡片被内滚动切掉一截比多滚一段页面糟；槽照留，表头才对得齐 */
+.tbody.tbody--gated{max-height:none}
 .tbody::-webkit-scrollbar{width:11px}
 .tbody::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:6px;border:3px solid var(--panel)}
 .tr{display:flex;align-items:center;border-bottom:1px solid var(--row-line);transition:background .12s}
@@ -469,10 +512,15 @@ a:hover{color:var(--gold-hi)}
 [data-asset="ashare"] .sort-opt.active,[data-asset="ashare"] .sort-arrow{color:var(--asset-ashare-ink)}
 .sort-opt:hover{color:var(--text)}
 .sort-arrow{color:var(--asset-crypto-ink);font-size:10px;margin-left:2px}
-.chk{accent-color:var(--gold);width:15px;height:15px;cursor:pointer}
-.chk--row{opacity:.32;transition:opacity .12s}
-.tr:hover .chk--row,.chk--row:checked{opacity:1}
-@media (hover:none){.chk--row{opacity:.62}}
+/* 自绘勾选框（appearance:none + 内嵌 SVG 对勾）：原生控件在暗色下是一块灰白实心方块，与纸墨的 hairline 语汇对不上。
+   描边走 --chk-line（对行底 ≥3:1，WCAG 1.4.11）⇒ 不再靠 opacity 压暗；选中 ＝ 品牌色实底。
+   不加 transition：透明 → 实色的 background 过渡在真机上卡在起始值过（见 .asset-seg__opt 那条注释）。
+   强制配色（Windows 高对比）下背景图会被系统抹掉 ⇒ 退回原生控件。 */
+.chk{appearance:none;-webkit-appearance:none;flex:none;width:15px;height:15px;margin:0;border:1.5px solid var(--chk-line);border-radius:4px;background:transparent center / 11px 11px no-repeat;cursor:pointer}
+.chk:hover{border-color:var(--muted)}
+.chk:checked,.chk:indeterminate{background-color:var(--gold);border-color:var(--gold);background-image:var(--chk-tick)}
+.chk:indeterminate{background-image:var(--chk-dash)}
+@media (forced-colors:active){.chk{appearance:auto;-webkit-appearance:auto}}
 .row-accent{position:absolute;left:0;top:15%;height:70%;width:2.5px;border-radius:3px;background:var(--asset-accent);opacity:0;transition:opacity .14s}
 .tr:hover .row-accent{opacity:1}
 /* 名次:top-3 用扁平精修徽记(金/银/铜墨 + hairline 环,无渐变/无游戏感)*/
@@ -491,7 +539,8 @@ a:hover{color:var(--gold-hi)}
 .sym__tv{opacity:0;font-size:10.5px;color:var(--muted-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;white-space:nowrap;transform:translateY(-1px);transition:opacity .15s,color .15s,border-color .15s;flex:none}
 .tr:hover .sym__tv{opacity:1;color:var(--gold-ink);border-color:rgba(var(--gold-rgb),.4)}
 .sub{font-size:11.5px;color:var(--muted-2);margin-top:5px;line-height:1.5;font-variant-numeric:tabular-nums}
-.val{position:relative;display:inline-block;padding-bottom:7px;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:15.5px;letter-spacing:-.01em;white-space:nowrap;color:var(--text)}
+/* 数字下方那道 hairline 是强度条的轨道（与数字同宽）：没有它，值小的行只剩一截 8px 短横，看着像脏点而不是「条」 */
+.val{position:relative;display:inline-block;padding-bottom:7px;font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:15.5px;letter-spacing:-.01em;white-space:nowrap;color:var(--text);background:linear-gradient(var(--line),var(--line)) right bottom / 100% 2px no-repeat}
 .val--up{color:var(--price-up)}
 .val--down{color:var(--price-down)}
 /* 强度条更细更静(编辑式克制):2px,直角略收 */
@@ -506,8 +555,6 @@ a:hover{color:var(--gold-hi)}
 .c-val--badged{align-items:baseline;gap:8px}
 .val-rank{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:11px;font-weight:500;color:var(--muted-2);white-space:nowrap}
 .table-foot{margin-top:13px;padding:0 4px;font-size:12px;color:var(--muted-2);text-align:right;letter-spacing:0;font-variant-numeric:tabular-nums}
-.foot-cta{margin-left:8px;padding:3.5px 12px;border-radius:6px;border:1px solid transparent;background:var(--btn-fill);color:var(--btn-ink);font-weight:600;font-size:12px;cursor:pointer;font-family:inherit}
-.foot-cta:hover{box-shadow:var(--shadow-btn)}
 
 /* ---------------- 状态(骨架=静态灰条;空态)---------------- */
 .skeleton-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--row-line)}
@@ -515,7 +562,7 @@ a:hover{color:var(--gold-hi)}
 .empty{text-align:center;padding:58px 20px 64px}
 .empty__icon{width:46px;height:46px;margin:0 auto 15px;border-radius:50%;background:var(--panel-2);border:1px solid var(--line-2);display:flex;align-items:center;justify-content:center;font-size:19px}
 .empty__title{font-size:16px;color:var(--text);font-weight:600;margin-bottom:7px}
-.empty__desc{font-family:var(--font-serif);font-size:13px;color:var(--muted);line-height:1.75}
+.empty__desc{font-family:var(--font-serif);font-size:13px;color:var(--muted);line-height:1.75;text-wrap:balance}
 .empty__cta{margin-top:18px;padding:10px 26px}
 
 /* 锁定橱窗(未解锁/失效的策略榜):模糊预览行 + 品牌锁卡片。GPU 三约束不触碰。*/
@@ -537,7 +584,7 @@ a:hover{color:var(--gold-hi)}
 .lockgate__icon svg{width:23px;height:23px}
 .lockgate__count{font-size:16px;font-weight:600;color:var(--text)}
 .lockgate__count b{margin:0 3px;font-size:21px;font-weight:700;color:var(--asset-accent);font-variant-numeric:tabular-nums;font-family:var(--mono)}
-.lockgate__desc{font-family:var(--font-serif);margin-top:9px;font-size:13.5px;line-height:1.7;color:var(--muted);max-width:296px}
+.lockgate__desc{font-family:var(--font-serif);margin-top:9px;font-size:13.5px;line-height:1.7;color:var(--muted);max-width:296px;text-wrap:balance}
 .lockgate__cta{margin-top:21px;min-width:190px;padding:11.5px 30px;border-radius:var(--r-btn);font-size:14.5px;font-weight:600;
     font-family:inherit;cursor:pointer;transition:box-shadow .15s}
 .lockgate__link{margin-top:14px;padding:4px;background:none;border:none;color:var(--muted-2);font-size:12.5px;font-family:inherit;
@@ -578,15 +625,20 @@ a:hover{color:var(--gold-hi)}
 .modal::backdrop{background:rgba(20,20,19,.38)}
 [data-theme="dark"] .modal::backdrop{background:rgba(0,0,0,.62)}
 .modal h3{font-size:20px;margin-bottom:12px;font-weight:600;letter-spacing:-.012em;line-height:1.3}
+/* 右上角关闭钮（输入通行证 / 购买两个表单弹窗；常见问题与免责声明底部自带「关闭」）。只过渡 color，background 直接切 */
+.modal-x{position:absolute;top:12px;right:12px;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;background:transparent;border:none;border-radius:var(--r-btn);color:var(--muted-2);font-size:14px;line-height:1;font-family:inherit;cursor:pointer;transition:color .15s}
+.modal-x:hover{color:var(--text);background:var(--nav-hover)}
 .modal-actions{display:flex;align-items:center;gap:8px;margin-top:20px}
 .spacer{flex:1}
 .modal-actions button,.modal-actions a{padding:9.5px 19px;border-radius:var(--r-btn);font-size:13.5px;font-weight:600;cursor:pointer;text-decoration:none;transition:all .15s;text-align:center;font-family:inherit}
 .btn-ghost{border:1px solid var(--line-2);background:transparent;color:var(--muted)}
 .btn-ghost:hover{border-color:var(--muted);color:var(--text)}
 /* 提示/说明属长文 ⇒ 衬线 */
-.modal-hint{font-family:var(--font-serif);font-size:13.5px;color:var(--muted);line-height:1.8;margin-bottom:18px}
+.modal-hint{font-family:var(--font-serif);font-size:13.5px;color:var(--muted);line-height:1.8;margin-bottom:18px;text-wrap:pretty}
 .btn-primary{background:var(--btn-fill);border:1px solid transparent;color:var(--btn-ink);font-weight:600}
 .btn-primary:hover{box-shadow:var(--shadow-btn)}
+/* 表单弹窗（输入通行证 / 购买）：主按钮吃掉余下宽度，别和次按钮挤在左边留半行空白 */
+.modal form .modal-actions .btn-primary{flex:1}
 .modal-foot{margin-top:14px;font-size:12px;color:var(--muted-2);line-height:1.7}
 .text-input{width:100%;padding:12.5px;background:var(--panel-2);border:1px solid var(--line-2);border-radius:var(--r-sm);color:var(--text);font-size:14.5px;font-family:inherit;transition:border-color .15s,box-shadow .15s}
 [data-theme="dark"] .text-input{background:var(--bg0)}
@@ -611,10 +663,10 @@ a:hover{color:var(--gold-hi)}
 .buy-steps b{color:var(--gold-ink);font-family:var(--mono)}
 
 /* FAQ / 免责声明 —— 全站唯一的长文区,衬线在这里最名副其实 */
-.faq{max-height:55vh;overflow-y:auto;font-family:var(--font-serif);font-size:14px;color:var(--muted);line-height:1.9;padding-right:4px;overscroll-behavior:contain}
+.faq{max-height:55vh;overflow-y:auto;font-family:var(--font-serif);font-size:14px;color:var(--muted);line-height:1.9;padding-right:8px;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent;overscroll-behavior:contain}
 .faq h4{font-family:var(--font-sans);color:var(--text);font-size:14.5px;margin:19px 0 6px;font-weight:600}
 .faq h4:first-child{margin-top:0}
-.faq p{margin-bottom:8px}
+.faq p{margin-bottom:8px;text-wrap:pretty}
 .faq b{color:var(--text);font-weight:700}
 
 /* ---------------- ≤640px:抽屉导航 + 折叠表格 ---------------- */
@@ -654,7 +706,7 @@ a:hover{color:var(--gold-hi)}
     .board-head__name{font-size:21px}
     .board-head__note{margin-top:6px;font-size:13px;line-height:1.6}
     .board-head__note.is-clamped{-webkit-line-clamp:3}
-    .search{width:100%}
+    .search{width:100%;margin-top:0}
     /* iOS Safari <16px 输入框聚焦会强制放大整页——搜索/弹窗输入统一 ≥16px */
     .search__input{font-size:16px}
     .text-input{font-size:16px}
@@ -701,6 +753,11 @@ a:hover{color:var(--gold-hi)}
 /* 641–860px:桌面双列但收窄 rail、缩固定列,宽度让给标的列 */
 @media (min-width:641px) and (max-width:860px){
     .layout{grid-template-columns:210px minmax(0,1fr);gap:18px}
+    /* rail 只剩 210px（榜名列约 100px）：缩写前那一刀放开（part 退回 inline），不然「月线突破 / SAR空头第 / 二根低点」白多一行 */
+    .nav-item .nm-part{display:inline}
+    /* 主栏不足 600px：搜索框挪到标题下面（同 ≤640px），否则标题与说明被挤成 150px 宽的一窄条 */
+    .board-head{flex-direction:column;align-items:stretch;gap:12px}
+    .search{width:100%;margin-top:0}
     .c-rank{width:48px}
     .c-val{width:150px;padding:0 12px 0 6px;overflow:hidden;text-overflow:ellipsis}
     .sub{display:flex;flex-wrap:wrap;column-gap:10px;max-height:3em;overflow:hidden}

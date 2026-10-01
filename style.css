@@ -780,8 +780,11 @@ a:hover{color:var(--gold-hi)}
     .asset-seg__dot{width:5px;height:5px}
 }
 
-/* ≤360px 超窄屏:再压固定列宽 */
+/* ≤360px 超窄屏:再压固定列宽;顶栏(汉堡+品牌+胶囊+主题钮)在 320 宽原来超出 4px,收一点内距与间距(实测离屏幕右缘 7.7px) */
 @media (max-width:360px){
+    .topbar__inner{padding:0 10px;gap:6px}
+    .topbar__tools{gap:8px}
+    .fresh{padding:4px 8px}
     .c-check{width:30px}
     .c-rank{width:34px}
     .c-val{width:100px;padding-right:8px}

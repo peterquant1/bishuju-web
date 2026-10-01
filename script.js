@@ -16,11 +16,11 @@ function fmtTakerVal(x) {
 function fmtRsiVal(x) { return x == null ? "—" : x.toFixed(2); }
 // 成交额显示串是后端拼好的字符串、原样进 innerHTML ⇒ 转义（其余格式化都对数字做 toFixed，混不进标记；
 // 付费 KV 凭上传 token 可写，别让那把 token 顺带变成往付费用户页面里塞脚本的口子）。
-function fmtVolVal(v) { return v.volumeFormatted != null ? escapeHtml(v.volumeFormatted) : "N/A"; }
+function fmtVolVal(v) { return v.volumeFormatted != null ? escapeHtml(v.volumeFormatted) : "—"; }
 // 周 / 月成交额读各自的显示串。⚠️ 别复用 fmtVolVal（写死读日成交额的 volumeFormatted）：
 // 套上去会显示日成交额、却按周 / 月成交额排序，不报错。
-function fmtWeeklyVolVal(v) { return v.weeklyVolumeFormatted != null ? escapeHtml(v.weeklyVolumeFormatted) : "N/A"; }
-function fmtMonthlyVolVal(v) { return v.monthlyVolumeFormatted != null ? escapeHtml(v.monthlyVolumeFormatted) : "N/A"; }
+function fmtWeeklyVolVal(v) { return v.weeklyVolumeFormatted != null ? escapeHtml(v.weeklyVolumeFormatted) : "—"; }
+function fmtMonthlyVolVal(v) { return v.monthlyVolumeFormatted != null ? escapeHtml(v.monthlyVolumeFormatted) : "—"; }
 // 全市场成交额名次「TOP N」徽标（写成工厂，别拆成三份近亲函数）：只在按对应「X成交额」轴排序时挂在值列数字左侧
 // （renderTable 读轴定义上的 `badge`）。名次字段：日 volumeRank / 周 weeklyVolumeRank / 月 monthlyVolumeRank，
 // 「全市场」＝ 同周期涨跌幅榜的全部行。
@@ -334,7 +334,7 @@ const TAB_GROUPS = [
         label: "加密行情", asset: "加密",
         tabs: [
             { key: "dailyChange", name: "日线", full: "涨跌幅", tf: "日线",
-              desc: "最新已收盘日 K 的涨跌幅（当根收盘 ÷ 当根开盘，币安日 K 每天 00:00 UTC 收盘，所以看的是昨天那一整根）。没有任何筛选条件——全部加密 USDT 永续合约都在里面，谁涨谁跌一眼看全，是先看清全市场在发生什么、再去策略榜里筛的入口。默认按涨幅从高到低；排序条和策略榜是同一套（日线、周线各轴外加三根月线轴「月成交额」「月线RSI」「月+DI」，按钮上都写明了周期），比如切成日成交额看涨得多是不是也有人接、日线RSI 看是不是已经超买、日CVD强弱与日订单流看近期买卖力量在全市场里谁相对更强。上市当天、还没有一根已收盘日 K 的新合约不入榜；上市不足约 23 天的合约涨跌幅和日成交额照常显示，但 RSI、CVD强弱、订单流、ADX、MACD 这类要暖机的轴会显示「—」，排序时自动沉底。" },
+              desc: "最新已收盘日 K 的涨跌幅（当根收盘 ÷ 当根开盘，币安日 K 每天 00:00 UTC 收盘，所以看的是昨天那一整根）。没有任何筛选条件——全部加密 USDT 永续合约都在里面，谁涨谁跌一眼看全，是先看清全市场在发生什么、再去策略榜里筛的入口。默认按涨幅从高到低；排序条和策略榜是同一套（日线、周线各轴外加三根月线轴「月成交额」「月线RSI」「月+DI」，按钮上都写明了周期），比如切成日成交额看涨得多是不是也有人接、日线RSI 看是不是已经超买、日CVD强弱与日订单流看近期买卖力量在全市场里谁相对更强。上市当天、还没有一根已收盘日 K 的新合约不入榜；上市不足约 23 天的合约涨跌幅和日成交额照常显示，但日线RSI、日CVD强弱、日订单流、日SAR多头根数这类要暖机的轴会显示「—」，排序时自动沉底；日RSI缺口、日ADX、日+DI 要约 28 天，日MACD强弱要约 35 天，不够的同样显示「—」。" },
             { key: "weeklyChange", name: "周线", full: "涨跌幅", tf: "周线",
               desc: "最新已收盘周 K 的涨跌幅（周 K 每周一 00:00 UTC 收盘，所以整周之内这张榜的数值是不变的，下周一才换一批）。没有任何筛选条件，全部加密 USDT 永续合约。它比日线那张钝得多，正好用来分辨「这几天的涨只是反弹」还是「整周都在往上走」。排序条和策略榜是同一套，日线、周线、月线各轴都在、按钮上写明了周期：「周线RSI」「周CVD强弱」「周ADX」「周+DI」「周订单流」看的是那一根周 K，「日线RSI」「日成交额」这些是最新那根日 K 的值，「月成交额」「月线RSI」「月+DI」是最新已收盘那根月 K 的值；「周成交额」是那一根周 K 的成交额，不是 7 天滚动也不是日均。只要有 1 根已收盘周 K 就入榜，所以刚上市一两周的新合约也在；但它们的周线 RSI 要 16 根周 K、周ADX 和周+DI 要 28 根才算得出来，不够的显示「—」并在排序时沉底。" },
             { key: "monthlyChange", name: "月线", full: "涨跌幅", tf: "月线",
@@ -351,7 +351,7 @@ const TAB_GROUPS = [
             { key: "weeklyEmaSarBull", name: "周线9/21扩张＋SAR多头", tf: "周线",
               desc: "两个条件都看最新已收盘的那根周线：一是 EMA9 在 EMA21 上方、而且两条均线的间距比上一周更大（结构正在张开）；二是这根周线的 Parabolic SAR 站在多头一侧（圆点在价格下方，不管已经多头了几周）。扩张是两半合起来才算：光是间距在变大还不够，EMA9 必须已经站到 EMA21 上方；EMA 的算法和 TradingView 自带的 EMA 一致。和「周线首次9/21扩张」不同，本榜不要求这一周才刚开始扩张——已经张开好几周、这一周还在继续张开的都算；SAR 也不要求刚翻多。有三处要先说清楚。第一，两条都是拿最新这一周和上一周比（或看这一周的状态）：间距这一周不再变大、或者 SAR 翻到空头，就离开本榜；回放里这一周的成员下一周还在的比例中位约 67%。第二，9/21 扩张的标的绝大多数本来就站在 SAR 多头一侧（回放 104 周里约 84%），所以第二条筛掉的不多，主要是挡掉 SAR 已经翻空、均线还没来得及收拢的那一小批。第三，算 EMA9/21 扩张至少要 22 根已收盘周 K，所以上市不足约五个月的新合约不入榜。和站内其他榜的关系：「周线首次9/21扩张」只看均线、不看 SAR，还要求这一周才刚开始扩张，和本榜互不包含。本榜里这一周收阴、而且 CVD 为正的那一小批，另有一张「周线阴K＋9/21扩张＋SAR多头＋CVD>0」单独列出来（上线这一周 82 个里的 6 个）。命中数：回放过去 104 周（2024 年 9 月 23 日开盘的那一周到 2026 年 9 月 14 日开盘的那一周），每周中位 14 个、最少 1 个、最多 208 个，没有一周是空的，中位约占全市场的 3%。上线这一周（最新已收盘的是 2026 年 9 月 14 日开盘的那根周线）是 82 个，远高于中位——这一周普涨，站在 SAR 多头一侧的标的是这两年最多的一周，别当常态。本榜是免费橱窗榜：没有通行证也能看到这张榜里排在第一位的那个标的（按日成交额排序的第一名）——成员一周才换一次，但排序看的是每天的成交额，所以这个第一名在周内也可能换人。也要如实说一句：它不是买入信号。回放里成员下一周收阳的比例是 42.3%（2239 个样本），全市场 41.8%，基本持平；按周比，成员下一周涨跌幅的中位数跑赢全市场的周数约一半（51%）；4 周后收盘比入榜那一周更高的比例 31.0%，全市场 35.6%，4 周后涨跌幅的中位数 −13.93%（全市场 −8.36%）——周线均线正在张开的标的，往后一个月反而回落得更多。只看 9/21 扩张一条是 41.9%、30.9% 和 −13.84%，几乎一样。它更适合当成「周线趋势结构正在张开」的背景名单，配合日线各轴再挑，而不是追进去的理由。表格里的日线、周线、月线各轴都不参与筛选，用来在这批标的里再分强弱。周线每周一 00:00（UTC）收盘后才换一批，同一周之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。范围是全部加密 USDT 永续合约。" },
             { key: "monthlySarBearish", name: "月线突破SAR空头第二根低点", tf: "月线",
-              desc: "最新已收盘那根月线的收盘价，站上了最近一轮月线 SAR 空头段里第 2 根 K 线的最低价。拆开说：先在月线上找到最近一轮 SAR 处在空头（圆点在 K 线上方）的那一段，取这一段第 2 根月 K 的最低价当参照线，再看最新已收盘那根月线的收盘价有没有高过这条线。只有这一个条件。有四处要先说清楚。第一，「最近一轮」不要求那一段已经结束：如果最新这根月线的 SAR 还在空头侧，参照的就是正在进行的这一轮下跌——收盘价站上这轮下跌第 2 根的低点，是抢在 SAR 翻多之前的领先信号，改判据当天 120 个命中里有 94 个正是这一类；如果 SAR 已经翻多，参照的就是刚刚结束的那一段。第二，本榜完全不问当前 SAR 是多头还是空头（这一点和它上一版判据正相反，上一版只问 SAR 方向）。第三，有一个退化的情形：当那个参照根恰好就是最新已收盘的这根月线时，「收盘价高于自己的最低价」按 K 线定义必然成立，这类标的会自动命中（改判据当天 120 个里有 18 个属于此类）——这是刻意保留的，不是漏做。第四，参照价取的是那一段第 2 根的最低价，不是收盘价、也不是第 1 根。命中数：改判据当天 120 个（上一版是 469 个、占全市场九成，那是一张背景名单，这一版不是）。回放过去 48 个月：中位 96 个、最少的一个月 14 个、最多 184 个，48 个月里一个月都没有空过；占当月可判标的中位约27.6%，也就是四分之一上下。这是一张门槛清单：参照线只在 SAR 换段时才会变，而收盘价每个月都在动，所以成员会随收盘价在那条线上下进出——上个月的成员这个月还在的比例中位数 84%，已经结束的在榜段中位只有 2 个月，最长的一段39 个月。也要如实说一句：它不是择时信号。回放里成员下个月收盘更高的比例是 37.0%（3994 个样本），当月可判全体是37.4%，两者几乎没有差别——它标记的是「价格已经从这轮月线级下跌里抬起头」这个事实，而不是预测下个月。它和「月线SAR多头首根＋收盘价反包所有空头SAR」那张榜大多数时候会重叠（那张要求收盘价越过整段空头 SAR 的圆点，位置比本榜这条线更高，站上更高的线自然也站上了这条），但不是必然：如果那一轮空头段只有 1 根月 K，本榜就没有「第 2 根」可参照、那个标的不会出现在本榜上——改判据当天就有这样一个。另有一张「月线突破SAR空头第二根低点＋成交量递增或缩量阳K」是本榜的子集——在本榜这一条之上再要求这个月放量、或者缩量收阳，它的每一个标的都必然在本榜上，回放里每个月大约占本榜的六成多。「月线突破SAR空头第二根低点＋至少二连阳」则更窄——在本榜这一条之上再要求这个月和上个月都收阳，它的每一个标的也必然在本榜上，回放里每个月中位约占本榜的一成半。门槛：算 SAR 至少要 3 根已收盘月 K；另外那一轮空头段必须有第 2 根，段里只有 1 根、或者可用历史里一次空头都没出现过的标的不入榜（改判据当天有 16 个因此不在）。另外月线数据每月 1 号 00:00（UTC）新月线收盘后才刷新一次，同一个月之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。表格里的日线、周线、月线各轴都不参与筛选，用来在这批标的里再分强弱。范围是全部加密 USDT 永续合约。" },
+              desc: "最新已收盘那根月线的收盘价，站上了最近一轮月线 SAR 空头段里第 2 根 K 线的最低价。拆开说：先在月线上找到最近一轮 SAR 处在空头（圆点在 K 线上方）的那一段，取这一段第 2 根月 K 的最低价当参照线，再看最新已收盘那根月线的收盘价有没有高过这条线。只有这一个条件。有四处要先说清楚。第一，「最近一轮」不要求那一段已经结束：如果最新这根月线的 SAR 还在空头侧，参照的就是正在进行的这一轮下跌——收盘价站上这轮下跌第 2 根的低点，是抢在 SAR 翻多之前的领先信号，改判据当天 120 个命中里有 94 个正是这一类；如果 SAR 已经翻多，参照的就是刚刚结束的那一段。第二，本榜完全不问当前 SAR 是多头还是空头（这一点和它上一版判据正相反，上一版只问 SAR 方向）。第三，有一个退化的情形：当那个参照根恰好就是最新已收盘的这根月线时，「收盘价高于自己的最低价」几乎必然成立（只有正好收在当月最低价时才不算，因为要求的是严格高于），这类标的基本都会命中（改判据当天 120 个里有 18 个属于此类）——这是刻意保留的，不是漏做。第四，参照价取的是那一段第 2 根的最低价，不是收盘价、也不是第 1 根。命中数：改判据当天 120 个（上一版是 469 个、占全市场九成，那是一张背景名单，这一版不是）。回放过去 48 个月：中位 96 个、最少的一个月 14 个、最多 184 个，48 个月里一个月都没有空过；占当月可判标的中位约27.6%，也就是四分之一上下。这是一张门槛清单：参照线只在 SAR 换段时才会变，而收盘价每个月都在动，所以成员会随收盘价在那条线上下进出——上个月的成员这个月还在的比例中位数 84%，已经结束的在榜段中位只有 2 个月，最长的一段39 个月。也要如实说一句：它不是择时信号。回放里成员下个月收盘更高的比例是 37.0%（3994 个样本），当月可判全体是37.4%，两者几乎没有差别——它标记的是「价格已经从这轮月线级下跌里抬起头」这个事实，而不是预测下个月。它和「月线SAR多头首根＋收盘价反包所有空头SAR」那张榜大多数时候会重叠（那张要求收盘价越过整段空头 SAR 的圆点，位置比本榜这条线更高，站上更高的线自然也站上了这条），但不是必然：如果那一轮空头段只有 1 根月 K，本榜就没有「第 2 根」可参照、那个标的不会出现在本榜上——改判据当天就有这样一个。另有一张「月线突破SAR空头第二根低点＋成交量递增或缩量阳K」是本榜的子集——在本榜这一条之上再要求这个月放量、或者缩量收阳，它的每一个标的都必然在本榜上，回放里每个月大约占本榜的六成多。「月线突破SAR空头第二根低点＋至少二连阳」则更窄——在本榜这一条之上再要求这个月和上个月都收阳，它的每一个标的也必然在本榜上，回放里每个月中位约占本榜的一成半。门槛：算 SAR 至少要 3 根已收盘月 K；另外那一轮空头段必须有第 2 根，段里只有 1 根、或者可用历史里一次空头都没出现过的标的不入榜（改判据当天有 16 个因此不在）。另外月线数据每月 1 号 00:00（UTC）新月线收盘后才刷新一次，同一个月之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。表格里的日线、周线、月线各轴都不参与筛选，用来在这批标的里再分强弱。范围是全部加密 USDT 永续合约。" },
             { key: "dailyEmaCvdSarTwoBreakBearDot", name: "日线9/21扩张＋SAR多头前两根＋CVD递增＋RSI≥60", tf: "日线",
               desc: "四个条件都看最新已收盘的那根日线：一是 EMA9 在 EMA21 上方、而且两条均线的间距比前一天更大（结构正在张开）；二是它正好是这一轮 Parabolic SAR 多头的第 1 根或第 2 根——SAR 圆点刚翻到价格下方不久；三是 CVD 比前一天走强；四是日线 RSI 不低于 60。有四处要先说清楚。第一，「前两根」是两个「恰好」旗标的并集——翻多当天是第 1 根、第二天是第 2 根，到第 3 根就掉出，所以同一个标的最多连着两天出现。第二，CVD 用的是站内一贯口径：当根为正、而且比前一天大，不是单纯看方向。第三，RSI 是 TradingView 默认的 RSI(14)，门槛含 60 本身，就是表格里「日线RSI」那一列的数，本榜每一行都不低于 60（70 以上才是通常说的超买区）。第四，扩张是两半合起来才算：光是间距在变大还不够，EMA9 必须已经站到 EMA21 上方。命中数：回放过去 360 天（2025 年 10 月 4 日到 2026 年 9 月 28 日），每天中位 3 个、最多 112 个，有 38 天一个都没有（约一成的天数）——空榜不是数据坏了；改判据这一天（最新已收盘的是 2026 年 9 月 28 日那根日线）是 1 个，是翻多第 2 根。逐条收紧：只看前两条每天中位 6 个，加上 CVD 剩 4 个，再加 RSI 不低于 60 剩 3 个。和上一版比（上一版另要这根日线的最高价碰到或越过刚结束那一轮 SAR 空头的最后一个圆点，RSI 门槛是 70）：上一版每天中位 1 个、最多 48 个、152 天空榜；一年累计的成员（按天计）上一版 571 个、这一版 2079 个，上一版的每一个成员都在这一版里。人数变多几乎全来自 RSI 门槛从 70 降到 60：拿掉「碰到最后一个圆点」那条只多放进约 5%。也要如实说一句：它不是买入信号，这一版在回放里比上一版好，但仍跑输大盘。回放里成员次日收涨的比例是 42.9%（2078 个样本），上一版 38.6%，全市场 46.0%；5 天后收盘比入榜那天更高的比例 43.9%，上一版 40.5%，全市场 43.2%，和全市场差不多；但 5 天后涨跌幅的中位数是 −2.01%（上一版 −4.47%，全市场 −1.36%）。RSI 门槛仍是越高越差：前三条都满足、完全不看 RSI 是 43.7% 和 44.3%，门槛 65 是 40.6% 和 42.9%，门槛 70 是 38.6% 和 40.5%。按天比，成员次日涨跌幅的中位数跑赢当天全市场的约占 38% 的天数。它更适合当成「刚翻多、资金同步转强、动能偏强」的观察名单，而不是追进去的理由。表格里「日线RSI」「日SAR多头根数」「日CVD强弱」三列和判据同源——本榜每一行的日线RSI 都不低于 60、SAR多头根数是 1 或 2、日CVD强弱为正；其余各轴都不参与筛选，用来在这批标的里再分强弱。日线每天 00:00（UTC）收盘后才换一批，同一天之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。上市不足 23 天的新合约日线数据不够，不入榜。范围是全部加密 USDT 永续合约。" },
             { key: "monthlySarFirstBar", name: "月线SAR多头首根＋收盘价反包所有空头SAR", tf: "月线",
@@ -444,9 +444,13 @@ function formatPercent(val) {
  * 各种横线 / 减号统一成 "-" → 只留 A-Z 0-9 "-"（空白、零宽字符、引号、前后缀文字一并去掉）。必须在存储和发请求头之前做：
  * X-License-Key 头含非 Latin-1 字符会让 fetch() 抛 TypeError —— 落进「网络错误」分支，页面永远停在「验证中…」、Worker 一次都收不到。 */
 function normalizeKey(raw) {
-    return String(raw || "").normalize("NFKC").toUpperCase()
+    const s = String(raw || "").normalize("NFKC").toUpperCase()
         .replace(/[\u2010-\u2015\u2212\uFE58\uFE63\uFF0D]/g, "-")
         .replace(/[^A-Z0-9-]/g, "");
+    // 多选了一行（邮件里卡密下一行就是到期时间）、或续费时贴在预填的旧卡后面 ⇒ 规范化后粘成一串、Worker 回「不存在」：
+    // 取其中最后一张完整卡密（Worker generateKey 的格式；最后一张 ＝ 刚贴进来的那张）。一张都认不出就原样返回，交给 Worker 判。
+    const m = s.match(/BSJ(?:-[A-Z0-9]{4}){4}/g);
+    return m ? m[m.length - 1] : s;
 }
 
 /** 某榜命中数：优先 paidMeta（服务端按完整名单算），数组长度只兜底——橱窗榜的 data[key] 只有 1 行，
@@ -530,11 +534,14 @@ function escapeHtml(s) {
 
 function getSortedItems() {
     let items = [...(data[currentTab] || [])];
-    // 搜索过滤：代码/名称都大小写不敏感（ST股名字含 ASCII 前缀，小写 st 也要能搜到）
+    // 搜索过滤：代码/名称都大小写不敏感（ST股名字含 ASCII 前缀，小写 st 也要能搜到）。
+    // 加密合约的输入不带 USDT 时只比去掉后缀的部分：全部合约都以 USDT 结尾，按整串比的话搜 S / T / US 会命中全部、SUSDT 这类反而找不到；
+    // 带 USDT 的输入（BTCUSDT）照旧按整串比。
     if (searchQuery) {
         const q = searchQuery.toUpperCase();
         items = items.filter(i =>
-            i.symbol.toUpperCase().includes(q) || (i.name && i.name.toUpperCase().includes(q)));
+            (!q.includes("USDT") && isCryptoSymbol(i.symbol) ? stripUSDT(i.symbol) : i.symbol).toUpperCase().includes(q)
+            || (i.name && i.name.toUpperCase().includes(q)));
     }
     const key = sortField;
     const dir = sortAsc ? 1 : -1;
@@ -730,11 +737,12 @@ const LOCK_PREVIEW_ROWS = [
     { sym: 82, bar: 96 }, { sym: 104, bar: 78 }, { sym: 66, bar: 64 }, { sym: 92, bar: 55 },
     { sym: 74, bar: 47 }, { sym: 110, bar: 39 }, { sym: 70, bar: 30 }, { sym: 88, bar: 23 },
 ];
-// firstRank：预览行的起始名次（橱窗榜的预览接在免费那一行后面，从第 2 名起）。
+// firstRank：预览行的起始名次（橱窗榜的预览接在免费那一行后面，从第 2 名起）；null ＝ 名次未知、一律写「—」（见 renderTable 的 rankUnknown）。
 function lockPreviewRowsHtml(firstRank = 1) {
     return `<div class="lockgate__rows" aria-hidden="true">` + LOCK_PREVIEW_ROWS.map((r, i) => {
-        const rank = i + firstRank;
-        const rankCell = rank <= 3
+        const rank = firstRank == null ? null : i + firstRank;
+        const rankCell = rank == null ? `<span class="rank-num">—</span>`
+            : rank <= 3
             ? `<span class="medal medal--${rank}">${rank}</span>`
             : `<span class="rank-num">${rank}</span>`;
         return `<div class="tr lockrow">
@@ -930,15 +938,18 @@ function renderTable() {
     const total = (data[currentTab] || []).length;
     const teaserHits = tabCount(currentTab); // paidMeta 的真实命中数（不是被截成 1 行的数组长度）
     const teaserRest = teaserHits != null && teaserHits > total ? teaserHits - total : null;
+    // 橱窗榜只有公开那 1 行时（未解锁 / 付费包还没到），它是**默认视图**（首轴降序）的第一名：换了轴或切成升序，它在完整榜单里
+    // 多半不是第 1 ⇒ 名次与预览行一律写「—」，别在免费面上印假名次。
+    const rankUnknown = (teaserLocked || teaserPartial) && !(config.sorts && sortField === config.sorts[0].key && !sortAsc);
     const gateCopy = teaserLocked ? lockGateCopy() : null;
     const gateHtml = gateCopy ? lockGateHtml(null, {
-        ...gateCopy, firstRank: shown.length + 1,
+        ...gateCopy, firstRank: rankUnknown ? null : shown.length + 1,
         countHtml: teaserRest != null ? `还有 <b>${teaserRest}</b> 个标的` : "完整榜单已锁定",
     }) : "";
 
     tbody.innerHTML = shown
         .map((item, i) => {
-            const rank = i + 1;
+            const rank = rankUnknown ? null : i + 1;
             // 只在值列展示涨跌幅时红绿上色：涨跌幅榜首轴 key 就是 value（别改名，否则红绿失效）；切到其它轴一律 neutral。
             const colorClass = sortField === "value" ? getColorClass(item.value, currentTab) : "neutral";
             // 涨跌语义只标 up/down，红绿由 CSS 的 [data-asset] 作用域决定（A股 涨红跌绿，休眠件）
@@ -948,7 +959,8 @@ function renderTable() {
             const badge = sortDef && sortDef.badge ? sortDef.badge(item) : "";
             const checked = selectedSymbols.has(item.symbol) ? "checked" : "";
 
-            const rankCell = rank <= 3
+            const rankCell = rank == null ? `<span class="rank-num">—</span>`
+                : rank <= 3
                 ? `<span class="medal medal--${rank}">${rank}</span>`
                 : `<span class="rank-num">${rank}</span>`;
 
@@ -1500,7 +1512,8 @@ async function loadData() {
         const pill = document.getElementById(pillId);
         if (pill) {
             pill.className = "fresh fresh--bad";
-            document.getElementById(pillId + "Txt").textContent = " · 数据加载失败,稍后自动重试";
+            // 文案别加长：≤640px 顶栏余量只够这么宽（原来那句「数据加载失败，稍后自动重试」在 375 宽把整页撑出横向滚动）；轮询本来就会自动重试
+            document.getElementById(pillId + "Txt").textContent = " · 加载失败";
         }
         // 只有从未加载成功才在表格区报错；已有数据时单次失败别清掉用户正在看的榜单。
         if (!data) {
@@ -1586,6 +1599,8 @@ function openUnlockDialog(hintMsg) {
         msg.className = "lic-msg";
     }
     dlg.showModal();
+    // 预填的旧卡整段选中：续费后直接粘贴新卡就整段替换，别接在旧卡后面（normalizeKey 另有兜底）
+    if (input && input.value) input.select();
 }
 
 function openPurchaseDialog() {
@@ -1662,8 +1677,13 @@ function initPaywallUI() {
             if (freeUpdateTime) data.updateTime = freeUpdateTime;
             // 公开数据还没到（没有 build 时刻可恢复）就删掉 KV 的上传时刻，理由同上。
             else delete data.updateTime;
+            // 付费包比公开文件旧（整点刚过、KV 边缘缓存还在回吐上一小时的包）：照样先解锁，但别推进 lastPaidUpdateTime ——
+            // 留 null 让下一轮轮询接着追新包（同 loadData 的单调性守卫）；推进了就会整小时停在旧包上、胶囊却显示新时刻。
+            const paidT = parseUpdateTime(paidData.updateTime);
+            const freeT = freeUpdateTime ? parseUpdateTime(freeUpdateTime) : null;
+            const stalePaid = paidT == null || (freeT != null && paidT < freeT);
             // 与 loadData 的 paidFetchKey / renderKey 同构，改一处三处一起改。
-            lastPaidUpdateTime = data ? (data.updateTime + "|" + data.ashareUpdateTime) : null;
+            lastPaidUpdateTime = stalePaid ? null : data ? (data.updateTime + "|" + data.ashareUpdateTime) : null;
             renderLicenseStatus();
             if (msg) { msg.textContent = "解锁成功！"; msg.className = "lic-msg lic-ok"; }
             // 公开数据已在手就立即渲染；还没到时 data 只有付费部分、直接渲会瞬时空白 ⇒ 交给 loadData 合并后再渲。

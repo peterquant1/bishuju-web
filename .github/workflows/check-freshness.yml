@@ -64,7 +64,7 @@ jobs:
       # KV updateTime 每小时被 crypto 上传刷新，阈值与 crypto 同为 2.5h。
       # /api/status 只回元信息（updateTime/tab 数/字节数），公开无鉴权。
       # ⚠️ 若日后紧急关闭付费墙（PAYWALL_ENABLED=false），上传停止、这步会开始告警——
-      # 届时把本步一并注释掉。
+      # 届时把本步与下面「橱窗恰好 1 行」那步一并注释掉（关墙后公开文件里橱窗榜是整榜，那步也会次次红）。
       # ⚠️⚠️ `if: always()` 不能删（2026-08-05 审计补；后面几步同理）：GH Actions 默认「前一步 fail 就跳过
       # 后续所有步骤」，而上一步一 fail（当年是 A股/美股 陈旧，现在是加密停更）就会让公开侧
       # 的陈旧把付费侧的监控一起弄瞎。2026-08-03~05 机器睡眠事故实测：A股 陈旧 65 小时期间
@@ -99,13 +99,14 @@ jobs:
       # 公开文件的内容级检查（2026-10-01 加）：橱窗榜恰好 1 行。0 行 ＝ 新访客的落地页没有免费预览、只剩锁定卡片
       # （后端视为真故障，但只在本机日志里打一行 [警告]，这里才会发邮件）；多于 1 行 ＝ 付费墙切分出了问题。
       # 橱窗榜 key 从本仓库 script.js 的 TEASER_TAB 读（前后端同名常量，audit C 项保证一致）；抽不到就算失败，别静默跳过。
+      # 正则用 \w+（同 audit C 项）：key 里可能带数字（如 weeklyEma921Expansion），写成 [A-Za-z]+ 换橱窗后会每次假红。
       - name: Check public teaser row
         if: always()
         run: |
           python3 - << 'PYEOF'
           import json, re, sys
 
-          m = re.search(r'^const TEASER_TAB = "([A-Za-z]+)";', open("script.js", encoding="utf-8").read(), re.M)
+          m = re.search(r'^const TEASER_TAB = "(\w+)";', open("script.js", encoding="utf-8").read(), re.M)
           if not m:
               print("::error::script.js 里抽不到 TEASER_TAB —— 本检查的正则要跟着改了！")
               sys.exit(1)

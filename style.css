@@ -482,7 +482,7 @@ a:hover{color:var(--gold-hi)}
 .sort-chip{flex:none;display:inline-flex;align-items:center;gap:4px;padding:6.5px 13px;font-size:12.5px;font-weight:500;font-family:var(--font-sans);color:var(--muted);background:var(--chip-wash);border:1px solid var(--line);border-radius:var(--r-pill);cursor:pointer;white-space:nowrap;transition:color .14s,border-color .14s,background .14s}
 .sort-chip:hover{color:var(--text);border-color:var(--muted)}
 .sort-chip__arrow{font-size:9px;line-height:1}
-/* 周期分隔：日 / 周 / 月三组轴之间一道 hairline（renderSortStrip 在标签首字变化处插入），三十多根轴不再连成一片 */
+/* 周期分隔：日 / 周 / 月三组轴之间一道 hairline（renderSortStrip 在标签首字变化处插入），轴一多也不连成一片 */
 .sort-strip__sep{flex:none;align-self:center;width:1px;height:16px;margin:0 3px;background:var(--line-2)}
 .sort-chip.is-active{font-weight:600}
 [data-asset="crypto"] .sort-chip.is-active{background:rgba(var(--asset-crypto-rgb),.14);border-color:rgba(var(--asset-crypto-rgb),.5);color:var(--asset-crypto-ink)}
@@ -712,7 +712,7 @@ a:hover{color:var(--gold-hi)}
     .text-input{font-size:16px}
     .tbody{max-height:420px;max-height:min(64dvh,600px)}
     .sort-chip{padding:7px 13px}
-    /* 窄屏保持横向滑动：13 根轴在手机上换行会占掉半屏高度，而触屏横滑是自然手势。
+    /* 窄屏保持横向滑动：轴一多在手机上换行会占掉半屏高度，而触屏横滑是自然手势。
        桌面端是换行（见上方 .sort-strip__chips 注释块）。 */
     .sort-strip{align-items:center}
     .sort-strip__label{padding-top:0}

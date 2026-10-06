@@ -3,24 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#f0eee6">
+    <meta name="theme-color" content="#181a20">
     <title>页面不存在 — 狗庄74</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <style>
-        /* 独立页,不读 style.css——v6「纸墨」配色/字体在此内联一份(改品牌色记得同步)。
-           取值与 style.css 的 :root/[data-theme=dark] 同源:骨白页/象牙卡/墨字/赤陶强调。
-           主按钮同样是**墨黑实心 + 象牙字**,暗色下反过来(象牙底 + 墨字)。 */
+        /* 独立页，不读 style.css —— v7「币安」配色 / 字体在此内联一份（改品牌色记得同步）。
+           取值与 style.css 的 :root（深色默认）/ [data-theme="light"] 同源：深底 #181A20、主字 #EAECEF、品牌黄 #F0B90B，
+           主按钮黄底深字。主站默认深色、不跟系统；这里没有切换钮 ⇒ 系统偏好浅色时给浅色版。 */
         @font-face{font-family:"Geist";src:url("/fonts/geist-latin.woff2") format("woff2");font-weight:100 900;font-display:swap}
-        @font-face{font-family:"Geist Mono";src:url("/fonts/geist-mono-latin.woff2") format("woff2");font-weight:100 900;font-display:swap}
         :root{
-            --bg:#f0eee6; --text:#141413; --muted:#5c5a54; --line:rgba(20,20,19,.1);
-            --accent:#c6613f; --accent-ink:#a94a26; --panel:#faf9f5;
-            --btn-fill:#141413; --btn-ink:#faf9f5;
+            --bg:#181a20; --text:#eaecef; --muted:#929aa5;
+            --accent-ink:#f0b90b; --btn-fill:#fcd535; --btn-fill-hover:#f0b90b; --btn-ink:#202630;
         }
-        @media (prefers-color-scheme:dark){
-            :root{ --bg:#141413; --text:#f5f3ed; --muted:#a8a49a; --line:rgba(250,249,245,.11);
-                   --accent:#e08a66; --accent-ink:#e08a66; --panel:#1c1b19;
-                   --btn-fill:#f0eee6; --btn-ink:#141413; }
+        @media (prefers-color-scheme:light){
+            :root{ --bg:#ffffff; --text:#1e2329; --muted:#474d57; --accent-ink:#8f6800; --btn-ink:#1e2329; }
         }
         *{margin:0;padding:0;box-sizing:border-box}
         body{
@@ -32,15 +28,15 @@
         .card{max-width:380px}
         .brand{display:inline-flex;align-items:center;gap:9px;margin-bottom:28px;font-weight:600;font-size:16px;letter-spacing:-.01em}
         .brand svg{width:26px;height:26px}
-        .code{font-size:76px;font-weight:600;color:var(--accent-ink);font-family:"Geist Mono",ui-monospace,Consolas,monospace;letter-spacing:-.03em;line-height:1}
-        /* 说明文字走 Latin 衬线(CJK 落回无衬线),与主站 v6 的长文规矩一致 */
-        p{color:var(--muted);margin:16px 0 30px;font-size:14.5px;line-height:1.75;font-family:Georgia,"PingFang SC","Microsoft YaHei",serif}
+        .code{font-size:76px;font-weight:700;color:var(--accent-ink);font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1}
+        p{color:var(--muted);margin:16px 0 30px;font-size:14.5px;line-height:1.75}
         a.home{
             display:inline-block; background:var(--btn-fill); color:var(--btn-ink); font-weight:600;
             text-decoration:none; padding:11.5px 28px; border-radius:8px; font-size:14px;
-            transition:box-shadow .18s;
+            transition:background .15s;
         }
-        a.home:hover{box-shadow:0 2px 4px rgba(20,20,19,.1),0 8px 16px rgba(20,20,19,.12)}
+        a.home:hover{background:var(--btn-fill-hover)}
+        a.home:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
     </style>
 </head>
 <body>
@@ -48,12 +44,12 @@
         <div class="brand">
             <svg viewBox="0 0 32 32" aria-hidden="true">
                 <defs><linearGradient id="gm" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0" stop-color="#d98363"/><stop offset="1" stop-color="#c6613f"/>
+                    <stop offset="0" stop-color="#fcd535"/><stop offset="1" stop-color="#f0b90b"/>
                 </linearGradient></defs>
                 <rect x="1" y="1" width="30" height="30" rx="8" fill="url(#gm)"/>
-                <rect x="7" y="17" width="4" height="8" rx="1.5" fill="#faf9f5"/>
-                <rect x="14" y="12" width="4" height="13" rx="1.5" fill="#faf9f5"/>
-                <rect x="21" y="7" width="4" height="18" rx="1.5" fill="#faf9f5"/>
+                <rect x="7" y="17" width="4" height="8" rx="1.5" fill="#181a20"/>
+                <rect x="14" y="12" width="4" height="13" rx="1.5" fill="#181a20"/>
+                <rect x="21" y="7" width="4" height="18" rx="1.5" fill="#181a20"/>
             </svg>
             <span>狗庄74</span>
         </div>

@@ -4,8 +4,8 @@
   "description": "加密永续合约指标筛选排行榜",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f0eee6",
-  "theme_color": "#f0eee6",
+  "background_color": "#181a20",
+  "theme_color": "#181a20",
   "icons": [
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]

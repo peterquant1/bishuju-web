@@ -1,15 +1,15 @@
 ﻿<!DOCTYPE html>
-<html lang="zh-CN" data-theme="light">
+<html lang="zh-CN" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#f0eee6" id="themeColorMeta">
-    <!-- v5 起亮色为默认。防闪:在样式表生效前按 localStorage 置好 data-theme(审计 P2-6)。
+    <meta name="theme-color" content="#181a20" id="themeColorMeta">
+    <!-- v7 起深色为默认（本机存过 "light" 才是浅色）。防闪:在样式表生效前按 localStorage 置好 data-theme(审计 P2-6)。
          裸访问 localStorage 可能抛(禁存储模式),必须 try 包住,否则整页脚本死掉。
-         两个 hex 常量必须跟 style.css 的 --bg1(亮 #f0eee6 骨白 / 暗 #141413 墨)保持一致——
-         改配色时这两处一起改，否则地址栏/状态栏颜色会跟页面背景对不上。
+         两个 hex 常量必须跟 style.css 的 --header-bg(深 #181a20 / 浅 #ffffff，与页底同色)保持一致——
+         改配色时这两处一起改，否则地址栏/状态栏颜色会跟页面顶部对不上。
          ⚠️ 同一对值另有两处副本:manifest.webmanifest 与 script.js 的 applyTheme()，共四处。 -->
-    <script>try{if(localStorage.getItem("bishuju_theme")==="dark"){document.documentElement.dataset.theme="dark";document.getElementById("themeColorMeta").content="#141413";}}catch(e){}</script>
+    <script>try{if(localStorage.getItem("bishuju_theme")==="light"){document.documentElement.dataset.theme="light";document.getElementById("themeColorMeta").content="#ffffff";}}catch(e){}</script>
     <title>狗庄74 — 加密永续合约指标筛选排行榜</title>
     <!-- 下面 meta description 与 FAQ 里的榜单枚举（含「哪些免费」那句里的橱窗榜名、「每个榜到底在筛什么」里散在句中的例子）
          必须跟 script.js 的 TAB_GROUPS 一致：增删榜、改判据、换橱窗时一起改，数目以 TAB_GROUPS 为准。 -->
@@ -44,10 +44,10 @@
     <meta name="twitter:image" content="https://gouzhuang748.com/og.png">
     <meta name="twitter:image:alt" content="狗庄74 — 加密永续合约指标筛选排行榜">
 
-    <!-- 自托管 Geist 变量字体(Latin);预加载避免首屏 FOUT。CJK 走系统栈不预载 -->
+    <!-- 自托管 Geist 变量字体(Latin);预加载避免首屏 FOUT。CJK 走系统栈不预载。
+         Geist Mono 只剩通行证输入框在用 ⇒ 不预加载(预加载了首屏却用不上，浏览器会报警告) -->
     <link rel="preload" as="font" type="font/woff2" href="fonts/geist-latin.woff2" crossorigin>
-    <link rel="preload" as="font" type="font/woff2" href="fonts/geist-mono-latin.woff2" crossorigin>
-    <link rel="stylesheet" href="style.css?v=66">
+    <link rel="stylesheet" href="style.css?v=67">
 </head>
 <body>
 <div class="app" id="app" data-asset="crypto">
@@ -59,20 +59,20 @@
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
             </button>
             <div class="brand">
-                <!-- v6 视觉系统:logo 渐变 = 品牌赤陶轴 book cloth(与 style.css --gold 同源)。
+                <!-- v7 视觉系统:logo 渐变 = 品牌黄(style.css --gold-hi → --gold)，柱子 = 深色页底 #181a20。
                      ⚠️ 同一组色标另有四处副本:favicon.svg / 404.html / scripts/make_icons.py /
                      scripts/make_og.py(后两个在私有后端仓,改色后要重跑生成 png)。 -->
                 <svg class="brand__logo" viewBox="0 0 32 32" aria-hidden="true">
                     <defs>
                         <linearGradient id="gm" x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0" stop-color="#d98363"/>
-                            <stop offset="1" stop-color="#c6613f"/>
+                            <stop offset="0" stop-color="#fcd535"/>
+                            <stop offset="1" stop-color="#f0b90b"/>
                         </linearGradient>
                     </defs>
                     <rect x="1" y="1" width="30" height="30" rx="8" fill="url(#gm)"/>
-                    <rect x="7" y="17" width="4" height="8" rx="1.5" fill="#faf9f5"/>
-                    <rect x="14" y="12" width="4" height="13" rx="1.5" fill="#faf9f5"/>
-                    <rect x="21" y="7" width="4" height="18" rx="1.5" fill="#faf9f5"/>
+                    <rect x="7" y="17" width="4" height="8" rx="1.5" fill="#181a20"/>
+                    <rect x="14" y="12" width="4" height="13" rx="1.5" fill="#181a20"/>
+                    <rect x="21" y="7" width="4" height="18" rx="1.5" fill="#181a20"/>
                 </svg>
                 <div class="brand__text">
                     <div class="brand__name">狗庄74 <span class="brand__latin">gouzhuang748.com</span></div>
@@ -86,7 +86,7 @@
                 <button type="button" class="fresh" id="freshCrypto" title="查看加密榜单"><span class="fresh__dot"></span><span class="fresh__asset crypto">加密</span><span id="freshCryptoTxt">数据加载中…</span></button>
                 <span id="licenseStatus"><span class="lic-badge lic-off">未解锁</span></span>
                 <button id="licenseBtn" class="lic-btn-mini">输入通行证</button>
-                <button class="theme-btn" id="themeBtn" aria-label="切换亮暗主题" title="切换亮/暗">◐</button>
+                <button class="theme-btn" id="themeBtn" aria-label="切换亮暗主题" title="切换亮/暗"></button>
             </div>
         </div>
         <div class="banner banner--down" id="staleBanner" hidden>
@@ -267,6 +267,6 @@
     <button type="button" class="modal-x dialog-close" data-dialog="purchaseDialog" aria-label="关闭">✕</button>
 </dialog>
 
-<script src="script.js?v=369"></script>
+<script src="script.js?v=370"></script>
 </body>
 </html>

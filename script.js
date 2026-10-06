@@ -1921,18 +1921,23 @@ document.getElementById("drawerScrim").addEventListener("click", closeDrawer);
 document.getElementById("drawerBody").innerHTML = `
     <nav class="board-nav" id="drawerNav"></nav>`;
 
-// === 亮/暗主题切换（token 覆盖,组件零分叉）===
+// === 亮/暗主题切换（token 覆盖,组件零分叉）。默认深色，本机存过 "light" 才是浅色（与 index.html 内联防闪脚本同一判据）===
 const LS_THEME = "bishuju_theme";
+// 主题钮图标显示「当前」主题：深色 ＝ 月亮、浅色 ＝ 太阳（常量串，不含外部数据）
+const THEME_ICON = {
+    dark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z"/></svg>',
+    light: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>',
+};
 function applyTheme(t) {
     document.documentElement.dataset.theme = t;
     const btn = document.getElementById("themeBtn");
-    if (btn) btn.textContent = t === "light" ? "☀" : "◐";
+    if (btn) btn.innerHTML = THEME_ICON[t] || THEME_ICON.dark;
     // 切换时同步手机浏览器工具栏色（加载时由 index.html 内联脚本设）。
-    // ⚠️ 两个 hex ＝ style.css 的 --bg1；index.html 内联脚本与 manifest 各有一份硬编码，改品牌色一起改。
+    // ⚠️ 两个 hex ＝ style.css 的 --header-bg；index.html 内联脚本与 manifest 各有一份硬编码，改品牌色一起改。
     const meta = document.getElementById("themeColorMeta");
-    if (meta) meta.content = t === "light" ? "#f0eee6" : "#141413";
+    if (meta) meta.content = t === "light" ? "#ffffff" : "#181a20";
 }
-applyTheme(safeStore.get("localStorage", LS_THEME) === "dark" ? "dark" : "light");
+applyTheme(safeStore.get("localStorage", LS_THEME) === "light" ? "light" : "dark");
 document.getElementById("themeBtn").addEventListener("click", () => {
     const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
     safeStore.set("localStorage", LS_THEME, next);

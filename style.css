@@ -7,7 +7,8 @@
    与其站的差异都是刻意的（别「改回去」）：
      ① 对比度一律 WCAG AA：其站三级字 #707A8A（深底 4.0:1）、浅色的涨跌色与灰字都不达标 ⇒ 深色三级字用 #848E9C，
         浅色的字 / 涨跌色整组换成同色相的深一档（见 [data-theme="light"]）。悬停底取 #1D2128（#29313D 会把跌色压到 3.7:1）。
-     ② 字体：其站 BinanceNova 是私有字体 ⇒ 沿用自托管 Geist；数字走同一字族 + tabular-nums（其站数字也不是等宽字体）。
+     ② 字体：其站 BinanceNova / BinancePlex 是私有字体 ⇒ 自托管外形最接近的开源字体 IBM Plex Sans（OFL-1.1，许可证随文件放在
+        fonts/OFL-IBM-Plex-Sans.txt）；数字走同一字族 + tabular-nums（其站数字也不是等宽字体）。
      ③ 不用其站 logo / 字标。
    **黄色要省着用**（其站只在主按钮、选中指示、少数高亮上用黄）：周期徽标、共振卡分数与 #2/#3 chip、中性深度条一律灰调，
    黄只留给主按钮（已解锁时顶栏按钮也退成灰）、选中指示条、选中导航项的徽标、榜首奖牌、共振 #1 chip、链接、排序箭头与少数核心数字。
@@ -20,7 +21,9 @@
    ============================================================ */
 
 /* ---------------- 自托管字体（Latin 变量字体，单文件覆盖 400–700；CJK 走系统栈）---------------- */
-@font-face{font-family:"Geist";src:url("fonts/geist-latin.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+2000-206F,U+2070-209F,U+20A0-20BF,U+2100-214F,U+2190-21FF,U+2212}
+/* IBM Plex Sans：Fontsource 的 Latin 子集可变字体（字重轴 100–700，全站最粗只用到 700，别写 800+）；
+   unicode-range 照抄 Fontsource 给的子集覆盖范围（≈ 这类子集外的字逐字回退到系统字体）*/
+@font-face{font-family:"IBM Plex Sans";src:url("fonts/ibm-plex-sans-latin-wght-normal.woff2") format("woff2");font-weight:100 700;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 /* Geist Mono 只剩通行证输入框在用（固定格式的机读串），不预加载 */
 @font-face{font-family:"Geist Mono";src:url("fonts/geist-mono-latin.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+2000-206F,U+2070-209F,U+20A0-20BF,U+2100-214F,U+2190-21FF,U+2212}
 
@@ -70,8 +73,8 @@
     --chk-line:#707a8a;
     --chk-tick:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23202630' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.6 6.3l2.3 2.4 4.5-5.2'/%3E%3C/svg%3E");
     --chk-dash:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23202630' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 6h6'/%3E%3C/svg%3E");
-    /* 字体：数字与正文同一字族（Geist 有 tabular 数字），等宽字族只给通行证输入框 */
-    --font-sans:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans SC",Roboto,sans-serif;
+    /* 字体：数字与正文同一字族（IBM Plex Sans 有 tabular 数字），等宽字族只给通行证输入框 */
+    --font-sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans SC",Roboto,sans-serif;
     --num:var(--font-sans);
     --mono:"Geist Mono",ui-monospace,"Cascadia Code","SF Mono",Consolas,"JetBrains Mono",monospace;
     /* 圆角：卡片 16（其站实测）、chip / 行 / 输入框 / 按钮 8、标签 4 */
@@ -121,7 +124,7 @@
 *{margin:0;padding:0;box-sizing:border-box}
 [hidden]{display:none!important}
 html{scrollbar-color:var(--line-2) var(--bg1);-webkit-text-size-adjust:100%}
-body{font-family:var(--font-sans);color:var(--text);background:var(--bg1);min-height:100vh;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;font-feature-settings:"cv01","ss01"}
+body{font-family:var(--font-sans);color:var(--text);background:var(--bg1);min-height:100vh;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 body.no-scroll{overflow:hidden}
 ::selection{background:var(--selection)}
 a{color:var(--gold-ink);text-decoration:none}
@@ -686,6 +689,8 @@ a:hover{color:var(--gold-hi)}
     .layout{grid-template-columns:210px minmax(0,1fr);gap:18px}
     /* rail 只剩 210px（榜名列约 100px）：缩写前那一刀放开（part 退回 inline），不然「月线突破 / SAR空头第 / 二根低点」白多一行 */
     .nav-item .nm-part{display:inline}
+    /* 徽标 / 榜名 / 命中数间距收到 7px：换 IBM Plex Sans 后「周线首次9/21扩张」差 1.1px 折成两行（量的是 700 宽、命中数两位数），这里多给 4px */
+    .nav-item{gap:7px}
     /* 主栏不足 600px：搜索框挪到标题下面（同 ≤640px），否则标题与说明被挤成 150px 宽的一窄条 */
     .board-head{flex-direction:column;align-items:stretch;gap:12px}
     .search{width:100%;margin-top:0}

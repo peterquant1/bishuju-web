@@ -10,7 +10,7 @@
         /* 独立页，不读 style.css —— v7「币安」配色 / 字体在此内联一份（改品牌色记得同步）。
            取值与 style.css 的 :root（深色默认）/ [data-theme="light"] 同源：深底 #181A20、主字 #EAECEF、品牌黄 #F0B90B，
            主按钮黄底深字。主站默认深色、不跟系统；这里没有切换钮 ⇒ 系统偏好浅色时给浅色版。 */
-        @font-face{font-family:"Geist";src:url("/fonts/geist-latin.woff2") format("woff2");font-weight:100 900;font-display:swap}
+        @font-face{font-family:"IBM Plex Sans";src:url("/fonts/ibm-plex-sans-latin-wght-normal.woff2") format("woff2");font-weight:100 700;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
         :root{
             --bg:#181a20; --text:#eaecef; --muted:#929aa5;
             --accent-ink:#f0b90b; --btn-fill:#fcd535; --btn-fill-hover:#f0b90b; --btn-ink:#202630;
@@ -20,7 +20,7 @@
         }
         *{margin:0;padding:0;box-sizing:border-box}
         body{
-            font-family:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+            font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
             background:var(--bg); color:var(--text); min-height:100vh;
             display:flex; align-items:center; justify-content:center; text-align:center; padding:24px;
             -webkit-font-smoothing:antialiased;

@@ -1610,6 +1610,8 @@ function renderLicenseStatus() {
             badge.textContent = "未解锁";
             if (btnEl) btnEl.textContent = "输入通行证";
         }
+        // 已解锁 / 待验证时按钮退成灰色次按钮（CSS .is-quiet）：黄色主按钮只留给要去输入 / 购买的人
+        if (btnEl) btnEl.classList.toggle("is-quiet", !!license.valid || licensePending());
     });
 }
 

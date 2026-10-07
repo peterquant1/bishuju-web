@@ -78,13 +78,15 @@ function axesSub(item, sf, volLabel, extra) {
     if ("adx" in item && sf !== "adx") seg.push(`${axisLabelFor("adx", "ADX")} ${fmtDmiVal(item.adx)}`);
     if ("diPlus" in item && sf !== "diPlus") seg.push(`${axisLabelFor("diPlus", "+DI")} ${fmtDmiVal(item.diPlus)}`);
     if ("macdStrength" in item && sf !== "macdStrength") seg.push(`${axisLabelFor("macdStrength", "MACD强弱")} ${fmtGapVal(item.macdStrength)}`);
-    // 涨跌幅榜的行去掉了与 `value` 重复的那个 key（日线榜 changePercent、周线榜 weeklyChangePercent；尾巴由 changeSub 处理）⇒ 不会重复显示。
+    // 涨跌幅榜的行去掉了与 `value` 重复的那个 key（日线榜 changePercent、周线榜 weeklyChangePercent、月线榜 monthlyChangePercent；尾巴由 changeSub 处理）⇒ 不会重复显示。
     if ("changePercent" in item && sf !== "changePercent") seg.push(`${axisLabelFor("changePercent", "涨跌幅")} ${fmtGapVal(item.changePercent)}`);
     if ("weeklyChangePercent" in item && sf !== "weeklyChangePercent") seg.push(`${axisLabelFor("weeklyChangePercent", "周涨跌幅")} ${fmtGapVal(item.weeklyChangePercent)}`);
     if ("sarBullBars" in item && sf !== "sarBullBars") seg.push(`${axisLabelFor("sarBullBars", "SAR多头根数")} ${fmtBarsVal(item.sarBullBars)}`);
     // 周 / 月成交额用各自的 fmtWeeklyVolVal / fmtMonthlyVolVal（别套 fmtVolVal，那个写死读日成交额）；月成交额 / 月线RSI 两段在截断线之后（默认副行不变）。
     if ("weeklyVolume" in item && sf !== "weeklyVolume") seg.push(`${axisLabelFor("weeklyVolume", "周成交额")} ${fmtWeeklyVolVal(item)}`);
     if ("monthlyVolume" in item && sf !== "monthlyVolume") seg.push(`${axisLabelFor("monthlyVolume", "月成交额")} ${fmtMonthlyVolVal(item)}`);
+    // 月涨跌幅：月涨跌幅榜的行不带这个 key（与 `value` 重复，同上面日 / 周涨跌幅）。
+    if ("monthlyChangePercent" in item && sf !== "monthlyChangePercent") seg.push(`${axisLabelFor("monthlyChangePercent", "月涨跌幅")} ${fmtGapVal(item.monthlyChangePercent)}`);
     if ("monthlyRsi" in item && sf !== "monthlyRsi") seg.push(`${axisLabelFor("monthlyRsi", "月线RSI")} ${fmtRsiVal(item.monthlyRsi)}`);
     if ("weeklyCvdStrength" in item && sf !== "weeklyCvdStrength") seg.push(`${axisLabelFor("weeklyCvdStrength", "周CVD强弱")} ${fmtCvdVal(item.weeklyCvdStrength)}`);
     // 只在对应周期涨跌幅榜的行上有（策略榜行不带）。
@@ -194,7 +196,7 @@ const AXIS_W_ADX = { key: "weeklyAdx", label: "周ADX", format: v => fmtDmiVal(v
                      hint: "最新已收盘周K的ADX（DMI 14，对齐TV）：只量趋势有多强、不分涨跌，0–100；降序＝趋势最强（大涨大跌都会高），升序＝最没趋势；上市不足28周显示「—」" };
 const AXIS_W_DIPLUS = { key: "weeklyDiPlus", label: "周+DI", format: v => fmtDmiVal(v.weeklyDiPlus),
                         hint: "最新已收盘周K的+DI（DMI 14，对齐TV）：多方方向压力，0–100；上市不足28周显示「—」" };
-// === 月+DI（同一个 calc_adx_dmi，喂最新已收盘月 K）：各轴集月线块的最后一根（月成交额 → 月线RSI → 月+DI；月线涨跌幅榜里接着是月CVD强弱、月订单流）===
+// === 月+DI（同一个 calc_adx_dmi，喂最新已收盘月 K）：各轴集月线块的最后一根（月成交额 → 月涨跌幅 → 月线RSI → 月+DI；月线涨跌幅榜里接着是月CVD强弱、月订单流）===
 // 门槛 15 根 ＝ TV 的 +DI 起画根数、不是日 / 周线的 28 根（月线 15–27 根的合约约占三成，理由见后端 get_monthly_rsi）⇒ hint 别照抄周线那句「28」。
 // 标签「月」开头 ⇒ 自动进月线共振卡。hint 的回放数字只含现存合约，别写成买点。
 const AXIS_M_DIPLUS = { key: "monthlyDiPlus", label: "月+DI", format: v => fmtDmiVal(v.monthlyDiPlus),
@@ -217,6 +219,10 @@ const AXIS_M_VOL = { key: "monthlyVolume", label: "月成交额", format: v => f
 // 其余同 AXIS_D_CHGPCT：只挂策略榜、两资产口径不同别统一、hint 只写口径。
 const AXIS_W_CHGPCT = { key: "weeklyChangePercent", label: "周涨跌幅", format: v => fmtGapVal(v.weeklyChangePercent),
                         hint: "最新已收盘那一根周K的涨跌幅：K线实体(收−开)/开，一周只更新一次" };
+// 月涨跌幅：同周涨跌幅，换成最新已收盘那一根月 K（与月涨跌幅榜同 symbol 那行的 `value` 同一个数）。月涨跌幅榜自己不挂
+//   （首轴 AXIS_M_CHG 就是它）⇒ 月线共振卡的轴不变。A股 轴集没同补（休眠，见 fetch_ashare.py 复活清单 ⑦）。
+const AXIS_M_CHGPCT = { key: "monthlyChangePercent", label: "月涨跌幅", format: v => fmtGapVal(v.monthlyChangePercent),
+                        hint: "最新已收盘那一根月K的涨跌幅：K线实体(收−开)/开，一个月只更新一次" };
 // 周CVD强弱：同「日CVD强弱」的算法（K 线形态拆买卖量 → EMA14 → 归一化失衡比 ∈ [−1,+1]），喂已收盘周 K；≥15 根周 K 才有值、
 // 不够显示「—」并在两个方向都沉底。与周涨跌幅榜排序条上的「周CVD强弱」是同一个数（后端取同一份周线缓存字段）。
 // 形态推断、不是真实归边 ⇒ 横截面上主要在读周线级「最近在涨」；hint 只写口径，别写成资金流信号。
@@ -227,7 +233,7 @@ const AXIS_W_CVD = { key: "weeklyCvdStrength", label: "周CVD强弱", format: v 
 const AXIS_W_EMAGAP = { key: "weeklyEmaGap", label: "周线EMA间距", format: v => fmtGapVal(v.weeklyEmaGap) };
 
 // A股 策略榜轴集（休眠件）：与 cryptoStrategySorts 逐根对齐，少「日订单流」（tushare 日线无 taker 归边，数据源硬边界）——
-// 另少「日 / 周RSI缺口」与「月+DI」（加轴时 A股 已休眠、没同补，见 fetch_ashare.py 复活清单 ⑦）——
+// 另少「日 / 周RSI缺口」「月涨跌幅」与「月+DI」（加轴时 A股 已休眠、没同补，见 fetch_ashare.py 复活清单 ⑦）——
 // 别并进加密那套、也别硬凑（会成永远全 null 的幽灵轴）；首轴日成交额须与 fetch_ashare.py 行构造的 `value` 一致。
 const singleStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD,
                              ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
@@ -242,11 +248,11 @@ const singleStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD,
 const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
                              ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
                              AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_RSIGAP, AXIS_W_CVD, AXIS_W_ADX, AXIS_W_DIPLUS,
-                             AXIS_M_VOL, AXIS_MRSI, AXIS_M_DIPLUS];
+                             AXIS_M_VOL, AXIS_M_CHGPCT, AXIS_MRSI, AXIS_M_DIPLUS];
 
 // === 三张涨跌幅榜的轴集：与策略榜对齐 ===
 // 行由后端 `_strategy_row` ＋ 本周期 `value` / `open` / `close` 产出 ⇒ 通用 key 与策略榜同义（日线值），周 / 月线值带前缀。
-// 轴集 ＝ 首轴本周期涨跌幅 ＋ 照抄 cryptoStrategySorts 的顺序、删掉与首轴重复的那根（日线榜「日涨跌幅」、周线榜「周涨跌幅」）
+// 轴集 ＝ 首轴本周期涨跌幅 ＋ 照抄 cryptoStrategySorts 的顺序、删掉与首轴重复的那根（日线榜「日涨跌幅」、周线榜「周涨跌幅」、月线榜「月涨跌幅」）
 //   ＋ 该周期独有的轴补在所属周期块末尾（周订单流；月CVD强弱、月订单流 —— 策略榜没有，后端也只在对应涨跌幅榜发字段）。
 // ⚠️ 写成显式数组、别改成运行时从 cryptoStrategySorts 裁剪：audit A 项靠正则静态抽取数组里的 AXIS_* 常量 ⇒ 加删策略榜的轴要这三份同批改。
 // ⚠️ 首轴 key 必须是 `value`，别"语义化"改成 changePercent：renderTable 的红绿上色写死 `sortField === "value"`，
@@ -263,11 +269,11 @@ const AXIS_M_TAKER = { key: "monthlyTakerStrength", label: "月订单流", forma
 const dailyChangeSorts = [AXIS_D_CHG, AXIS_D_VOL, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
                           ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
                           AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_RSIGAP, AXIS_W_CVD, AXIS_W_ADX, AXIS_W_DIPLUS,
-                          AXIS_M_VOL, AXIS_MRSI, AXIS_M_DIPLUS];
+                          AXIS_M_VOL, AXIS_M_CHGPCT, AXIS_MRSI, AXIS_M_DIPLUS];
 const weeklyChangeSorts = [AXIS_W_CHG, AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
                            ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
                            AXIS_W_VOL, AXIS_WRSI, AXIS_W_RSIGAP, AXIS_W_CVD, AXIS_W_ADX, AXIS_W_DIPLUS, AXIS_W_TAKER,
-                           AXIS_M_VOL, AXIS_MRSI, AXIS_M_DIPLUS];
+                           AXIS_M_VOL, AXIS_M_CHGPCT, AXIS_MRSI, AXIS_M_DIPLUS];
 const monthlyChangeSorts = [AXIS_M_CHG, AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
                             ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
                             AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_RSIGAP, AXIS_W_CVD, AXIS_W_ADX, AXIS_W_DIPLUS,
@@ -343,9 +349,9 @@ const TAB_GROUPS = [
         label: "加密行情", asset: "加密",
         tabs: [
             { key: "dailyChange", name: "日线", full: "涨跌幅", tf: "日线",
-              desc: "最新已收盘日 K 的涨跌幅（当根收盘 ÷ 当根开盘，币安日 K 每天 00:00 UTC 收盘，所以看的是昨天那一整根）。没有任何筛选条件——全部加密 USDT 永续合约都在里面，谁涨谁跌一眼看全，是先看清全市场在发生什么、再去策略榜里筛的入口。默认按涨幅从高到低；排序条和策略榜是同一套（日线、周线各轴外加三根月线轴「月成交额」「月线RSI」「月+DI」，按钮上都写明了周期），比如切成日成交额看涨得多是不是也有人接、日线RSI 看是不是已经超买、日CVD强弱与日订单流看近期买卖力量在全市场里谁相对更强。上市当天、还没有一根已收盘日 K 的新合约不入榜；上市不足约 23 天的合约涨跌幅和日成交额照常显示，但日线RSI、日CVD强弱、日订单流、日SAR多头根数这类要暖机的轴会显示「—」，排序时自动沉底；日RSI缺口、日ADX、日+DI 要约 28 天，日MACD强弱要约 35 天，不够的同样显示「—」。" },
+              desc: "最新已收盘日 K 的涨跌幅（当根收盘 ÷ 当根开盘，币安日 K 每天 00:00 UTC 收盘，所以看的是昨天那一整根）。没有任何筛选条件——全部加密 USDT 永续合约都在里面，谁涨谁跌一眼看全，是先看清全市场在发生什么、再去策略榜里筛的入口。默认按涨幅从高到低；排序条和策略榜是同一套（日线、周线各轴外加四根月线轴「月成交额」「月涨跌幅」「月线RSI」「月+DI」，按钮上都写明了周期），比如切成日成交额看涨得多是不是也有人接、日线RSI 看是不是已经超买、日CVD强弱与日订单流看近期买卖力量在全市场里谁相对更强。上市当天、还没有一根已收盘日 K 的新合约不入榜；上市不足约 23 天的合约涨跌幅和日成交额照常显示，但日线RSI、日CVD强弱、日订单流、日SAR多头根数这类要暖机的轴会显示「—」，排序时自动沉底；日RSI缺口、日ADX、日+DI 要约 28 天，日MACD强弱要约 35 天，不够的同样显示「—」。" },
             { key: "weeklyChange", name: "周线", full: "涨跌幅", tf: "周线",
-              desc: "最新已收盘周 K 的涨跌幅（周 K 每周一 00:00 UTC 收盘，所以整周之内这张榜的数值是不变的，下周一才换一批）。没有任何筛选条件，全部加密 USDT 永续合约。它比日线那张钝得多，正好用来分辨「这几天的涨只是反弹」还是「整周都在往上走」。排序条和策略榜是同一套，日线、周线、月线各轴都在、按钮上写明了周期：「周线RSI」「周CVD强弱」「周ADX」「周+DI」「周订单流」看的是那一根周 K，「日线RSI」「日成交额」这些是最新那根日 K 的值，「月成交额」「月线RSI」「月+DI」是最新已收盘那根月 K 的值；「周成交额」是那一根周 K 的成交额，不是 7 天滚动也不是日均。只要有 1 根已收盘周 K 就入榜，所以刚上市一两周的新合约也在；但它们的周线 RSI 要 16 根周 K、周ADX 和周+DI 要 28 根才算得出来，不够的显示「—」并在排序时沉底。" },
+              desc: "最新已收盘周 K 的涨跌幅（周 K 每周一 00:00 UTC 收盘，所以整周之内这张榜的数值是不变的，下周一才换一批）。没有任何筛选条件，全部加密 USDT 永续合约。它比日线那张钝得多，正好用来分辨「这几天的涨只是反弹」还是「整周都在往上走」。排序条和策略榜是同一套，日线、周线、月线各轴都在、按钮上写明了周期：「周线RSI」「周CVD强弱」「周ADX」「周+DI」「周订单流」看的是那一根周 K，「日线RSI」「日成交额」这些是最新那根日 K 的值，「月成交额」「月涨跌幅」「月线RSI」「月+DI」是最新已收盘那根月 K 的值；「周成交额」是那一根周 K 的成交额，不是 7 天滚动也不是日均。只要有 1 根已收盘周 K 就入榜，所以刚上市一两周的新合约也在；但它们的周线 RSI 要 16 根周 K、周ADX 和周+DI 要 28 根才算得出来，不够的显示「—」并在排序时沉底。" },
             { key: "monthlyChange", name: "月线", full: "涨跌幅", tf: "月线",
               desc: "最新已收盘月 K 的涨跌幅（月 K 每月 1 号 00:00 UTC 收盘，所以整个月之内这张榜是不动的——那是正确行为，不是数据卡住了）。没有任何筛选条件，全部加密 USDT 永续合约。这是站内周期最长的一张行情榜，看的是「这个月谁真的走出来了」，短线噪音基本被抹平。排序条是策略榜那一套日线、周线、月线各轴，再加上本榜独有的两根月线轴「月CVD强弱」「月订单流」：「月成交额」「月线RSI」「月+DI」和这两根看的是那一根月 K，其余是日线、周线的值。只要有 1 根已收盘月 K 就入榜（上市当月的新合约还没有，暂不入榜）；月线RSI 要 16 根月 K，月+DI、月CVD强弱、月订单流要 15 根，都得一年多才算得出来，所以有三成左右的合约这四根轴会显示「—」并在排序时沉底——这本身也是一种信息：显示「—」的就是还没走完一轮周期的品种。" },
         ],

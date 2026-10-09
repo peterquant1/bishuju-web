@@ -4,7 +4,13 @@
 //
 // CVD强弱 ＝ 归一化买卖失衡比 ∈ [−1,+1]（后端 calc_cvd_strength）。不排原始 CVD：它随成交量缩放，跨标的排序≈排成交量。
 // 带符号两位小数、不带 %（与涨跌幅共用值列，免得 +0.58 与 +5% 混淆）；中性不上色。
-function fmtCvdVal(x) { return x == null ? "—" : (x >= 0 ? "+" : "") + x.toFixed(2); }
+// 舍入后为 0 一律写「0.00」、不带正负号（同 fmtTakerVal）：后端 round 掉的小负数是 -0.0，写 `x >= 0` 会印成「+0.00」；
+//   fmtGapVal / fmtRsiGapVal 同一条规则、各写各的（见 fmtRsiGapVal 上方）。
+function fmtCvdVal(x) {
+    if (x == null) return "—";
+    const s = x.toFixed(2);
+    return s === "0.00" || s === "-0.00" ? "0.00" : (x > 0 ? "+" : "") + s;
+}
 // 订单流三轴（同一个失衡比，量的是真实主动成交）刻意例外：值天然挤在 0 附近、绝大多数是个位数百分比的负值，
 //   toFixed(2) 会把几百个币压成十几档、还冒出「+0.00 / −0.00」⇒ ×100 按百分比两位小数显示（% 在这里有实义：净主动买占成交量）。
 // ⚠️ 别复用 fmtCvdVal，也别反过来把 CVD强弱 改成百分比（它分布宽、两位小数够用）。舍入后为 0 一律显示「0.00%」，不带正负号。
@@ -42,13 +48,22 @@ const weeklyVolRankBadge = volRankBadgeFor("weeklyVolumeRank", "周", "weeklyCha
 const monthlyVolRankBadge = volRankBadgeFor("monthlyVolumeRank", "月", "monthlyChange", "ashareMonthlyChange");
 // 量比：无量纲倍数。间距 / 涨跌幅这类百分比量：带符号两位小数 + %。
 function fmtRatioVal(x) { return x == null ? "—" : x.toFixed(2); }
-function fmtGapVal(x) { return x == null ? "—" : (x >= 0 ? "+" : "") + x.toFixed(2) + "%"; }
+// 舍入后为 0 不带正负号（理由见 fmtCvdVal）：「周涨跌幅恒为负」那类说明碰上 -0.0 别印成「+0.00%」。
+function fmtGapVal(x) {
+    if (x == null) return "—";
+    const s = x.toFixed(2);
+    return (s === "0.00" || s === "-0.00" ? "0.00" : (x > 0 ? "+" : "") + s) + "%";
+}
 // 振幅 / 波动幅度：恒非负的百分比，不带符号。
 function fmtAmpVal(x) { return x == null ? "—" : x.toFixed(2) + "%"; }
 // ADX / +DI：0–100 的无量纲指数，不带 %（同 TV 显示口径）。
 function fmtDmiVal(x) { return x == null ? "—" : x.toFixed(2); }
 // 日 / 周RSI缺口：RSI 点数之差、有正有负 ⇒ 带符号两位小数、不带 %（与 fmtCvdVal 同格式，分开写免得两边口径一改互相牵连）。
-function fmtRsiGapVal(x) { return x == null ? "—" : (x >= 0 ? "+" : "") + x.toFixed(2); }
+function fmtRsiGapVal(x) {
+    if (x == null) return "—";
+    const s = x.toFixed(2);
+    return s === "0.00" || s === "-0.00" ? "0.00" : (x > 0 ? "+" : "") + s;
+}
 // 整数根数（日SAR多头根数）：带「根」不写「天」（A股 一根是交易日）。别复用 toFixed(2) 的格式化，会显示成「3.00」。
 function fmtBarsVal(x) { return x == null ? "—" : escapeHtml(x) + " 根"; }
 
@@ -138,7 +153,7 @@ const AXIS_W_RSIGAP = { key: "weeklyRsiSmaGap", label: "周RSI缺口", format: v
                         hint: "周线RSI(14)减去它自己的14周SMA（TV的RSI指标里那条均线）：正值＝RSI站在均线上方，越大＝这几周动能冲得越急。只看相对排名；回放104周里缺口最大的一成下周收涨40.2%、全市场42.3%，不是买点；一周只更新一次，上市不足28周显示「—」" };
 // 日成交额：最新已收盘那根日 K 的单日成交额（不是累计、不是均值）；badge ＝ 全市场名次「TOP N」，见 volRankBadgeFor。
 const AXIS_D_VOL = { key: "volume", label: "日成交额", format: v => fmtVolVal(v), badge: volRankBadge };
-// 日涨跌幅：只挂策略榜；涨跌幅榜刻意不挂（首轴 `value` 本身就是涨跌幅，挂了就是同一个量出现两次）。
+// 日涨跌幅：挂在全部策略榜与周 / 月涨跌幅榜；日涨跌幅榜自己刻意不挂（首轴 `value` 本身就是日涨跌幅，挂了就是同一个量出现两次）。
 // ⚠️ key 是 `changePercent` 不是 `value`（策略榜的 `value` 是日成交额）⇒ 按它排序时值列不上红绿（上色要求 tab 在
 //    CHANGE_PCT_TABS 且 `sortField === "value"`），靠正负号区分，是知情取舍。
 // 两资产口径不同是刻意的（加密 K 线实体、A股 相对前收含跳空），别"统一"。hint 只写口径、不写策略断言。
@@ -216,7 +231,7 @@ const AXIS_W_VOL = { key: "weeklyVolume", label: "周成交额", format: v => fm
 const AXIS_M_VOL = { key: "monthlyVolume", label: "月成交额", format: v => fmtMonthlyVolVal(v), badge: monthlyVolRankBadge,
                      hint: "最新已收盘那一根月K的成交额（不是近30天滚动累计），一个月只更新一次" };
 // 周涨跌幅：最新已收盘那一根周 K 的涨跌幅，与周涨跌幅榜同 symbol 那行的 `value` 是同一个数（后端取同一份缓存字段、别另算）。
-// 其余同 AXIS_D_CHGPCT：只挂策略榜、两资产口径不同别统一、hint 只写口径。
+// 其余同 AXIS_D_CHGPCT：挂在全部策略榜与日 / 月涨跌幅榜、周涨跌幅榜自己不挂；两资产口径不同别统一、hint 只写口径。
 const AXIS_W_CHGPCT = { key: "weeklyChangePercent", label: "周涨跌幅", format: v => fmtGapVal(v.weeklyChangePercent),
                         hint: "最新已收盘那一根周K的涨跌幅：K线实体(收−开)/开，一周只更新一次" };
 // 月涨跌幅：同周涨跌幅，换成最新已收盘那一根月 K（与月涨跌幅榜同 symbol 那行的 `value` 同一个数）。月涨跌幅榜自己不挂
@@ -336,7 +351,8 @@ const TABS_CONFIG = {
 // 增删榜两处都要配：这里（name / desc，desc 必填）＋ TABS_CONFIG（排序轴集、副行格式）。
 // ⚠️ 条目保持 `{ key: …, name: …` 写在同一行：audit_consistency.py 与 make_og.py 用正则在全文（含注释）里数榜。
 // 组上的 tf 只是 tab 没写 tf 时的兜底（t.tf || g.tf）；tf 取值要在 TF_SHORT 里有缩写（跨周期写组合值如「日线/周线」），
-//   查不到时 rail 徽标静默消失。full ＝ 标识栏用的完整名，缺省用 name。
+//   查不到时 rail 徽标静默消失。full ＝ 标识栏用的完整名，缺省用 name。hourly: true ＝ 成员每小时都可能变（圈定每小时重拉），
+//   只影响 0 命中时的「下次换批」提示（别的日线榜同一 UTC 日成员不变）。
 // 命名：name 写「怎么算」，条件用 ＋ / × 连接（都表示同时满足，并集写「或」）；根数用汉字（四连阳、前四根），
 //   指标参数照写（9/21、RSI≥60）；「扩张」专指间距在变大（只是排好了写「排列」），「两线扩张」专指 9/21 ∪ 9/26 并集
 //   （只看 9/21 写「9/21扩张」）。desc 用白话讲这张榜在找什么行情。
@@ -386,7 +402,7 @@ const TAB_GROUPS = [
               desc: "两个条件都看最新已收盘的那根月线：一是这根月线的 Parabolic SAR 站在空头一侧（圆点在价格上方）；二是它的收盘价，高过了这一轮 SAR 空头段里第一根月线的收盘价。拆开说第二条：在月线上找到当前这一段 SAR 处在空头的区间，它的第一根——也就是由多翻空的那个月——的收盘价就是参照线，再看最新这根月线收在不在它上面。合起来找的是：月线级别还没转向、但价格已经把翻空那个月的收盘价重新收复回来的标的。有五处要先说清楚。第一，第一条已经保证「最近一轮空头」就是正在走的这一段，所以参照线一定取自当前这轮下跌的起点，不是历史上某一段。第二，比较是严格大于，一样高不算；两边都用原始价格、不做四舍五入。第三，参照线在这一段空头里不会变（要等 SAR 翻多、下次再翻空才会换一条），所以成员的进出只看收盘价：回放里这个月的成员下个月还在的比例中位 57%，掉出的约七成是价格跌回参照线下方、约三成是 SAR 翻多整批离开；已结束的在榜段中位只有 1 个月、最长 11 个月。第四，上市初期那种从第一根月 K 直接起算的空头段也算数——月线取 100 根，对现有合约就是全部历史，和 TradingView 上看到的一样。第五，本榜只看月线 SAR 的方向和这一条参照线：不看均线、RSI、成交量、CVD，也不看月 K 的阴阳和连阳根数；门槛是至少 3 根已收盘月 K，上市未满三个自然月（上市当月不论几天都算一个月）的新合约不入榜。命中数：回放过去 48 个月，每月中位 18 个、最少 1 个、最多 128 个，没有一个月是空的；中位约占当月可判标的的 6%、占当月月线 SAR 在空头那批的 8%。上线这个月（最新已收盘的是 2026 年 8 月那根月线）是 44 个——这个月全市场 519 个可判标的里，469 个月线 SAR 在空头侧，其中收盘价站回翻空那根之上的只有 44 个。也要如实说一句：它不是买入信号，回放里反而略跑输大盘。成员下个月收盘更高的比例 35.5%（1122 个样本），当月可判全体 37.4%；下个月涨跌幅的中位数 −8.64%，全体 −7.24%；3 个月后收盘更高 30.6%（全体 31.2%），中位 −21.84%（全体 −17.38%）。按月比倒是有 54.8% 的月份成员跑赢当月中位——两个口径打架，说明这点差距不稳定，别当成结论。它更适合当成「月线还在下跌趋势里、但价格已经收复了翻空那一根」的观察名单。和站内其他榜的关系：和「月线SAR刚翻多」「月线SAR多头首根＋收盘价反包所有空头SAR」「月线SAR多头＋周线SAR多头」都一定不会同时出现（那三张都要求月线 SAR 已经在多头一侧，本榜要求还在空头）。「月线突破SAR空头第二根低点」比的是同一段空头里第 2 根的最低价、而且完全不看 SAR 方向，参照线通常比本榜这条低，所以本榜的标的回放 48 个月里（1166 人次）没有一个掉在那张之外——但这不是判据保证的包含：如果那一段空头第 2 根的最低价反而高过首根的收盘价，两者就会脱钩。表格里的各轴都不参与筛选，用来在这批标的里再分强弱。月线数据每月 1 号 00:00（UTC）新月线收盘后才刷新一次，整个月之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。范围是全部加密 USDT 永续合约。" },
             { key: "weeklyRsiAboveSma", name: "周线RSI大于RSI的14SMA", tf: "周线",
               desc: "只看最新已收盘的那根周线：它的 RSI(14) 高过 RSI 自己最近 14 周的简单平均——也就是 TradingView RSI 指标里那条 RSI 均线（类型 SMA、长度 14）。RSI 站在这条均线上方，说明这一周的动能强过最近十几周的平均水平。有三处要先说清楚。第一，比较是严格大于，正好相等不算；RSI 用 Wilder 平滑、和 TradingView 自带的 RSI 一致，均线是包括最新这一根在内的 14 个周 RSI 的算术平均。第二，要先有 15 根周线（14 个涨跌）才算得出第一个 RSI、再往后凑够 14 个 RSI 才有均线，所以至少要 28 根已收盘周 K——上市不足约六个半月的新合约不入榜。第三，这是一个状态、不是穿越：不要求这一周才刚上穿，已经在均线上方好几周的都算；RSI 回落到均线下方（或正好落在均线上）就离开本榜。所以成员换得慢：这一周的成员下一周还在的比例中位约 86%。命中数：回放过去 104 周（2024 年 9 月 30 日开盘的那一周到 2026 年 9 月 21 日开盘的那一周），每周中位 163 个、最少 3 个、最多 445 个，没有一周是空的，中位约占全市场的四成；它跟着大盘走——普跌的周只剩个位数（最少的是 2025 年 2 月 3 日开盘的那一周），普涨的周能装下大半个市场。上线这一周（最新已收盘的是 2026 年 9 月 21 日开盘的那根周线）是 445 个，占全市场 526 个的约八成五，是这 104 周里最多的一次，别当常态。也要如实说一句：它不是买入信号，回放里和大盘几乎没有差别。成员下一周收阳的比例是 42.9%（16041 个样本），全市场 43.0%；下一周涨跌幅的中位数 −2.11%，全市场 −2.03%；按周比，成员中位数跑赢全市场的只有 103 周里的 46 周；4 周后收盘比入榜那一周更高的比例 37.8%，全市场 37.2%，4 周后涨跌幅的中位数 −6.84%（全市场 −7.36%）。而且 RSI 高出均线越多反而越差：把成员按 RSI 高出均线的幅度分成五档，高出最多的那一档 4 周后收更高的只有 29.9%、涨跌幅中位数 −14.16%，高出最少的那一档是 44.0%、−2.99%——冲得越急的，之后回吐越多。它更适合当成一张「周线动能还在均线之上」的大名单，配合别的榜和日线各轴再挑，而不是追进去的理由。和站内其他榜的关系：其余周线榜看的是均线扩张、SAR、阴 K、CVD 和 ADX / DI，不看 RSI，和本榜没有必然的包含或互斥关系——上线这一周「周线9/21扩张＋SAR多头」的 129 个恰好全在本榜，那是普涨周的巧合，回放里那张的成员约有 6% 的时候不在本榜。表格里的「周RSI缺口」就是本榜判据里那个差值（RSI 减均线），本榜每一行都是正的，按它排序能看出谁高出均线最多（按上面的回放，高出越多之后越差）；其余日线、周线、月线各轴都不参与筛选，用来在这批标的里再分强弱。周线每周一 00:00（UTC）收盘后才换一批，同一周之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。范围是全部加密 USDT 永续合约。" },
-            { key: "dailyAlphaNoSpotEmaSar", name: "币安Alpha未上现货＋日线9/21扩张＋CVD递增＋RSI≥70", tf: "日线",
+            { key: "dailyAlphaNoSpotEmaSar", name: "币安Alpha未上现货＋日线9/21扩张＋CVD递增＋RSI≥70", tf: "日线", hourly: true,
               desc: "四个条件一起看。先把币圈定在：已经上了币安 USDT 永续、现货还没有状态为交易中的交易对、并且现在还挂在币安 Alpha 里。然后只看最新已收盘的那根日线：一是 EMA9 在 EMA21 上方、而且两条均线的间距比前一天更大；二是 CVD 在递增——这一天的 CVD 为正、而且比前一天大；三是 RSI(14) 不低于 70。有五处要先说清楚。第一，现货认的是币安现货接口里状态为交易中的交易对，不管用什么币计价；Alpha 认的是币安 Alpha 现在还挂着的代币，已经下架的不算。合约名前面的 1000、1000000 会还原成原来的币再去对这两份名单，所以现货上有 PEPE 的话，1000PEPE 的合约不算「没上现货」。第二，CVD 是按 K 线形态拆出买卖量再平滑出来的（和 TradingView 的 Cumulative Volume Delta 同口径），不是真实成交归边；「递增」要求它既是正的、又比前一天大，和「日线9/21扩张＋SAR多头前两根＋CVD递增＋RSI≥70」那张的 CVD 是同一份数。RSI 用 Wilder 平滑、和 TradingView 一致，正好等于 70 也算。第三，扩张是两半合起来才算：光是间距在变大还不够，EMA9 必须已经站到 EMA21 上方。第四，这张榜的名单每小时都会重算：当天要是上了现货，或者从 Alpha 下架，下一小时就会离开；三条日线条件则要等每天 00:00（UTC）日线收盘才变，任何一条哪天不再满足（间距不再变大、CVD 不再比前一天大、RSI 掉到 70 以下）就离开。第五，算这套日线至少要 23 根已收盘日 K，上市不足约 23 天的新合约不入榜。和站内其他榜的关系：和「日线9/21扩张＋SAR多头前两根＋CVD递增＋RSI≥70」互不包含——两张的 9/21 扩张、CVD 递增和 RSI 不低于 70 是同一个口径，但那张另要 SAR 正好是多头的第 1 或第 2 根，也不限是不是 Alpha、上没上现货；本榜不看 SAR，只收现在还挂在 Alpha、现货还没有交易对的合约。所以那张里凡是属于这批 Alpha 未上现货的合约，必然也在本榜上。命中数：回放过去 477 天（2025 年 6 月 16 日到 2026 年 10 月 5 日，只算每个币上架 Alpha 之后的日子；币安不提供现货历史上架区间，更早曾经上过现货又下架的日子会混在样本里），每天中位 1 个、最多 15 个，有 156 天一个都没有（大约三分之一的天数）——空榜不是数据坏了。改判据这一天（最新已收盘的是 2026 年 10 月 5 日那根日线）是 3 个；圈定本身大约 135 个合约，真正卡人的是后面三条日线条件，尤其是 RSI 不低于 70。成员换得快：今天的成员明天还在的比例中位只有 20%。也要如实说一句：它不是买入信号，回放里明显跑输大盘，也跑输这批币自己的普通日子。成员次日收盘更高的比例是 40.9%（866 个样本），同一窗口的全市场是 46.9%，这批还没上现货的 Alpha 合约随便拿一天是 47.2%；次日涨跌幅的中位数 −2.29%，全市场 −0.27%，这批币的普通日子 −0.31%。5 天后收盘更高的比例 39.4%（全市场 44.5%、这批币普通日子 45.7%），5 天后涨跌幅的中位数 −6.49%（全市场 −1.11%）。改判据之前的版本（9/21 扩张＋SAR 多头前两根）是 43.9% 和 42.1%，现在这版更差——均线在张开、CVD 走强、RSI 又冲上 70，在这批币上多半是短线已经过热，之后回吐得更多。它更适合当成观察名单：看哪些还没上现货的 Alpha 合约正在被资金推高、热度已经很高，而不是追进去的理由。表格里的日线、周线、月线各轴都不参与筛选（「日线RSI」那一列每行都不低于 70），用来在这批标的里再分强弱。范围是全部加密 USDT 永续合约。" },
             { key: "weeklyAdxRisingDiPlus", name: "周线ADX连续递增＋+DI大于−DI", tf: "周线",
               desc: "两个条件都看最新已收盘的那根周线：一是 ADX 连续在抬——这一周比上一周高、上一周又比上上周高（至少连着两周往上，再多也算）；二是 +DI 大于 −DI。合起来找的是「趋势强度已经连着几周在变强、而且多方的方向压力压过空方」的标的。有四处要先说清楚。第一，ADX 只量趋势有多强、不分涨跌，所以只看第一条的话，跌势在加速的也会过；第二条把这一类挡在外面。比较都是严格大于：ADX 有一周和前一周持平就算断了，+DI 正好等于 −DI 也不算。第二，第二条不是阳线。+DI 比的是这一周向上的波动和向下的波动谁更大，不看收盘有没有高于开盘，所以收阴的周也可以在榜上。改成「连续递增」的这一周 283 个里有 181 个收的是阴线。第三，两条用的都是 TradingView 的 DMI（长度 14、平滑 14），和表格里的「周ADX」「周+DI」是同一个数。ADX 要 28 根已收盘周 K 才有，再往回比两周就要 30 根，所以上市不足约七个月的新合约不入榜。TradingView 上的 +DI 第 15 根周 K 就画得出来，这里为了和 ADX 用同一道门槛，要到 28 根，只在刚上市半年左右的合约上和 TV 不完全一样。第四，它留得很久：ADX 是平滑过的指标，一旦抬头往往连着抬很多周，只要还在抬、+DI 还在 −DI 上方，就一直在榜上。回放里这一周的成员下一周还在的比例中位约 89%，同一个标的最长连了 37 周。命中数：回放过去 104 周（2024 年 10 月 7 日开盘的那一周到 2026 年 9 月 28 日开盘的那一周），每周中位 26.5 个、最少 2 个、最多 283 个，没有一周是空的。改成「连续递增」的这一周就是那 283 个，是这 104 周里最多的一次，别当常态。平时两条会互相卡：单看 ADX 连续在抬每周中位大约 110 个，再加上 +DI 大于 −DI 就剩中位 26.5 个；这一周 ADX 连续在抬的 288 个里有 283 个方向也过，方向这一条几乎没再筛人，那是这一周的特例。和只要求 ADX 比上一周高的旧版比，「连续」平时把每周中位从 36 个筛到 26.5 个，这一周只少了 14 个（ADX 一涨往往连涨好几周）。也要如实说一句：它不是买入信号。下一周收阳的比例是 43.9%（4626 个样本），全市场 42.8%；下一周涨跌幅的中位数 −2.11%，全市场 −2.07%；按周比，成员中位数跑赢全市场的只有 103 周里的 45 周。4 周后收盘比入榜那一周更高的比例 33.1%，全市场 37.9%，4 周后涨跌幅的中位数 −10.40%（全市场 −7.04%）。下一周跟大盘差不多，放久了比大盘差；和旧版几乎一样（旧版 43.9%、34.1%），要求连着抬三周也没变好（42.8%、32.5%）。它更适合当成观察名单：看哪些合约的趋势已经连着几周在变强、多方压力也占上风。和站内其他榜的关系：不看均线、SAR、阴 K、CVD 和 RSI，和现有的周线榜没有必然的包含或互斥。这一周「周线9/21扩张＋SAR多头」的 148 个里有 129 个也在本榜，那是这一周很多标的趋势一起变强的巧合。表格里的「周ADX」「周+DI」和判据同源，每一行都有数；「周涨跌幅」可以是负的。其余各轴都不参与筛选，用来在这批标的里再分强弱。周线每周一 00:00（UTC）收盘后才换一批，同一周之内反复打开本榜，看到的标的完全一样，这是正确行为不是数据卡住了。范围是全部加密 USDT 永续合约。" },
@@ -410,7 +426,7 @@ const TAB_GROUPS = [
 const TAB_META = {};
 for (const g of TAB_GROUPS) {
     for (const t of g.tabs) {
-        TAB_META[t.key] = { asset: g.asset, tf: t.tf || g.tf, name: t.name, full: t.full || t.name, desc: t.desc || "" };
+        TAB_META[t.key] = { asset: g.asset, tf: t.tf || g.tf, name: t.name, full: t.full || t.name, desc: t.desc || "", hourly: !!t.hourly };
     }
 }
 
@@ -770,8 +786,11 @@ const LOCK_PREVIEW_ROWS = [
     { sym: 74, bar: 47 }, { sym: 110, bar: 39 }, { sym: 70, bar: 30 }, { sym: 88, bar: 23 },
 ];
 // firstRank：预览行的起始名次（橱窗榜的预览接在免费那一行后面，从第 2 名起）；null ＝ 名次未知、一律写「—」（见 renderTable 的 rankUnknown）。
-function lockPreviewRowsHtml(firstRank = 1) {
-    return `<div class="lockgate__rows" aria-hidden="true">` + LOCK_PREVIEW_ROWS.map((r, i) => {
+// count：画几行 ＝ 锁住的那部分有几个标的（全锁榜 ＝ 命中数，橱窗榜 ＝ 命中数减公开行数），最多 8 行；null（命中数未知）才画满。
+//   别改回恒画 8 行：命中 1 个的榜会在锁后面印出带奖牌的第 2–8 名（不存在的名次）。
+function lockPreviewRowsHtml(firstRank = 1, count = null) {
+    const rows = count == null ? LOCK_PREVIEW_ROWS : LOCK_PREVIEW_ROWS.slice(0, Math.max(0, count));
+    return `<div class="lockgate__rows" aria-hidden="true">` + rows.map((r, i) => {
         const rank = firstRank == null ? null : i + firstRank;
         const rankCell = rank == null ? `<span class="rank-num">—</span>`
             : rank <= 3
@@ -785,12 +804,13 @@ function lockPreviewRowsHtml(firstRank = 1) {
         </div>`;
     }).join("") + `</div>`;
 }
-// 锁定卡片：预览行 + 锁图标 + 命中数 + CTA。n ＝ 命中数（paidMeta，可为 null）；opts.countHtml 可整句替换标题（橱窗榜用）。
+// 锁定卡片：预览行 + 锁图标 + 命中数 + CTA。n ＝ 命中数（paidMeta，可为 null）；opts.countHtml 可整句替换标题（橱窗榜用）；
+// opts.previewCount ＝ 预览画几行（见 lockPreviewRowsHtml 的 count）。
 // 文案与动作走 lockGateCopy / bindLockGate，全锁榜与未解锁的橱窗榜共用同一张卡。
 function lockGateHtml(n, opts) {
     const count = opts.countHtml || (n != null ? `已找到 <b>${n}</b> 个标的` : "该榜已锁定");
     return `<div class="lockgate">
-        ${lockPreviewRowsHtml(opts.firstRank)}
+        ${lockPreviewRowsHtml(opts.firstRank, opts.previewCount)}
         <div class="lockgate__veil">
             <div class="lockgate__card">
                 <div class="lockgate__icon">${LOCK_SVG}</div>
@@ -894,7 +914,9 @@ function renderTable() {
         // （别催已付费的人重复付款：Worker 一抖就对持有效卡的人显示「已失效…续费」，是这里出过的真问题）。
         if (locked && !license.valid && !pending) {
             const copy = lockGateCopy();
-            tbody.innerHTML = lockGateHtml(tabCount(currentTab), copy);
+            const n = tabCount(currentTab);
+            // 预览行按命中数画（0 命中时背后不垫假行）。0 命中照样出锁定卡片（「已找到 0 个」+ 解锁）是在案设计，改不改归站长。
+            tbody.innerHTML = lockGateHtml(n, { ...copy, previewCount: n });
             bindLockGate(copy.expired);
             // 页脚（role=status / aria-live）给读屏用户播报一句状态（#rankBody 不设 live）；行情榜同样付费 ⇒ 说「该榜」不说「该策略榜」
             if (foot) { foot.textContent = copy.notFound ? "查不到这张通行证，请重新输入" : copy.expired ? "通行证已失效，续费后可继续查看" : "该榜需通行证解锁"; foot.hidden = false; }
@@ -935,7 +957,9 @@ function renderTable() {
             // 加密策略榜一律按最新已收盘 K 判，周期内名单不变 ⇒ 别暗示「下个整点可能就有」，写清下次换批的时刻。
             // 跨周期榜按变得最快的那个周期算（含日线 ⇒ 每天换；周＋月 ⇒ 周一或 1 号先到的那个）；tf 取 TAB_META（同 rail 徽标）。
             const tf = (TAB_META[currentTab] || {}).tf || "";
-            const nextBatch = tf.includes("日线") ? "按最新已收盘日 K 判，同一天之内名单不变<br>下次换批：每天 00:00 UTC（北京时间 08:00）收盘后"
+            // hourly（币种圈定每小时重拉，如 dailyAlphaNoSpotEmaSar）：日线条件照样 00:00 UTC 才换，但成员每小时都可能变 ⇒ 别写「同一天之内不变」。
+            const nextBatch = (TAB_META[currentTab] || {}).hourly ? "日线条件按最新已收盘日 K 判（每天 00:00 UTC 换），币种圈定每小时重拉<br>整点后约 2 分钟可能有变化"
+                : tf.includes("日线") ? "按最新已收盘日 K 判，同一天之内名单不变<br>下次换批：每天 00:00 UTC（北京时间 08:00）收盘后"
                 : tf === "周线" ? "按最新已收盘周 K 判，整周之内名单不变<br>下次换批：下周一 00:00 UTC（北京时间周一 08:00）收盘后"
                 : tf === "月线" ? "按最新已收盘月 K 判，整个月之内名单不变<br>下次换批：下月 1 号 00:00 UTC（北京时间 1 号 08:00）收盘后"
                 : tf === "周线/月线" ? "按最新已收盘周 K 与月 K 判，名单只在周 K 或月 K 收盘时换<br>下次换批：下周一或下月 1 号 00:00 UTC（北京时间 08:00），以先到的为准"
@@ -976,13 +1000,17 @@ function renderTable() {
     const total = (data[currentTab] || []).length;
     const teaserHits = tabCount(currentTab); // paidMeta 的真实命中数（不是被截成 1 行的数组长度）
     const teaserRest = teaserHits != null && teaserHits > total ? teaserHits - total : null;
+    // 橱窗命中数不超过公开行数（回放里最少的几周只有 1 个）：公开的就是整张榜 ⇒ 名次照常、背后不垫预览行、
+    //   别写「完整榜单已锁定 / 还有 N 个」（不实：付了钱也只有这几行）。锁定卡片照出 —— 它是落地页的购买入口（在案设计，去不去归站长）。
+    const teaserComplete = (teaserLocked || teaserPartial) && teaserHits != null && teaserHits <= total;
     // 橱窗榜只有公开那 1 行时（未解锁 / 付费包还没到），它是**默认视图**（首轴降序）的第一名：换了轴或切成升序，它在完整榜单里
     // 多半不是第 1 ⇒ 名次与预览行一律写「—」，别在免费面上印假名次。
-    const rankUnknown = (teaserLocked || teaserPartial) && !(config.sorts && sortField === config.sorts[0].key && !sortAsc);
+    const rankUnknown = (teaserLocked || teaserPartial) && !teaserComplete && !(config.sorts && sortField === config.sorts[0].key && !sortAsc);
     const gateCopy = teaserLocked ? lockGateCopy() : null;
     const gateHtml = gateCopy ? lockGateHtml(null, {
-        ...gateCopy, firstRank: rankUnknown ? null : shown.length + 1,
-        countHtml: teaserRest != null ? `还有 <b>${teaserRest}</b> 个标的` : "完整榜单已锁定",
+        ...gateCopy, firstRank: rankUnknown ? null : shown.length + 1, previewCount: teaserComplete ? 0 : teaserRest,
+        countHtml: teaserComplete ? `这张榜本期就这 <b>${teaserHits}</b> 个标的`
+            : teaserRest != null ? `还有 <b>${teaserRest}</b> 个标的` : "完整榜单已锁定",
     }) : "";
 
     tbody.innerHTML = shown
@@ -1039,8 +1067,9 @@ function renderTable() {
         const q = isStrategyTab(currentTab) ? "命中" : "共";
         if (teaserLocked) {
             // 排在搜索分支之前：这时 total 是被截成 1 行的数组长度，写成「匹配 1 / 命中 1 个」会与标题旁的命中数打架
-            foot.textContent = `免费预览第 1 名，${teaserRest != null ? `其余 ${teaserRest} 个标的` : "完整榜单"}需通行证解锁`;
-        } else if (teaserPartial) {
+            foot.textContent = teaserComplete ? `共 ${total} 个标的，其余榜单需通行证解锁`
+                : `免费预览第 1 名，${teaserRest != null ? `其余 ${teaserRest} 个标的` : "完整榜单"}需通行证解锁`;
+        } else if (teaserPartial && !teaserComplete) {
             // 同样是被截成 1 行的橱窗榜，只是还在等 Worker 答复 / 付费整包还没到：别写成「共 1 个标的」
             foot.textContent = pending ? "正在验证通行证，完整榜单稍后自动出现" : "通行证有效，完整榜单正在加载，稍后自动出现";
         } else if (searchQuery) {

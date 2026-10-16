@@ -96,8 +96,9 @@ jobs:
           print("OK：付费数据新鲜。")
           PYEOF
 
-      # 公开文件的内容级检查（2026-10-01 加）：橱窗榜恰好 1 行。0 行 ＝ 新访客的落地页没有免费预览、只剩锁定卡片
-      # （后端视为真故障，但只在本机日志里打一行 [警告]，这里才会发邮件）；多于 1 行 ＝ 付费墙切分出了问题。
+      # 公开文件的内容级检查（2026-10-01 加）：橱窗榜恰好 1 行。0 行 ＝ 新访客的落地页没有免费预览；多于 1 行 ＝ 付费墙切分出了问题。
+      # 0 行时按 paidMeta 分两种说法：paidMeta 也是 0 ＝ 当天真没命中（现任橱窗回放里偶有空榜日，已知代价，照样报红）；
+      # paidMeta > 0 却 0 行 ＝ 切分 / 发布出了问题（真故障）。
       # 橱窗榜 key 从本仓库 script.js 的 TEASER_TAB 读（前后端同名常量，audit C 项保证一致）；抽不到就算失败，别静默跳过。
       # 正则用 \w+（同 audit C 项）：key 里可能带数字（如 weeklyEma921Expansion），写成 [A-Za-z]+ 换橱窗后会每次假红。
       - name: Check public teaser row
@@ -117,7 +118,10 @@ jobs:
           n = len(rows) if isinstance(rows, list) else None
           print(f"橱窗榜 {teaser}：公开文件里 {n} 行（paidMeta 命中 {data.get('paidMeta', {}).get(teaser)}）")
           if n != 1:
-              print(f"::error::公开文件的橱窗榜 {teaser} 不是恰好 1 行（{n}）—— 新访客的落地页没有免费预览了：该换橱窗，或付费墙切分出了问题！")
+              if n == 0 and data.get("paidMeta", {}).get(teaser) == 0:
+                  print(f"::error::橱窗榜 {teaser} 今天 0 命中（现任橱窗回放里偶有空榜日）—— 落地页今天没有免费预览；不是切分故障。")
+              else:
+                  print(f"::error::公开文件的橱窗榜 {teaser} 不是恰好 1 行（{n}）—— 新访客的落地页没有免费预览了：付费墙切分或发布出了问题！")
               sys.exit(1)
           print("OK：橱窗 1 行。")
           PYEOF

@@ -512,6 +512,7 @@ const TABS_CONFIG = {
     s29: { sorts: day7StrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s30: { sorts: day8StrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s31: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    s32: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
     // subClass：≤860px 别的榜副行限两行、整段不折，这张的周期段长 ⇒ 放开（style.css .sub--tg）。
@@ -538,6 +539,8 @@ const TAB_GROUPS = [
         tabs: [
             { key: "s01", name: "周线长期弱势", tf: "周线",
               desc: "看合约上市以来的全部周线：一直没走出过像样的上涨趋势、长期偏弱的合约，多是近一两年上市、一路走低的币。" },
+            { key: "s32", name: "日线动能转弱期", tf: "日线",
+              desc: "日线动能转弱之后、还没重新转强的合约，重新转强当天离开。是一份大名单：平常约占全市场三四成，普跌时能占到大多数。" },
             { key: "s12", name: "日线动能转强初期", tf: "日线",
               desc: "日线动能由弱转强后的头几天里的合约，转强过了初期或重新转弱就离开。" },
             { key: "s31", name: "日线强势回调", tf: "日线",

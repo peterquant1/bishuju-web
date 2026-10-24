@@ -1,0 +1,190 @@
+name: Check Data Freshness
+
+# 数据停更告警：本机两条计划任务是唯一的数据更新通道（加密每小时一枪、A股 每天一枪（10-19 复活）；GH Actions 抓取因代理失效停用、美股已退役），
+# 机器离线/睡眠/任务挂掉时没有任何兜底，只能靠这里发现。夜里关机时前两步每晚都会红一阵（已知），收到邮件先看是不是关机时段。
+# 只在数据落后超过阈值时 fail —— fail 即 GitHub 给你发邮件，收到就去看机器。
+#
+# 2026-07-22 拆仓库后：本仓库 bishuju-web 是公开的前端+数据仓库，本机任务把
+# data/rankings.json 推到这里（后端源码在私有仓库 bishuju）。第一步读的就是任务 push 的
+# 结果（actions/checkout 拉下来的已提交文件），不夹 Pages/CDN 两层，直接反映数据是否停更；
+# 「公开站是否还在服务」由最后一步另抓 https://gouzhuang748.com/data/rankings.json 比对。
+
+on:
+  schedule:
+    # 每 2 小时查一次（GH cron 可能延迟/跳过，但停更状态会持续存在，下一次总能抓到）
+    - cron: '17 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (仅最新一次提交，避免拉整段每小时数据提交的历史)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Check updateTime is fresh
+        run: |
+          python3 - << 'PYEOF'
+          import json, sys
+          from datetime import datetime, timezone
+
+          with open("data/rankings.json", encoding="utf-8") as f:
+              data = json.load(f)
+
+          def age_min(field):
+              ts = datetime.strptime(data[field], "%Y-%m-%d %H:%M:%S UTC").replace(tzinfo=timezone.utc)
+              return (datetime.now(timezone.utc) - ts).total_seconds() / 60
+
+          a = age_min("updateTime")
+          n = (data.get("paidMeta") or {}).get("dailyChange")
+          print(f"updateTime: {data['updateTime']}  (落后 {a:.0f} 分钟，crypto 独占字段——A股 不写它)  日线行情榜 {n} 行")
+          if a > 150:
+              print("::error::加密数据已超过 2.5 小时未更新 —— 本机每小时计划任务可能挂了，去看机器！")
+              sys.exit(1)
+          # 日线行情榜是全市场、正常不会空 ⇒ 0 行 ＝ build 坏了（时间戳照样新鲜，上面那条看不出来）
+          if not n:
+              print("::error::加密日线行情榜 0 行（全市场榜不该空）—— build 坏了！")
+              sys.exit(1)
+
+          print("OK：加密数据新鲜。")
+          PYEOF
+
+      # A股 独立一步（10-19 审计：原来跟在加密那项后面，加密一红就 sys.exit、A股 根本不查；字段不见了还会 continue 静默变绿）。
+      # 每个交易日 15:05 北京时间收盘后触发、还要等数据发布 ⇒ 30 小时阈值（非交易日任务照跑、只刷新时间戳，周末 / 长假不误报；前提是机器每天开着）。
+      # updateTime 是加密管道独占的，光看它发现不了 A股 任务挂了；A股 日线行情榜是全市场、正常不会空 ⇒ 0 行 ＝ A股 build 坏了。
+      - name: Check A股 freshness
+        if: always()
+        run: |
+          python3 - << 'PYEOF'
+          import json, sys
+          from datetime import datetime, timezone
+
+          with open("data/rankings.json", encoding="utf-8") as f:
+              data = json.load(f)
+          if "ashareUpdateTime" not in data:
+              print("::error::公开文件里没有 ashareUpdateTime —— A股 管道没发布过，或被合并逻辑抹掉了！")
+              sys.exit(1)
+          ts = datetime.strptime(data["ashareUpdateTime"], "%Y-%m-%d %H:%M:%S UTC").replace(tzinfo=timezone.utc)
+          m = (datetime.now(timezone.utc) - ts).total_seconds() / 60
+          n = (data.get("paidMeta") or {}).get("ashareDailyChange")
+          print(f"ashareUpdateTime: {data['ashareUpdateTime']}  (落后 {m:.0f} 分钟)  数据日 {data.get('ashareDataDate')}  A股 日线行情榜 {n} 行")
+          if m > 30 * 60:
+              print("::error::A股数据已超过 30 小时未更新 —— A股每日计划任务可能挂了，去看机器！")
+              sys.exit(1)
+          if not n:
+              print("::error::A股 日线行情榜 0 行（全市场榜不该空）—— A股 build 坏了或数据源异常！")
+              sys.exit(1)
+          print("OK：A股 数据新鲜。")
+          PYEOF
+
+      # 付费数据链路（Worker KV）独立检查：上面的检查只覆盖公开文件——付费用户真正读的
+      # 是 Worker KV（X-License-Key → /api/data），upload 断了（400/token 失效等）公开侧
+      # 一切正常、这里才能发现（split_output 400 事故曾静默近一天，2026-07-22 加）。
+      # KV updateTime 每小时被 crypto 上传刷新，阈值与 crypto 同为 2.5h。
+      # /api/status 只回元信息（updateTime/tab 数/字节数），公开无鉴权。
+      # ⚠️ 若日后紧急关闭付费墙（PAYWALL_ENABLED=false），上传停止、这步会开始告警——
+      # 届时把本步与下面「橱窗恰好 1 行」那步一并注释掉（关墙后公开文件里橱窗榜是整榜，那步也会次次红）。
+      # ⚠️⚠️ `if: always()` 不能删（2026-08-05 审计补；后面几步同理）：GH Actions 默认「前一步 fail 就跳过
+      # 后续所有步骤」，而上一步一 fail（当年是 A股/美股 陈旧，现在是加密停更）就会让公开侧
+      # 的陈旧把付费侧的监控一起弄瞎。2026-08-03~05 机器睡眠事故实测：A股 陈旧 65 小时期间
+      # 本步被**连续跳过 15 次**，付费数据链路（客户真正读的那条、也正是当初 400 事故静默近
+      # 一天的那条）整整 40 小时零监控。加上之后两条检查互相独立；job 整体仍会因上一步 fail
+      # 而 fail，告警语义不变。
+      - name: Check paid-data KV freshness (Worker /api/status)
+        if: always()
+        run: |
+          # 自定义 UA：Cloudflare 会把已知机器人 UA 直接 403（error 1010，license.py 同款坑）
+          body=$(curl -sS --retry 3 --retry-delay 5 -A "bishuju-freshness-check/1.0" \
+            https://bishuju-api.fanshenpan.workers.dev/api/status) || {
+            echo "::error::Worker /api/status 连不上 —— 付费数据服务可能整体不可用！"; exit 1; }
+          echo "$body"
+          python3 - "$body" << 'PYEOF'
+          import json, sys
+          from datetime import datetime, timezone
+
+          d = json.loads(sys.argv[1])
+          if not d.get("ok") or not d.get("updateTime"):
+              print(f"::error::Worker /api/status 异常：{d} —— 付费数据缺失或损坏！")
+              sys.exit(1)
+          ts = datetime.strptime(d["updateTime"], "%Y-%m-%d %H:%M:%S UTC").replace(tzinfo=timezone.utc)
+          m = (datetime.now(timezone.utc) - ts).total_seconds() / 60
+          print(f"KV updateTime: {d['updateTime']}  (落后 {m:.0f} 分钟, tabs={d.get('tabs')}, bytes={d.get('bytes')})")
+          if m > 150:
+              print("::error::付费数据(Worker KV)已超过 2.5 小时未更新 —— 上传链路断了，付费用户正在受影响！")
+              sys.exit(1)
+          # A股 那包在单独的 KV key（10-19），/api/status 的 ashare 字段是它的元信息：同 A股 公开时刻的 30 小时阈值
+          a = d.get("ashare")
+          if not a or not a.get("updateTime"):
+              print(f"::error::Worker /api/status 没有 A股 那包的元信息：{a} —— A股 付费数据没上传过或 meta 丢了！")
+              sys.exit(1)
+          ta = datetime.strptime(a["updateTime"], "%Y-%m-%d %H:%M:%S UTC").replace(tzinfo=timezone.utc)
+          ma = (datetime.now(timezone.utc) - ta).total_seconds() / 60
+          print(f"A股 KV updateTime: {a['updateTime']}  (落后 {ma:.0f} 分钟, tabs={a.get('tabs')}, bytes={a.get('bytes')})")
+          if ma > 30 * 60:
+              print("::error::A股 付费数据(Worker KV)已超过 30 小时未更新 —— A股 上传断了，付费用户看到的是旧数据！")
+              sys.exit(1)
+          print("OK：付费数据新鲜。")
+          PYEOF
+
+      # 公开文件的内容级检查（2026-10-01 加）：橱窗榜恰好 1 行。0 行 ＝ 新访客的落地页没有免费预览；多于 1 行 ＝ 付费墙切分出了问题。
+      # 0 行时按 paidMeta 分两种说法：paidMeta 也是 0 ＝ 当天真没命中（现任橱窗回放 398 天没空过；真空了照样报红）；
+      # paidMeta > 0 却 0 行 ＝ 切分 / 发布出了问题（真故障）。
+      # 橱窗榜 key 从本仓库 script.js 的 TEASER_TAB 读（前后端同名常量，audit C 项保证一致）；抽不到就算失败，别静默跳过。
+      # 正则用 \w+（同 audit C 项）：key 里可能带数字（如公开编号 s01），写成 [A-Za-z]+ 换橱窗后会每次假红。
+      - name: Check public teaser row
+        if: always()
+        run: |
+          python3 - << 'PYEOF'
+          import json, re, sys
+
+          m = re.search(r'^const TEASER_TAB = "(\w+)";', open("script.js", encoding="utf-8").read(), re.M)
+          if not m:
+              print("::error::script.js 里抽不到 TEASER_TAB —— 本检查的正则要跟着改了！")
+              sys.exit(1)
+          teaser = m.group(1)
+          with open("data/rankings.json", encoding="utf-8") as f:
+              data = json.load(f)
+          rows = data.get(teaser)
+          n = len(rows) if isinstance(rows, list) else None
+          print(f"橱窗榜 {teaser}：公开文件里 {n} 行（paidMeta 命中 {data.get('paidMeta', {}).get(teaser)}）")
+          if n != 1:
+              if n == 0 and data.get("paidMeta", {}).get(teaser) == 0:
+                  print(f"::error::橱窗榜 {teaser} 今天 0 命中（现任橱窗回放 398 天没空过，先核上游数据）—— 落地页今天没有免费预览；不是切分故障。")
+              else:
+                  print(f"::error::公开文件的橱窗榜 {teaser} 不是恰好 1 行（{n}）—— 新访客的落地页没有免费预览了：付费墙切分或发布出了问题！")
+              sys.exit(1)
+          print("OK：橱窗 1 行。")
+          PYEOF
+
+      # 线上站点是否跟上仓库（2026-10-01 加）：前几步只看仓库 checkout 与 Worker，GitHub Pages 部署失败 /
+      # 自定义域名或 DNS 失效时它们都是绿的。阈值 70 分钟 ＝ 一整个小时周期 + 部署与 CDN 的余量，只抓持续性的「仓库在更新、线上不动」。
+      # 带时间戳参数绕过 CDN 缓存；自定义 UA 理由同上。
+      - name: Check live site serves the latest data
+        if: always()
+        run: |
+          live=$(curl -sS --retry 3 --retry-delay 5 -A "bishuju-freshness-check/1.0" \
+            "https://gouzhuang748.com/data/rankings.json?ts=$(date +%s)") || {
+            echo "::error::gouzhuang748.com 连不上 —— 公开站可能整个挂了（Pages / 域名 / DNS）！"; exit 1; }
+          python3 - "$live" << 'PYEOF'
+          import json, sys
+          from datetime import datetime, timezone
+
+          fmt = "%Y-%m-%d %H:%M:%S UTC"
+          try:
+              live = json.loads(sys.argv[1])
+          except ValueError:
+              print(f"::error::线上 rankings.json 不是合法 JSON（前 200 字：{sys.argv[1][:200]!r}）—— 公开站返回的不是数据文件！")
+              sys.exit(1)
+          with open("data/rankings.json", encoding="utf-8") as f:
+              repo = json.load(f)
+          lt = datetime.strptime(live["updateTime"], fmt).replace(tzinfo=timezone.utc)
+          rt = datetime.strptime(repo["updateTime"], fmt).replace(tzinfo=timezone.utc)
+          lag = (rt - lt).total_seconds() / 60
+          print(f"仓库 {repo['updateTime']} · 线上 {live['updateTime']}（线上落后 {lag:.0f} 分钟）")
+          if lag > 70:
+              print("::error::线上站点比仓库落后超过 70 分钟 —— Pages 部署失败或自定义域名失效，访客看到的是旧数据！")
+              sys.exit(1)
+          print("OK：线上与仓库同步。")
+          PYEOF

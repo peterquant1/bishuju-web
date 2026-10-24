@@ -511,6 +511,7 @@ const TABS_CONFIG = {
     s28: { sorts: day6StrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s29: { sorts: day7StrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s30: { sorts: day8StrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    s31: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
     // subClass：≤860px 别的榜副行限两行、整段不折，这张的周期段长 ⇒ 放开（style.css .sub--tg）。
@@ -537,6 +538,8 @@ const TAB_GROUPS = [
         tabs: [
             { key: "s01", name: "周线长期弱势", tf: "周线",
               desc: "看合约上市以来的全部周线：一直没走出过像样的上涨趋势、长期偏弱的合约，多是近一两年上市、一路走低的币。" },
+            { key: "s31", name: "日线强势回调", tf: "日线",
+              desc: "日线大方向仍然向上、上涨动能也还在，这一天却收跌的合约——强势中的一次回调。每天换一批，普跌的日子会一下子多出很多。" },
             { key: "s02", name: "日线资金异动", tf: "日线",
               desc: "日线上买盘力度明显放大、成交比平时活跃，而且走势正在转强的合约。换得快，不少日子一个都没有。" },
             { key: "s03", name: "周线资金涌入", tf: "周线",

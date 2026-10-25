@@ -96,6 +96,7 @@ function hitHoursSub(item) {
     return `<span class="sub__seg sub__seg--hit" title="${escapeHtml(tip)}">命中 ${escapeHtml(d.join("·"))}H</span><span class="sub__sep"> | </span>`;
 }
 // 行上命中周期列表（`key` 指字段，默认 `hitTfs`）如 ["1D", "1W"] → 副行最前一段「命中 日·周」（同 hitDaysSub 的金字段、不占 SUB_AXES_MAX 额度、不是排序轴）。
+// 现在没有榜用它（休眠件，带命中周期的榜复活时接回 subFormat）。
 const HIT_TF_LABEL = { "1D": "日", "2D": "2日", "3D": "3日", "1W": "周", "1M": "月" };
 function hitTfsSub(item, key = "hitTfs") {
     const t = Array.isArray(item[key]) ? item[key].filter(x => HIT_TF_LABEL[x]) : [];
@@ -480,7 +481,7 @@ const TABS_CONFIG = {
     //     行由后端统一产出，各榜只差筛选条件 ===
     // 轴是描述值、不是判据镜像：改判据不动轴，也别按判据增删轴。⚠️ 尤其别为布尔判据加轴 —— 布尔值排不了序、后端也不发 ⇒ 幽灵轴。
     // key ＝ 公开编号（同 TAB_GROUPS）；新 key 别以后端 RETIRED_KEY_PREFIXES 里的前缀开头，否则后端自愈会静默删掉整张榜。
-    // s20 的行另带 `hitTfs`（命中的周期）⇒ 副行最前一段「命中 日·周」。s23–s30 加密不单独出榜，条目留着只给 A股 镜像用（ASHARE_ONLY_TABS / ASHARE_ONLY_SRC）。
+    // s23–s30 加密不单独出榜，条目留着只给 A股 镜像用（ASHARE_ONLY_TABS / ASHARE_ONLY_SRC）。
     s01: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s02: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s03: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
@@ -497,7 +498,6 @@ const TABS_CONFIG = {
     s17: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s18: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s19: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    s20: { sorts: cryptoStrategySorts, subFormat: (v, sf) => hitTfsSub(v) + axesSub(v, sf, "日成交额") },
     s21: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s22: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s23: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
@@ -590,8 +590,6 @@ const TAB_GROUPS = [
               desc: "最新一周买盘力量占上风的合约，成员多。" },
             { key: "s19", name: "日线弱势突破", tf: "日线",
               desc: "日线大方向还在向下、价格却已经突破一个关键位置的合约。" },
-            { key: "s20", name: "多周期高位转弱", tf: "日线/周线/月线",
-              desc: "日线、周线或月线在历史高位刚刚转弱的合约，每行副行最前面标着是哪个周期。" },
             { key: "s21", name: "月线连涨初期", tf: "月线",
               desc: "月线刚走出一小段连涨、还在初期的合约。" },
             { key: "s22", name: "日线全市场最强", tf: "日线",

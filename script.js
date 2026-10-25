@@ -1107,8 +1107,12 @@ const ASHARE_AXIS_HINT = {
     monthlyDiPlus: "最新已收盘月K的+DI（DMI 14，对齐TV）：多方方向压力，0–100，一个月只更新一次；不足15个月显示「—」",
     athDistPct: "回到历史高点还要涨多少：上市以来全部日K的最高价（前复权、含影线）÷ 最新收盘 − 1。降序＝离高点最远；除权后的高点按前复权算，和行情软件的前复权图一致",
 };
+// A股 资产总开关（2026-10-26 站长「移除整个A股。等我需要恢复时再恢复。」⇒ false）：不生成「A股行情」「A股策略」两组、index.html 的资产切换与 A股 胶囊隐藏、
+//   抽屉里不出资产切换 ⇒ currentAsset 恒为加密（它由当前榜推出），A股 那包付费数据也就不会去拉。A股 的整套代码（下面的镜像块、口径说明、胶囊、付费包拉取、快照横幅）留作休眠件。
+//   恢复 ＝ 这里改回 true ＋ index.html 两处 display:none 拿掉 ＋ 标题 / FAQ 文案 ＋ 后端（RETIRED_KEY_PREFIXES 拿掉 ashare、启用 A股 任务，清单在 fetch_ashare.py 顶部）＋ check-freshness 的 A股 两段。
+const ASHARE_ENABLED = false;
 let ASHARE_HOME_TAB = null;   // A股 默认落地 ＝ A股策略组第一张（加密置顶组里第一张有 A股 版的那张；置顶组第一张没有 A股 版），下面填
-{
+if (ASHARE_ENABLED) {
     const src = TAB_GROUPS.filter(g => g.asset === "加密")
         .flatMap(g => g.tabs.map(t => ({ ...t, tf: t.tf || g.tf })))
         .filter(t => !ASHARE_SKIP_TABS.has(t.key) && TABS_CONFIG[t.key]);   // 漏配 TABS_CONFIG 的加密榜跳过：顶层这里一抛就整页白屏（只坏那一张才对）
@@ -2518,13 +2522,14 @@ document.getElementById("hamburger").addEventListener("click", openDrawer);
 document.getElementById("drawerClose").addEventListener("click", closeDrawer);
 document.getElementById("drawerScrim").addEventListener("click", closeDrawer);
 
-// 抽屉体：资产分段控件 + 导航容器（renderNav 往 #drawerNav 填）。⚠️ 分段控件与 index.html rail 里那份同款结构，增删资产两处一起改。
-document.getElementById("drawerBody").innerHTML = `
+// 抽屉体：资产分段控件 + 导航容器（renderNav 往 #drawerNav 填）。⚠️ 分段控件与 index.html rail 里那份同款结构，增删资产两处一起改；
+//   只剩加密（ASHARE_ENABLED 关）时不出分段控件。
+document.getElementById("drawerBody").innerHTML = (ASHARE_ENABLED ? `
     <div class="asset-seg">
         <button class="asset-seg__opt is-active" data-k="crypto"><span class="asset-seg__dot"></span>加密</button>
         <button class="asset-seg__opt" data-k="ashare"><span class="asset-seg__dot"></span>A股</button>
-    </div>
-    <nav class="board-nav" id="drawerNav" style="margin-top:14px"></nav>`;
+    </div>` : "") + `
+    <nav class="board-nav" id="drawerNav"${ASHARE_ENABLED ? ' style="margin-top:14px"' : ""}></nav>`;
 
 // === 亮/暗主题切换（token 覆盖,组件零分叉）。默认深色，本机存过 "light" 才是浅色（与 index.html 内联防闪脚本同一判据）===
 const LS_THEME = "bishuju_theme";

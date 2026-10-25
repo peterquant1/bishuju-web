@@ -695,6 +695,8 @@ let license = { key: safeStore.get("localStorage", LS_LICENSE) || "", valid: fal
 // 卡密三态：valid（Worker 认了）/ 确定失效（401 · 402，reason 有值）/ 待验证（本机有 key、还没拿到 Worker 的明确答复：
 // 刚开页，或 Worker 5xx / 网络不通）。待验证不是失效 ⇒ 不挂锁、不出「已失效…续费」，只说正在验证；每轮轮询照常重试。
 const licensePending = () => !!license.key && !license.valid && !license.reason;
+// 这张榜对当前访客是不是锁着的（rail 的锁标与榜头收起用同一条）：待验证（本机有卡密、Worker 还没答复）不算锁。
+const isTabLocked = key => PAYWALL_ENABLED && !license.valid && !licensePending() && key !== TEASER_TAB && !FREE_TABS.has(key);
 let paidData = null; // Worker 返回的全量付费数据（未解锁或未拉到时为 null）
 // 策略榜的真名与完整说明：付费包里的 tabMeta（{编号: {name, desc}}）。已解锁（或付费墙关、公开文件里就带）才用；
 // 待验证（刚开页）先用本机上次存的那份，免得付费用户每次开页榜名先闪一下风格名。没卡密的访客不读也不存。
@@ -910,7 +912,7 @@ function navHtml() {
                 const tf = TF_SHORT[m.tf] || "";
                 // 策略榜挂命中数（锁定态也挂，走 paidMeta）；涨跌幅榜恒为全市场数量、不挂。数据未到时不渲染，loadData 后补上。
                 const hits = isStrategyTab(t.key) || MODULE_TABS.has(t.key) ? tabCount(t.key) : null;
-                const locked = PAYWALL_ENABLED && !license.valid && !licensePending() && t.key !== TEASER_TAB && !FREE_TABS.has(t.key);
+                const locked = isTabLocked(t.key);
                 return `<button class="nav-item${t.key === currentTab ? " is-active" : ""}" data-tab="${t.key}"${t.key === currentTab ? ' aria-current="page"' : ''} title="${g.label} · ${escapeHtml(m.name)}${hits != null ? ` · ${MODULE_TABS.has(t.key) ? "监控中" : "命中"} ${hits}` : ""}${locked ? " · 未解锁" : ""}">
                     <span class="nav-item__bar"></span>
                     ${tf ? `<span class="tf-chip${tf.length > 1 ? " tf-chip--wide" : ""}">${tf}</span>` : ""}
@@ -963,6 +965,8 @@ function renderBoardHead() {
     tfEl.style.display = m.tf ? "" : "none";
     document.getElementById("bhName").innerHTML = nameSegHtml(m.full);
     // 命中数挂在标题旁（说明收起时也看得到）；说明行只放 desc（完整规则，导航名可以短）。
+    // 锁着的榜（未解锁访客）：榜头只留资产 tag · 周期 · 风格名 —— 命中数、换批提示、说明都不出（命中数仍在 rail 与锁定卡片上）。
+    const headLocked = isTabLocked(currentTab);
     const note = document.getElementById("bhNote");
     const hitEl = document.getElementById("bhHit");
     const n = tabCount(currentTab);
@@ -970,17 +974,18 @@ function renderBoardHead() {
     // 数字包一层 <b>（HERO_LAYOUT 恒开 ⇒ `.is-hero .board-head__hit b` 放大成头条数字；关掉 HERO 才与正文同字重）。n 只会是数字（tabCount 只认数字），可直接进 innerHTML。
     const hit = n == null ? "" : MODULE_TABS.has(currentTab) ? `监控中 <b>${n}</b> 个`
         : `${isStrategyTab(currentTab) ? "命中" : "共"} <b>${n}</b> 个标的`;
-    hitEl.innerHTML = hit;
-    hitEl.hidden = !hit;
+    hitEl.innerHTML = headLocked ? "" : hit;
+    hitEl.hidden = headLocked || !hit;
     // 榜在最上的版式：命中数后面接一句「按哪根 K 判、什么时候换批」（旧版式不加）。
     const metaEl = document.getElementById("bhMeta");
     if (metaEl) {
-        const meta = HERO_LAYOUT ? batchMeta(currentTab) : "";
+        const meta = HERO_LAYOUT && !headLocked ? batchMeta(currentTab) : "";
         metaEl.textContent = meta;
         metaEl.hidden = !meta;
     }
-    note.innerHTML = noteHtml(m.desc || "");
-    note.hidden = !m.desc;
+    const desc = headLocked ? "" : m.desc || "";
+    note.innerHTML = noteHtml(desc);
+    note.hidden = !desc;
     head.hidden = false;
     syncNoteClamp();
 }

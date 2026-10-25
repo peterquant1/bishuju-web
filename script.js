@@ -539,8 +539,8 @@ const TAB_GROUPS = [
         //   版式见 HERO_LAYOUT / SINGLE_BOARD（榜恒在主栏最上；只剩一张时另外不出 rail）。
         label: "置顶", asset: "加密", pinned: true,
         tabs: [
-            { key: "s01", name: "周线长期弱势", tf: "周线",
-              desc: "看合约上市以来的全部周线：一直没走出过像样的上涨趋势、长期偏弱的合约，多是近一两年上市、一路走低的币。" },
+            { key: "s01", name: "周线逆势吸筹（精选名单）", tf: "周线", hourlyList: true,
+              desc: "精选潜力名单里，周线大方向还在向下、买盘却已经占上风的合约。名单每个整点重新圈定。" },
             { key: "s32", name: "日线动能转弱期", tf: "日线",
               desc: "日线动能转弱之后、还没重新转强的合约，重新转强当天离开。是一份大名单：平常约占全市场三四成，普跌时能占到大多数。" },
             { key: "s12", name: "日线动能转强初期", tf: "日线",
@@ -1076,10 +1076,10 @@ function noteHtml(desc) {
 // A股 的榜 ＝ 加密现役榜逐张镜像：后端同一个 build_rankings 产出（判据只有一份），key ＝ ashareKey(加密 key)。这里按加密那几组自动生成「A股行情」「A股策略」两组
 // （榜名 / 周期跟着加密走；说明 ＝ ASHARE_NOTE ＋ 加密那张说明的第一段判据；三张行情榜的说明单独写：涨跌幅口径不同）⇒ 改加密榜不用另改 A股。
 // 轴集 ＝ 加密那张去掉订单流（tushare 没有主动买卖数据，后端行上恒 null）。不镜像的加密榜（与后端 fetch_data.ASHARE_SKIP_TABS 必须一致，audit C 项在盯）：
-// 加密专属名单圈定的三张（A股 没有对应的名单）；后端那份另含几张加密这边不出的榜（前端用不到，audit C 只比有公开编号的）。A股 的 N 日K（2~8 日线、3日线）按交易日切：每年第一个交易日起每 N 个交易日一格
+// 加密专属名单圈定的四张（A股 没有对应的名单；含置顶组第一张）；后端那份另含几张加密这边不出的榜（前端用不到，audit C 只比有公开编号的）。A股 的 N 日K（2~8 日线、3日线）按交易日切：每年第一个交易日起每 N 个交易日一格
 // （10-19 在 TradingView 上核过；后端 `nd` 时间轴），说明里补一句（ASHARE_ND_NOTE）、换批提示不写日期（前端没有交易日历）。
 // ⚠️ 要放在 NOTE_BREAK_RE 之后、首次渲染之前：用它切加密说明的第一段，也要往 TAB_GROUPS / TAB_META / TABS_CONFIG / CHANGE_PCT_TABS 里补 A股 那几张。
-const ASHARE_SKIP_TABS = new Set(["s05", "s07", "s08"]);
+const ASHARE_SKIP_TABS = new Set(["s01", "s05", "s07", "s08"]);
 const ashareKey = k => "ashare" + k[0].toUpperCase() + k.slice(1);
 const ASHARE_ONLY_NOTE = "加密那边这一套已不展示；A股 这边照旧整张保留。";
 const ASHARE_NOTE = "这是加密同名榜的 A股 版。A股 这边有几处不同：日 K 一个交易日一根（北京时间 15:00 收盘），等当天数据发布（一般 16:00 前后）才换一批；周 K、月 K 以本周、本月最后一个交易日收盘为准；价格按前复权；涨跌幅按交易所口径、比的是上一根收盘；停牌的股票不入榜；没有订单流（A股 数据里没有主动买卖归边）。范围是沪深 A 股，不含北交所。A股 没有单独做回放：加密那张说明里的回放、命中数和表现都是加密市场的数字，这里只摘了判据。";
@@ -1117,7 +1117,7 @@ const ASHARE_AXIS_HINT = {
     monthlyDiPlus: "最新已收盘月K的+DI（DMI 14，对齐TV）：多方方向压力，0–100，一个月只更新一次；不足15个月显示「—」",
     athDistPct: "回到历史高点还要涨多少：上市以来全部日K的最高价（前复权、含影线）÷ 最新收盘 − 1。降序＝离高点最远；除权后的高点按前复权算，和行情软件的前复权图一致",
 };
-let ASHARE_HOME_TAB = null;   // A股 默认落地 ＝ A股策略组第一张（加密置顶组第一张的 A股 版），下面填
+let ASHARE_HOME_TAB = null;   // A股 默认落地 ＝ A股策略组第一张（加密置顶组里第一张有 A股 版的那张；置顶组第一张没有 A股 版），下面填
 {
     const src = TAB_GROUPS.filter(g => g.asset === "加密")
         .flatMap(g => g.tabs.map(t => ({ ...t, tf: t.tf || g.tf })))

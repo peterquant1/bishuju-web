@@ -530,8 +530,8 @@ const TABS_CONFIG = {
 //   付费用户的榜名与完整说明随付费包的 tabMeta 下发，解锁后由 tabMetaOf 换上（见 TAB_META）。行情榜四张没有筛选条件，写真名。
 const TAB_GROUPS = [
     {
-        // 置顶组：rail 最上方（排在其余各组之前），组名前挂图钉。本组第一张 ＝ 橱窗 TEASER_TAB ＝ 默认落地榜，三者必须统一（第二张起只是置顶位置、不动橱窗）；
-        //   换置顶要连动前后端 TEASER_TAB、currentTab、lastTabByAsset、switchAsset 兜底与 index.html FAQ「哪些免费」里的榜名。
+        // 置顶组：rail 最上方（排在其余各组之前），组名前挂图钉。本组第一张 ＝ 默认落地榜（第二张起只是置顶位置）；
+        //   换第一张要连动 currentTab、lastTabByAsset、switchAsset 兜底（10-26 起没有橱窗，见 TEASER_TAB）。
         //   版式见 HERO_LAYOUT / SINGLE_BOARD（榜恒在主栏最上；只剩一张时另外不出 rail）。
         label: "置顶", asset: "加密", pinned: true,
         tabs: [
@@ -655,10 +655,10 @@ const SINGLE_BOARD = TAB_GROUPS.reduce((n, g) => n + g.tabs.length, 0) === 1;
 // 总开关，必须与后端 fetch_data.py 的 PAYWALL_ENABLED 一致（audit C）；紧急回滚时两处一起改 false。
 const PAYWALL_ENABLED = true;
 const WORKER_API = "https://bishuju-api.fanshenpan.workers.dev";
-// 免费橱窗榜：公开 JSON 只含它的第 1 行（默认视图第一名）。必须与后端同名常量一致（audit C）。
-// 橱窗 ＝ 默认落地榜 ＝ 置顶组第一张（TAB_GROUPS 第一组的 tabs[0]），换榜七处同改：这里 + 后端 + currentTab + lastTabByAsset.crypto
-// + switchAsset 兜底 + TAB_GROUPS 置顶组那一条 + index.html FAQ「哪些免费」的榜名（只改落地页不改橱窗 ⇒ 新访客落在全锁空榜上）。
-const TEASER_TAB = "s01";
+// 免费橱窗榜（公开 JSON 只含它的第 1 行）：10-26 起没有（null）⇒ 未解锁时每张榜都整张上锁、出锁定卡片。必须与后端同名常量一致（audit C）。
+// 橱窗分支（teaserLocked / teaserPartial / teaserComplete、表尾「免费预览第 1 名」）留作休眠件；复活要连后端、audit D、check-freshness 与 index.html FAQ「哪些免费」一起改，
+// 且橱窗必须是默认落地榜（只改橱窗不改落地页 ⇒ 新访客落在全锁空榜上）。
+const TEASER_TAB = null;
 const LS_LICENSE = "bishuju_license";
 const PLAN_LABEL = { monthly: "月付", quarterly: "季付", yearly: "年付" };
 // 仅供页面标价；实际扣款以 Worker 同名常量为准，两处必须一致（audit C）。
@@ -684,7 +684,7 @@ const safeStore = {
 
 let data = null;
 let lastRenderKey = null; // loadData 上次重渲染时的 updateTime，用于跳过无变化的重建
-// 默认落地榜 ＝ TEASER_TAB（未解锁的新访客一进来就看到那行免费内容 + 转化位）；改这里要同步 currentAsset 默认值。
+// 默认落地榜 ＝ 置顶组第一张（10-26 起没有橱窗：未解锁的新访客看到的是锁定卡片 ＋ 命中数 ＋ 购买入口）；改这里要同步 currentAsset 默认值。
 let currentTab = "s01";
 let sortAsc = false; // false=降序, true=升序
 // 当前排序字段（切 tab 时重置为该 tab 首轴）。初值也必须是默认落地榜的首轴：首访不走 switchTab，写死 "value" 会让
@@ -763,7 +763,7 @@ function tabCount(key) {
 const CHANGE_PCT_TABS = new Set(["dailyChange", "threeDayChange", "weeklyChange", "monthlyChange"]);
 
 // 整榜免费的榜：必须与后端 fetch_data.py 同名 FREE_TABS 一致（audit C；后端据此整榜写进公开文件，前端据此不锁）。
-// 空集不是漏写：全站没有免费整榜，免费面只剩橱窗 1 行 + marketOverview。
+// 空集不是漏写：全站没有免费整榜，免费面只剩 marketOverview 与各榜命中数（10-26 起连橱窗那 1 行也没有）。
 const FREE_TABS = new Set([]);
 // 策略榜 ＝ 有筛选条件的榜（0 命中是正常信号）：空状态文案、脉搏计数、导航命中徽标据此。
 // 必须同时排除 CHANGE_PCT_TABS：涨跌幅榜也付费，只判 FREE_TABS 会把行情榜当策略榜（是不是策略榜与免费 / 付费无关）。
@@ -872,7 +872,7 @@ const ASSET_KEY = { "加密": "crypto", "A股": "ashare" };   // TAB_GROUPS.asse
 const ASSET_CN = { crypto: "加密", ashare: "A股" };        // data-asset → TAB_GROUPS.asset
 // 默认资产 ＝ 默认落地 tab（currentTab）所属资产，两者同改。
 let currentAsset = "crypto";                            // 当前资产（由 tab 派生/资产切换驱动）
-// 各资产上次看的榜；加密初值 ＝ TEASER_TAB（未解锁时唯一有内容的榜）；A股 初值由「A股 镜像」块填（ASHARE_HOME_TAB）。
+// 各资产上次看的榜；加密初值 ＝ 默认落地榜（置顶组第一张）；A股 初值由「A股 镜像」块填（ASHARE_HOME_TAB）。
 const lastTabByAsset = { crypto: "s01" };
 
 function assetOfTab(tab) {
@@ -1623,7 +1623,7 @@ function switchTab(tab) {
 // 切资产（分段控件 / 胶囊）：回到该资产上次看的榜单
 function switchAsset(assetK) {
     if (assetK === currentAsset) return;
-    // 兜底（lastTabByAsset 缺项时）也要落在本资产自己的榜上：再加资产时逐个列映射、别写成二分。加密兜底 ＝ TEASER_TAB。
+    // 兜底（lastTabByAsset 缺项时）也要落在本资产自己的榜上：再加资产时逐个列映射、别写成二分。加密兜底 ＝ 默认落地榜（置顶组第一张）。
     const fallback = assetK === "ashare" ? ASHARE_HOME_TAB : "s01";
     switchTab(lastTabByAsset[assetK] || fallback);
 }

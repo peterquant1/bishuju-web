@@ -10,10 +10,10 @@
          改配色时这两处一起改，否则地址栏/状态栏颜色会跟页面顶部对不上。
          ⚠️ 同一对值另有两处副本:manifest.webmanifest 与 script.js 的 applyTheme()，共四处;独立页 404.html 另有一对(深色默认 + 系统偏好浅色)。 -->
     <script>try{if(localStorage.getItem("bishuju_theme")==="light"){document.documentElement.dataset.theme="light";document.getElementById("themeColorMeta").content="#ffffff";}}catch(e){}</script>
-    <title>狗庄74 — 加密 + A股 指标筛选排行榜</title>
+    <title>狗庄74 — 加密永续合约指标筛选排行榜</title>
     <!-- 下面 meta description 与 FAQ 里的榜单说法（含「哪些免费」那句、榜数）跟 script.js 的 TAB_GROUPS 一致：增删榜时一起改。
          这里与各榜说明一样，只写风格名、不写具体指标与判据。 -->
-    <meta name="description" content="加密永续合约与 A 股的指标筛选排行榜：二十多张策略榜按日线、周线、月线收盘自动更新，外加日线 / 3日线 / 周线 / 月线四张全市场涨跌幅榜（只看排序）；A 股另有一套同名榜。一键导出自选清单，另附永续合约全市场情绪概览。">
+    <meta name="description" content="加密永续合约的指标筛选排行榜：二十多张策略榜按日线、周线、月线收盘自动更新，外加日线 / 3日线 / 周线 / 月线四张全市场涨跌幅榜（只看排序）。一键导出自选清单，另附永续合约全市场情绪概览。">
     <link rel="canonical" href="https://gouzhuang748.com/">
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <!-- PWA 基础:加主屏 = 全屏 app 体验。刻意不加 Service Worker——loadData 的
@@ -31,23 +31,23 @@
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="狗庄74">
     <meta property="og:locale" content="zh_CN">
-    <meta property="og:title" content="狗庄74 — 加密 + A股 指标筛选排行榜">
-    <meta property="og:description" content="指标筛选排行榜，覆盖加密永续合约与 A 股两个市场，随收盘自动更新。">
+    <meta property="og:title" content="狗庄74 — 加密永续合约指标筛选排行榜">
+    <meta property="og:description" content="加密永续合约指标筛选排行榜，随收盘自动更新。">
     <meta property="og:image" content="https://gouzhuang748.com/og.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="狗庄74 — 加密 + A股 指标筛选排行榜">
+    <meta property="og:image:alt" content="狗庄74 — 加密永续合约指标筛选排行榜">
     <meta property="og:url" content="https://gouzhuang748.com/">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="狗庄74 — 加密 + A股 指标筛选排行榜">
-    <meta name="twitter:description" content="指标筛选排行榜，覆盖加密永续合约与 A 股两个市场，随收盘自动更新。">
+    <meta name="twitter:title" content="狗庄74 — 加密永续合约指标筛选排行榜">
+    <meta name="twitter:description" content="加密永续合约指标筛选排行榜，随收盘自动更新。">
     <meta name="twitter:image" content="https://gouzhuang748.com/og.png">
-    <meta name="twitter:image:alt" content="狗庄74 — 加密 + A股 指标筛选排行榜">
+    <meta name="twitter:image:alt" content="狗庄74 — 加密永续合约指标筛选排行榜">
 
     <!-- 自托管 IBM Plex Sans 可变字体(Latin 子集);预加载避免首屏 FOUT。CJK 走系统栈不预载。
          Geist Mono 只剩通行证输入框在用 ⇒ 不预加载(预加载了首屏却用不上，浏览器会报警告) -->
     <link rel="preload" as="font" type="font/woff2" href="fonts/ibm-plex-sans-latin-wght-normal.woff2" crossorigin>
-    <link rel="stylesheet" href="style.css?v=120">
+    <link rel="stylesheet" href="style.css?v=121">
 </head>
 <body>
 <!-- is-hero：榜单排在主栏最上面（站长 10-18 定的版式，script.js HERO_LAYOUT）；is-single：只剩一张榜时另外不出 rail（SINGLE_BOARD）。
@@ -78,15 +78,15 @@
                 </svg>
                 <div class="brand__text">
                     <div class="brand__name">狗庄74 <span class="brand__latin">gouzhuang748.com</span></div>
-                    <div class="brand__tag">加密 + A股 · 策略筛选排行</div>
+                    <div class="brand__tag">加密永续合约 · 策略筛选排行</div>
                 </div>
             </div>
             <div class="topbar__tools">
-                <!-- 新鲜度胶囊（加密 / A股 各一个）：JS 填内容；当前资产那个亮、另一个 .is-dim（移动端 CSS 只显示亮的那个）。
+                <!-- 新鲜度胶囊（加密 / A股 各一个）：JS 填内容；当前资产那个亮、另一个 .is-dim（移动端 CSS 只显示亮的那个）。A股 那个 2026-10-26 起隐藏（script.js ASHARE_ENABLED）、DOM 留着。
                      初始 .is-dim 要与 script.js 的默认落地资产（加密）一致；增删胶囊时 renderUpdatePill 与点击监听同批改
                      （DOM 与 JS 对不上会让整个胶囊渲染静默 return）。 -->
                 <button type="button" class="fresh" id="freshCrypto" title="查看加密榜单"><span class="fresh__dot"></span><span class="fresh__asset crypto">加密</span><span id="freshCryptoTxt">数据加载中…</span></button>
-                <button type="button" class="fresh is-dim" id="freshAshare" title="查看A股榜单"><span class="fresh__dot"></span><span class="fresh__asset ashare">A股</span><span id="freshAshareTxt">—</span></button>
+                <button type="button" class="fresh is-dim" id="freshAshare" title="查看A股榜单" style="display:none"><span class="fresh__dot"></span><span class="fresh__asset ashare">A股</span><span id="freshAshareTxt">—</span></button>
                 <span id="licenseStatus"><span class="lic-badge lic-off">未解锁</span></span>
                 <button id="licenseBtn" class="lic-btn-mini">输入通行证</button>
                 <button class="theme-btn" id="themeBtn" aria-label="切换亮暗主题" title="切换亮/暗"></button>
@@ -106,9 +106,9 @@
         <div class="layout">
 
             <aside class="rail" id="rail">
-                <!-- 资产分段控件。⚠️ script.js 的抽屉里有一份同款结构的副本（drawerBody 的 innerHTML），增删资产时两处必须一起改；
+                <!-- 资产分段控件（2026-10-26 起只剩加密 ⇒ 隐藏，见 script.js ASHARE_ENABLED）。⚠️ script.js 的抽屉里有一份同款结构的副本（drawerBody 的 innerHTML），增删资产时两处必须一起改；
                      初始 is-active 要与默认落地资产（加密）一致。 -->
-                <div class="asset-seg" id="assetSeg">
+                <div class="asset-seg" id="assetSeg" style="display:none">
                     <button class="asset-seg__opt is-active" data-k="crypto"><span class="asset-seg__dot"></span>加密</button>
                     <button class="asset-seg__opt" data-k="ashare"><span class="asset-seg__dot"></span>A股</button>
                 </div>
@@ -196,18 +196,15 @@
     <h3 id="faqTitle">常见问题</h3>
     <div class="faq">
         <h4>数据多久更新一次？</h4>
-        <p>加密：每小时自动抓取一次（整点后约 2 分钟），覆盖全部加密 USDT 永续合约，日线以 UTC 00:00 收盘为准——日线榜因此每天 00:00 UTC（北京时间 08:00）收盘后才换一批，3日线涨跌幅榜在那根 3日K 收盘那天、周线榜每周一、月线榜每月 1 号同一时刻换（带「精选名单」的三张另外每个整点重新圈定名单，成员整点就可能变）；市场概览条则随每小时的抓取刷新。</p>
-        <p>A股：每个交易日收盘后（北京时间 15:05 起，等当天数据发布，一般 16:00 前后）更新一次，覆盖全部沪深 A 股（不含北交所，停牌的不入榜）；周末和节假日停在上一个交易日。</p>
+        <p>每小时自动抓取一次（整点后约 2 分钟），覆盖全部加密 USDT 永续合约，日线以 UTC 00:00 收盘为准——日线榜因此每天 00:00 UTC（北京时间 08:00）收盘后才换一批，3日线涨跌幅榜在那根 3日K 收盘那天、周线榜每周一、月线榜每月 1 号同一时刻换（带「精选名单」的四张另外每个整点重新圈定名单，成员整点就可能变）；市场概览条则随每小时的抓取刷新。</p>
         <h4>哪些免费、哪些收费？</h4>
         <p><b>免费的是市场概览条</b>（全市场情绪、涨跌家数、总成交额、资金费率），永久免费、不需要通行证；每张榜这一期命中了多少个标的也公开显示，具体是哪些标的需要通行证。</p>
         <p><b>榜单本身需要购买通行证解锁</b>——二十二个策略榜与四张行情榜（日线 / 3日线 / 周线 / 月线涨跌幅，全市场不筛选）的完整名单、多轴排序和每张榜的详细说明，是本站的核心价值。无需注册账号，付款用加密货币（OxaPay），到账后通行证自动发到邮箱。</p>
-        <p>同一张通行证也解锁 <b>A股</b> 那一套：加密各榜的 A股 版（判据逐张相同、同一份代码），包括日线 / 3日线 / 周线 / 月线四张涨跌幅榜；带「精选名单」的四张（A股 没有对应的名单）没有；另有八张只在 A股 这边单独列榜。A股 的 2~8 日线与 3日线按交易日切（每年第一个交易日起每 N 个交易日一根，和 TradingView 一样）。</p>
         <h4>每个榜到底在筛什么？</h4>
         <p>切到任一榜单，表格上方那行说明写着<b>这个榜在找什么样的行情</b>。「加密行情」组的四张涨跌幅榜（日线 / 3日线 / 周线 / 月线）没有任何筛选条件，全部合约都在，主要用来看排序：每张的排序条只有本周期自己的轴（比如 3日线那张全是 3日K 的涨跌幅、成交额、RSI……）。策略榜有的只认刚发生的那一根（换得快，有些日子一个都没有是正常的），有的是条件不破就一直在（同一个标的会连着好几期出现）。导航上的命中数不解锁也能看到。</p>
-        <p>「A股行情」「A股策略」两组是加密同名榜的 A股 版：判据和加密那张是同一份代码、榜名也一样；不同的只是数据（沪深 A 股前复权日 K，周 / 月 K 由日 K 拼）、涨跌幅口径（比上一根收盘）和换批时间（每个交易日收盘后）。</p>
         <p>底层指标与 TradingView 同口径，榜上每个标的都可以点开图表自行复核。</p>
         <h4>涨跌颜色是怎么定的？</h4>
-        <p>加密榜单遵循国际习惯：<b>涨绿跌红</b>（如市场概览条）；A股榜单遵循中国市场习惯：<b>涨红跌绿</b>。切换资产时颜色语义自动跟随。</p>
+        <p>榜单与市场概览条都遵循国际习惯：<b>涨绿跌红</b>。</p>
     </div>
     <div class="modal-actions">
         <span class="spacer"></span>
@@ -278,6 +275,6 @@
     <button type="button" class="modal-x dialog-close" data-dialog="purchaseDialog" aria-label="关闭">✕</button>
 </dialog>
 
-<script src="script.js?v=472"></script>
+<script src="script.js?v=473"></script>
 </body>
 </html>

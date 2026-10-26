@@ -513,6 +513,7 @@ const TABS_CONFIG = {
     s35: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s36: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s37: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    s38: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s12: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
@@ -540,6 +541,8 @@ const TAB_GROUPS = [
         tabs: [
             { key: "s32", name: "月线向上·日线回调", tf: "日线/月线",
               desc: "月线大方向向上，日线却转弱回调、但日线买盘仍占上风的合约。每天换一批，任何一条不再满足就离开。" },
+            { key: "s38", name: "月线向上·日线顺势", tf: "日线/月线",
+              desc: "月线大方向向上，日线短期均线也排成多头的合约。日线每天换一批，月线每月才变，任何一条不再满足就离开。" },
             { key: "s09", name: "日线全市场最强", tf: "日线",
               desc: "日线多项强弱指标同时排进全市场最前列、趋势和买盘一起走强的合约。换得快，一半多的日子没有。" },
             { key: "s37", name: "日线放量走强", tf: "日线",

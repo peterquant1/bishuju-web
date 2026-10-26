@@ -512,6 +512,7 @@ const TABS_CONFIG = {
     s34: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s35: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s36: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    s37: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s12: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
@@ -539,6 +540,8 @@ const TAB_GROUPS = [
         tabs: [
             { key: "s32", name: "月线向上·日线回调", tf: "日线/月线",
               desc: "月线大方向向上，日线却转弱回调、但日线买盘仍占上风的合约。每天换一批，任何一条不再满足就离开。" },
+            { key: "s37", name: "日线放量走强", tf: "日线",
+              desc: "日线短期趋势正在张开、买盘比前一天更强、当天量能放大的合约。每天收盘后重新筛选一批。" },
             { key: "s36", name: "日线连阳加速", tf: "日线",
               desc: "日线大方向向上、短期趋势正在张开、刚走出两连阳或四连阳且买盘走强的合约。只在当天在榜，每天换一批。" },
             { key: "s01", name: "周线回踩吸筹（精选名单）", tf: "周线", hourlyList: true,

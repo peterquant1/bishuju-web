@@ -1,12 +1,8 @@
 name: Check Data Freshness
 
-# 数据停更告警：本机计划任务是唯一的数据更新通道（加密每小时一枪；A股 2026-10-26 再次退役、美股已退役、GH Actions 抓取因代理失效停用），
-# 机器离线/睡眠/任务挂掉时没有任何兜底，只能靠这里发现。夜里关机时前两步每晚都会红一阵（已知），收到邮件先看是不是关机时段。
-# 只在数据落后超过阈值时 fail —— fail 即 GitHub 给你发邮件，收到就去看机器。
+# 数据停更告警：只在数据落后超过阈值时 fail，fail 即 GitHub 发邮件提醒。
 #
-# 2026-07-22 拆仓库后：本仓库 bishuju-web 是公开的前端+数据仓库，本机任务把
-# data/rankings.json 推到这里（后端源码在私有仓库 bishuju）。第一步读的就是任务 push 的
-# 结果（actions/checkout 拉下来的已提交文件），不夹 Pages/CDN 两层，直接反映数据是否停更；
+# 第一步读的是仓库里已提交的 data/rankings.json（actions/checkout 拉下来的文件），不夹 Pages/CDN 两层，直接反映数据是否停更；
 # 「公开站是否还在服务」由最后一步另抓 https://gouzhuang748.com/data/rankings.json 比对。
 
 on:
@@ -41,7 +37,7 @@ jobs:
           n = (data.get("paidMeta") or {}).get("dailyChange")
           print(f"updateTime: {data['updateTime']}  (落后 {a:.0f} 分钟，crypto 独占字段——A股 不写它)  日线行情榜 {n} 行")
           if a > 150:
-              print("::error::加密数据已超过 2.5 小时未更新 —— 本机每小时计划任务可能挂了，去看机器！")
+              print("::error::加密数据已超过 2.5 小时未更新 —— 数据更新任务可能挂了，去看机器！")
               sys.exit(1)
           # 日线行情榜是全市场、正常不会空 ⇒ 0 行 ＝ build 坏了（时间戳照样新鲜，上面那条看不出来）
           if not n:
@@ -51,8 +47,7 @@ jobs:
           print("OK：加密数据新鲜。")
           PYEOF
 
-      # A股 2026-10-26 整族退役（站长「移除整个A股」）：原来这里有一步「Check A股 freshness」（ashareUpdateTime 30 小时阈值 + A股 日线行情榜非空），
-      # 下面 Worker 那步里也有 A股 那包的检查；恢复 A股 时两处从 git 历史里搬回来。
+      # A股 已退役：恢复时从 git 历史把它的新鲜度检查搬回来（本步之后、Worker 那步各一处）。
 
       # 付费数据链路（Worker KV）独立检查：上面的检查只覆盖公开文件——付费用户真正读的
       # 是 Worker KV（X-License-Key → /api/data），upload 断了（400/token 失效等）公开侧
@@ -61,12 +56,9 @@ jobs:
       # /api/status 只回元信息（updateTime/tab 数/字节数），公开无鉴权。
       # ⚠️ 若日后紧急关闭付费墙（PAYWALL_ENABLED=false），上传停止、这步会开始告警——
       # 届时把本步与下面「公开文件没有榜单行」那步一并注释掉（关墙后公开文件里是整榜，那步也会次次红）。
-      # ⚠️⚠️ `if: always()` 不能删（2026-08-05 审计补；后面几步同理）：GH Actions 默认「前一步 fail 就跳过
-      # 后续所有步骤」，而上一步一 fail（当年是 A股/美股 陈旧，现在是加密停更）就会让公开侧
-      # 的陈旧把付费侧的监控一起弄瞎。2026-08-03~05 机器睡眠事故实测：A股 陈旧 65 小时期间
-      # 本步被**连续跳过 15 次**，付费数据链路（客户真正读的那条、也正是当初 400 事故静默近
-      # 一天的那条）整整 40 小时零监控。加上之后两条检查互相独立；job 整体仍会因上一步 fail
-      # 而 fail，告警语义不变。
+      # ⚠️⚠️ `if: always()` 不能删（后面几步同理）：GH Actions 默认「前一步 fail 就跳过
+      # 后续所有步骤」，上一步一 fail 就会让公开侧的陈旧把付费侧的监控一起弄瞎。
+      # 加上之后两条检查互相独立；job 整体仍会因上一步 fail 而 fail，告警语义不变。
       - name: Check paid-data KV freshness (Worker /api/status)
         if: always()
         run: |

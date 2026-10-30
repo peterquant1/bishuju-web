@@ -482,18 +482,15 @@ const TABS_CONFIG = {
     // 轴是描述值、不是判据镜像：改判据不动轴，也别按判据增删轴。⚠️ 尤其别为布尔判据加轴 —— 布尔值排不了序、后端也不发 ⇒ 幽灵轴。
     // key ＝ 公开编号（同 TAB_GROUPS）；新 key 别以后端 RETIRED_KEY_PREFIXES 里的前缀开头，否则后端自愈会静默删掉整张榜。
     // s23–s30 加密不单独出榜，条目留着只给 A股 镜像用（ASHARE_ONLY_TABS / ASHARE_ONLY_SRC）。
-    s01: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s02: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s03: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s05: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s07: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    s08: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s09: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s10: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s11: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s13: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s14: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    s15: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s16: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s17: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s18: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
@@ -513,7 +510,6 @@ const TABS_CONFIG = {
     s35: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s36: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s37: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    s38: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s12: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
@@ -541,18 +537,12 @@ const TAB_GROUPS = [
         tabs: [
             { key: "s32", name: "月线向上·日线回调", tf: "日线/月线",
               desc: "月线大方向向上，日线却转弱回调、但日线买盘仍占上风的合约。每天换一批，任何一条不再满足就离开。" },
-            { key: "s38", name: "月线向上·日线顺势", tf: "日线/月线",
-              desc: "月线大方向向上，日线短期均线也排成多头的合约。日线每天换一批，月线每月才变，任何一条不再满足就离开。" },
             { key: "s09", name: "日线全市场最强", tf: "日线",
               desc: "日线多项强弱指标同时排进全市场最前列、趋势和买盘一起走强的合约。换得快，一半多的日子没有。" },
             { key: "s37", name: "日线放量走强", tf: "日线",
               desc: "日线短期趋势正在张开、买盘比前一天更强、当天量能放大，而且短线强度和买盘力度都排在全市场最前列的合约。每天换一批，大多数日子有两三个。" },
             { key: "s36", name: "日线连阳加速", tf: "日线",
               desc: "日线大方向向上、短期趋势正在张开、刚走出四连阳且买盘走强的合约。只在当天在榜，每天换一批。" },
-            { key: "s01", name: "周线回踩吸筹（精选名单）", tf: "周线", hourlyList: true,
-              desc: "精选潜力名单里，周线大方向向上、这一周收跌回踩、买盘仍占上风的合约。名单每个整点重新圈定。" },
-            { key: "s15", name: "周线向上·日线回调", tf: "日线/周线",
-              desc: "周线大方向向上、买盘占优，日线却转弱回调、但日线买盘仍占上风的合约。每天换一批，任何一条不再满足就离开。" },
             { key: "s02", name: "日线资金异动", tf: "日线",
               desc: "日线走势正在转强、成交比平时活跃，而且短线强度和买盘力度都排在全市场最前列的合约。每天换一批，大多数日子有几个。" },
             { key: "s03", name: "周线资金涌入（精选名单）", tf: "周线", hourlyList: true,
@@ -561,8 +551,6 @@ const TAB_GROUPS = [
               desc: "精选潜力名单里，周线趋势正在加强、多方占优的合约。名单每个整点重新圈定。" },
             { key: "s07", name: "月线突破（精选名单）", tf: "周线/月线", hourlyList: true,
               desc: "精选潜力名单里，月线收盘突破一个关键价位、最近一周买盘也占优的合约。名单每个整点重新圈定。" },
-            { key: "s08", name: "周线买盘占优（精选名单）", tf: "周线", hourlyList: true,
-              desc: "精选潜力名单里，最新一周买盘力量占上风的合约。名单每个整点重新圈定。" },
         ],
     },
     {
@@ -1080,10 +1068,10 @@ function noteHtml(desc) {
 // A股 的榜 ＝ 加密现役榜逐张镜像：后端同一个 build_rankings 产出（判据只有一份），key ＝ ashareKey(加密 key)。这里按加密那几组自动生成「A股行情」「A股策略」两组
 // （榜名 / 周期跟着加密走；说明 ＝ ASHARE_NOTE ＋ 加密那张说明的第一段判据；三张行情榜的说明单独写：涨跌幅口径不同）⇒ 改加密榜不用另改 A股。
 // 轴集 ＝ 加密那张去掉订单流（tushare 没有主动买卖数据，后端行上恒 null）。不镜像的加密榜（与后端 fetch_data.ASHARE_SKIP_TABS 必须一致，audit C 项在盯）：
-// 加密专属名单圈定的四张（A股 没有对应的名单；含置顶组第一张）；后端那份另含几张加密这边不出的榜（前端用不到，audit C 只比有公开编号的）。A股 的 N 日K（2~8 日线、3日线）按交易日切：每年第一个交易日起每 N 个交易日一格
+// 加密专属名单圈定的三张（A股 没有对应的名单）；后端那份另含几张加密这边不出的榜（前端用不到，audit C 只比有公开编号的）。A股 的 N 日K（2~8 日线、3日线）按交易日切：每年第一个交易日起每 N 个交易日一格
 // （10-19 在 TradingView 上核过；后端 `nd` 时间轴），说明里补一句（ASHARE_ND_NOTE）、换批提示不写日期（前端没有交易日历）。
 // ⚠️ 要放在 NOTE_BREAK_RE 之后、首次渲染之前：用它切加密说明的第一段，也要往 TAB_GROUPS / TAB_META / TABS_CONFIG / CHANGE_PCT_TABS 里补 A股 那几张。
-const ASHARE_SKIP_TABS = new Set(["s01", "s03", "s05", "s07", "s08"]);
+const ASHARE_SKIP_TABS = new Set(["s03", "s05", "s07"]);
 const ashareKey = k => "ashare" + k[0].toUpperCase() + k.slice(1);
 const ASHARE_ONLY_NOTE = "加密那边这一套已不展示；A股 这边照旧整张保留。";
 const ASHARE_NOTE = "这是加密同名榜的 A股 版。A股 这边有几处不同：日 K 一个交易日一根（北京时间 15:00 收盘），等当天数据发布（一般 16:00 前后）才换一批；周 K、月 K 以本周、本月最后一个交易日收盘为准；价格按前复权；涨跌幅按交易所口径、比的是上一根收盘；停牌的股票不入榜；没有订单流（A股 数据里没有主动买卖归边）。范围是沪深 A 股，不含北交所。A股 没有单独做回放：加密那张说明里的回放、命中数和表现都是加密市场的数字，这里只摘了判据。";

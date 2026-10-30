@@ -533,6 +533,8 @@ const TAB_GROUPS = [
         //   版式见 HERO_LAYOUT / SINGLE_BOARD（榜恒在主栏最上；只剩一张时另外不出 rail）。
         label: "置顶", asset: "加密", pinned: true,
         tabs: [
+            { key: "s18", name: "周线买盘占优", tf: "周线",
+              desc: "最新一周买盘力量占上风的合约，成员多。" },
             { key: "s32", name: "月线向上·日线回调", tf: "日线/月线",
               desc: "月线大方向向上，日线却转弱回调、但日线买盘仍占上风的合约。每天换一批，任何一条不再满足就离开。" },
             { key: "s40", name: "周线买盘·日线放量走强", tf: "日线/周线",
@@ -582,8 +584,6 @@ const TAB_GROUPS = [
               desc: "月线大方向刚刚由空转多的那个月，每月换一批全新的合约。" },
             { key: "s14", name: "月线收复关键位", tf: "月线",
               desc: "月线收盘重新站上一个关键价位的合约，站上就在、跌回去就走。" },
-            { key: "s18", name: "周线买盘占优", tf: "周线",
-              desc: "最新一周买盘力量占上风的合约，成员多。" },
             { key: "s21", name: "月线连涨初期", tf: "月线",
               desc: "月线刚走出一小段连涨、还在初期的合约。" },
             { key: "s33", name: "月线买盘占优", tf: "月线",
@@ -677,7 +677,7 @@ const safeStore = {
 let data = null;
 let lastRenderKey = null; // loadData 上次重渲染时的 updateTime，用于跳过无变化的重建
 // 默认落地榜 ＝ 置顶组第一张（10-26 起没有橱窗：未解锁的新访客看到的是锁定卡片 ＋ 命中数 ＋ 购买入口）；改这里要同步 currentAsset 默认值。
-let currentTab = "s32";
+let currentTab = "s18";
 let sortAsc = false; // false=降序, true=升序
 // 当前排序字段（切 tab 时重置为该 tab 首轴）。初值也必须是默认落地榜的首轴：首访不走 switchTab，写死 "value" 会让
 // 排序条上没有一个高亮 chip、副行多重复一段首轴、第一次点表头不翻方向（策略榜首轴的 key 是 volume 不是 value）。
@@ -867,7 +867,7 @@ const ASSET_CN = { crypto: "加密", ashare: "A股" };        // data-asset → 
 // 默认资产 ＝ 默认落地 tab（currentTab）所属资产，两者同改。
 let currentAsset = "crypto";                            // 当前资产（由 tab 派生/资产切换驱动）
 // 各资产上次看的榜；加密初值 ＝ 默认落地榜（置顶组第一张）；A股 初值由「A股 镜像」块填（ASHARE_HOME_TAB）。
-const lastTabByAsset = { crypto: "s32" };
+const lastTabByAsset = { crypto: "s18" };
 
 function assetOfTab(tab) {
     const m = TAB_META[tab];
@@ -1627,7 +1627,7 @@ function switchTab(tab) {
 function switchAsset(assetK) {
     if (assetK === currentAsset) return;
     // 兜底（lastTabByAsset 缺项时）也要落在本资产自己的榜上：再加资产时逐个列映射、别写成二分。加密兜底 ＝ 默认落地榜（置顶组第一张）。
-    const fallback = assetK === "ashare" ? ASHARE_HOME_TAB : "s32";
+    const fallback = assetK === "ashare" ? ASHARE_HOME_TAB : "s18";
     switchTab(lastTabByAsset[assetK] || fallback);
 }
 

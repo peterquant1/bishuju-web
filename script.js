@@ -508,6 +508,7 @@ const TABS_CONFIG = {
     s36: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s37: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s39: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    s40: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
     // subClass：≤860px 别的榜副行限两行、整段不折，这张的周期段长 ⇒ 放开（style.css .sub--tg）。
@@ -534,6 +535,8 @@ const TAB_GROUPS = [
         tabs: [
             { key: "s32", name: "月线向上·日线回调", tf: "日线/月线",
               desc: "月线大方向向上，日线却转弱回调、但日线买盘仍占上风的合约。每天换一批，任何一条不再满足就离开。" },
+            { key: "s40", name: "周线买盘·日线放量走强", tf: "日线/周线",
+              desc: "周线买盘占上风，日线短期趋势又正在张开、买盘比前一天更强、当天量能放大的合约。每天换一批，近期每天十几二十个。" },
             { key: "s39", name: "周线回踩吸筹（精选名单）", tf: "周线", hourlyList: true,
               desc: "精选潜力名单里，周线大方向向上、趋势还在张开，这一周却收跌回踩、买盘仍占上风的合约。成员少、换得快，不少周一个都没有；名单每个整点重新圈定。" },
             { key: "s09", name: "日线全市场最强", tf: "日线",

@@ -510,6 +510,7 @@ const TABS_CONFIG = {
     s39: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s40: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s41: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    s42: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
     // subClass：≤860px 别的榜副行限两行、整段不折，这张的周期段长 ⇒ 放开（style.css .sub--tg）。
@@ -536,6 +537,8 @@ const TAB_GROUPS = [
         tabs: [
             { key: "s41", name: "月线转强·突破历史压力", tf: "月线",
               desc: "月线刚刚由弱转强、又一举越过历史压力区的合约。只在转强那个月在榜，成员很少，不少月份一个都没有。" },
+            { key: "s42", name: "周线买盘占优", tf: "周线",
+              desc: "周线资金面偏多的合约，成员多。每周一换一批，大方向不变的会连着几周出现。" },
             { key: "s18", name: "周线买盘·日线顺势放量", tf: "日线/周线",
               desc: "周线资金面偏多、日线顺势放量的合约。每天换一批，近期每天几十个，行情活跃的日子更多。" },
             { key: "s32", name: "月线向上·日线回调", tf: "日线/月线",

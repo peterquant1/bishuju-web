@@ -497,6 +497,7 @@ const TABS_CONFIG = {
     // 轴是描述值、不是判据镜像：改判据不动轴，也别按判据增删轴。⚠️ 尤其别为布尔判据加轴 —— 布尔值排不了序、后端也不发 ⇒ 幽灵轴。
     // key ＝ 公开编号（同 TAB_GROUPS）；新 key 别以后端 RETIRED_KEY_PREFIXES 里的前缀开头，否则后端自愈会静默删掉整张榜。
     // s23–s30 加密不单独出榜，条目留着只给 A股 镜像用（ASHARE_ONLY_TABS / ASHARE_ONLY_SRC）。
+    s01: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s02: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s03: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s05: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
@@ -557,6 +558,8 @@ const TAB_GROUPS = [
         tabs: [
             { key: "s32", name: "月周向上·日线回调", tf: "日线/周线/月线",
               desc: "大周期偏多、短周期回调的合约，盯的是回调里的机会。每天换一批。" },
+            { key: "s01", name: "周线逆势吸筹（精选名单）", tf: "周线", hourlyList: true,
+              desc: "精选潜力名单里，周线大方向还在向下、买盘却已经占上风的合约。状态不破就留在榜上，近一年每周三十个上下；名单每个整点重新圈定。" },
             { key: "s41", name: "月线转强·突破历史压力", tf: "月线",
               desc: "月线刚刚由弱转强、又一举越过历史压力区的合约。只在转强那个月在榜，成员很少，不少月份一个都没有。" },
             { key: "s45", name: "周线多头回踩（精选名单）", tf: "周线", hourlyList: true,
@@ -1130,7 +1133,7 @@ function noteHtml(desc) {
 // 加密专属名单圈定的各张（A股 没有对应的名单）；后端那份另含几张加密这边不出的榜（前端用不到，audit C 只比有公开编号的）。A股 的 N 日K（2~8 日线、3日线）按交易日切：每年第一个交易日起每 N 个交易日一格
 // （10-19 在 TradingView 上核过；后端 `nd` 时间轴），说明里补一句（ASHARE_ND_NOTE）、换批提示不写日期（前端没有交易日历）。
 // ⚠️ 要放在 NOTE_BREAK_RE 之后、首次渲染之前：用它切加密说明的第一段，也要往 TAB_GROUPS / TAB_META / TABS_CONFIG / CHANGE_PCT_TABS 里补 A股 那几张。
-const ASHARE_SKIP_TABS = new Set(["s03", "s05", "s07", "s39", "s45"]);
+const ASHARE_SKIP_TABS = new Set(["s01", "s03", "s05", "s07", "s39", "s45"]);
 const ashareKey = k => "ashare" + k[0].toUpperCase() + k.slice(1);
 const ASHARE_ONLY_NOTE = "加密那边这一套已不展示；A股 这边照旧整张保留。";
 const ASHARE_NOTE = "这是加密同名榜的 A股 版。A股 这边有几处不同：日 K 一个交易日一根（北京时间 15:00 收盘），等当天数据发布（一般 16:00 前后）才换一批；周 K、月 K 以本周、本月最后一个交易日收盘为准；价格按前复权；涨跌幅按交易所口径、比的是上一根收盘；停牌的股票不入榜；没有订单流（A股 数据里没有主动买卖归边）。范围是沪深 A 股，不含北交所。A股 没有单独做回放：加密那张说明里的回放、命中数和表现都是加密市场的数字，这里只摘了判据。";

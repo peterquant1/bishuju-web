@@ -903,7 +903,7 @@ function getSortedItems() {
 
 // === 左栏导航（master-detail）===
 // rail：当前资产的分组榜单（组数由 TAB_GROUPS 决定、别写死），激活态随资产变色；移动端 rail 隐藏，同一份导航渲染进抽屉。
-// TF_SHORT：tf → rail 徽标缩写，查不到时徽标静默消失（跨周期榜要在这里补，两个字及以上自动套 .tf-chip--wide）。tf 纯展示用。
+// TF_SHORT：tf → rail 徽标缩写，查不到时徽标静默消失（跨周期榜要在这里补，两个字及以上自动套 .tf-chip--wide；「3日」这种数字 + 日走 .tf-chip--nd、不竖排）。tf 纯展示用。
 const TF_SHORT = { "日线": "日", "周线": "周", "月线": "月", "日线/周线": "日周", "日线/月线": "日月", "日线/周线/月线": "日周月", "日线/3日线": "日3日", "周线/月线": "周月", "4H/6H/8H/12H": "时",
     "2日线": "2日", "3日线": "3日", "4日线": "4日", "5日线": "5日", "6日线": "6日", "7日线": "7日", "8日线": "8日",
     "1H": "1H", "2H": "2H", "4H": "4H", "6H": "6H", "8H": "8H", "12H": "12H", "1H~8日线": "TG", "日线~月线": "日~月", "名单": "名单" };
@@ -953,7 +953,7 @@ function navHtml() {
                 const locked = isTabLocked(t.key);
                 return `<button class="nav-item${t.key === currentTab ? " is-active" : ""}" data-tab="${t.key}"${t.key === currentTab ? ' aria-current="page"' : ''} title="${g.label} · ${escapeHtml(m.name)}${hits != null ? ` · ${MODULE_TABS.has(t.key) ? "监控中" : "命中"} ${hits}` : ""}${locked ? " · 未解锁" : ""}">
                     <span class="nav-item__bar"></span>
-                    ${tf ? `<span class="tf-chip${tf.length > 1 ? " tf-chip--wide" : ""}">${tf}</span>` : ""}
+                    ${tf ? `<span class="tf-chip${/^\d日$/.test(tf) ? " tf-chip--nd" : tf.length > 1 ? " tf-chip--wide" : ""}">${tf}</span>` : ""}
                     <span class="nav-item__name">${nameSegHtml(m.name)}</span>
                     ${hits != null ? `<span class="nav-item__count${hits === 0 ? " is-zero" : ""}">${hits}</span>` : ""}
                     ${locked ? LOCK_SVG : ""}
@@ -1015,8 +1015,10 @@ function renderBoardHead() {
     const n = tabCount(currentTab);
     // 量词随榜的语义：策略榜说「命中」；行情榜无筛选，说「共」（与表尾同一判据）。
     // 数字包一层 <b>（HERO_LAYOUT 恒开 ⇒ `.is-hero .board-head__hit b` 放大成头条数字；关掉 HERO 才与正文同字重）。n 只会是数字（tabCount 只认数字），可直接进 innerHTML。
-    const hit = n == null ? "" : MODULE_TABS.has(currentTab) ? `监控中 <b>${n}</b> 个`
-        : `${isStrategyTab(currentTab) ? "命中" : "共"} <b>${n}</b> 个标的`;
+    // 数据没到时数字写「—」：这一行照样占位，等数据到了榜头不会往下顶 9px。
+    const hitN = n == null ? "—" : n;
+    const hit = MODULE_TABS.has(currentTab) ? `监控中 <b>${hitN}</b> 个`
+        : `${isStrategyTab(currentTab) ? "命中" : "共"} <b>${hitN}</b> 个标的`;
     hitEl.innerHTML = headLocked ? "" : hit;
     hitEl.hidden = headLocked || !hit;
     // 榜在最上的版式：命中数后面接一句「按哪根 K 判、什么时候换批」（旧版式不加）。
@@ -1446,8 +1448,10 @@ function renderTable() {
         && !(license.valid && paidData && Array.isArray(paidData[TEASER_TAB]));
     // 搜索框：全锁榜没有行可搜；橱窗榜只有 1 行时，搜别的币只会得到「没有匹配」—— 而它其实在榜上 ⇒ 都收起，
     // 并清掉残留的搜索词（必须在 getSortedItems 之前）。排序条与表头只在全锁时收起。
-    setLockedChrome(locked, teaserLocked || teaserPartial);
-    if ((locked || teaserLocked || teaserPartial) && searchQuery) {
+    // 0 命中的榜：排序条、表头、搜索框都没有东西可操作 ⇒ 同锁定态一起收起（搜索无匹配不算：那是榜上有行、只是被筛掉了）。
+    const zeroHit = !locked && Array.isArray(data[currentTab]) && data[currentTab].length === 0;
+    setLockedChrome(locked || zeroHit, teaserLocked || teaserPartial);
+    if ((locked || zeroHit || teaserLocked || teaserPartial) && searchQuery) {
         searchQuery = "";
         const sb = document.getElementById("searchBox");
         if (sb) sb.value = "";
@@ -2325,7 +2329,7 @@ function openPurchaseDialog() {
 function renderPlanPrices() {
     for (const p of Object.keys(PRICES)) {
         const el = document.getElementById("price" + p[0].toUpperCase() + p.slice(1));
-        if (el) el.textContent = `${PRICES[p]} USDT`;
+        if (el) el.innerHTML = `${PRICES[p]} <span class="buy-plan__unit">USDT</span>`;
     }
 }
 

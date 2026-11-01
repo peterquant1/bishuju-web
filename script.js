@@ -512,6 +512,7 @@ const TABS_CONFIG = {
     s41: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s42: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s43: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    s44: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
     // subClass：≤860px 别的榜副行限两行、整段不折，这张的周期段长 ⇒ 放开（style.css .sub--tg）。
@@ -538,6 +539,8 @@ const TAB_GROUPS = [
         tabs: [
             { key: "s41", name: "月线转强·突破历史压力", tf: "月线",
               desc: "月线刚刚由弱转强、又一举越过历史压力区的合约。只在转强那个月在榜，成员很少，不少月份一个都没有。" },
+            { key: "s44", name: "月线连跌", tf: "月线",
+              desc: "月线连续多个月下跌、一直没止跌的合约。每月换一批，止跌就离榜，没止跌的会连着几个月出现；行情好的月份一个都没有，大跌之后能有上百个。" },
             { key: "s43", name: "日线趋势抬升", tf: "日线",
               desc: "日线多头趋势里，这一轮起点比上一轮高、又站上前一轮压力、多方占优且趋势够强的合约。状态不破就留在榜上，近期每天二十多个，普涨的日子上百个。" },
             { key: "s09", name: "日线全市场最强", tf: "日线",

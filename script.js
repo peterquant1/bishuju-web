@@ -22,11 +22,13 @@ function fmtTakerVal(x) {
 function fmtRsiVal(x) { return x == null ? "—" : x.toFixed(2); }
 // 成交额显示串是后端拼好的字符串、原样进 innerHTML ⇒ 转义（其余格式化都对数字做 toFixed，混不进标记；
 // 付费 KV 凭上传 token 可写，别让那把 token 顺带变成往付费用户页面里塞脚本的口子）。
-function fmtVolVal(v) { return v.volumeFormatted != null ? escapeHtml(v.volumeFormatted) : "—"; }
+// 单位字母包一层定宽（K / M / B 字宽不一样，右对齐时前面的数字差 2.5px）；显示串照旧先转义
+const volUnitHtml = s => escapeHtml(s).replace(/([KMB])$/, `<span class="val__unit val__unit--mag">$1</span>`);
+function fmtVolVal(v) { return v.volumeFormatted != null ? volUnitHtml(v.volumeFormatted) : "—"; }
 // 周 / 月成交额读各自的显示串。⚠️ 别复用 fmtVolVal（写死读日成交额的 volumeFormatted）：
 // 套上去会显示日成交额、却按周 / 月成交额排序，不报错。
-function fmtWeeklyVolVal(v) { return v.weeklyVolumeFormatted != null ? escapeHtml(v.weeklyVolumeFormatted) : "—"; }
-function fmtMonthlyVolVal(v) { return v.monthlyVolumeFormatted != null ? escapeHtml(v.monthlyVolumeFormatted) : "—"; }
+function fmtWeeklyVolVal(v) { return v.weeklyVolumeFormatted != null ? volUnitHtml(v.weeklyVolumeFormatted) : "—"; }
+function fmtMonthlyVolVal(v) { return v.monthlyVolumeFormatted != null ? volUnitHtml(v.monthlyVolumeFormatted) : "—"; }
 // 全市场成交额名次「TOP N」徽标（写成工厂，别拆成三份近亲函数）：只在按对应「X成交额」轴排序时挂在值列数字左侧
 // （renderTable 读轴定义上的 `badge`）。名次字段：日 volumeRank / 周 weeklyVolumeRank / 月 monthlyVolumeRank，
 // 「全市场」＝ 同周期涨跌幅榜的全部行（悬停提示里的总数取 paidMeta；那张榜不在时退化成不带总数，文字照样正确）。
@@ -104,6 +106,8 @@ function hitTfsSub(item, key = "hitTfs") {
     const tip = `命中周期：${t.map(x => HIT_TF_LABEL[x] + "线").join("、")}`;
     return `<span class="sub__seg sub__seg--hit" title="${escapeHtml(tip)}">命中 ${escapeHtml(t.map(x => HIT_TF_LABEL[x]).join("·"))}</span><span class="sub__sep"> | </span>`;
 }
+// 一段「标签 数值」：标签包 .sub__k 压暗一档（≥1081px 列名写在表头、单元格里藏掉）。标签里没有空格，第一个空格之前都算标签。
+const subSegHtml = (s, cls = "") => `<span class="sub__seg${cls}"><span class="sub__k">${s.slice(0, s.indexOf(" "))}</span>${s.slice(s.indexOf(" "))}</span>`;
 function axesSub(item, sf, volLabel, extra) {
     const seg = [];
     // 小时级六张 / 2~8 日线七张 / 月线各张：本周期 RSI 缺口排第一段（`hourRsiSmaGap` / `multiDayRsiSmaGap` / `monthlyRsiSmaGap` 只在各自那几张的行上，
@@ -147,11 +151,10 @@ function axesSub(item, sf, volLabel, extra) {
     if ("rsiSmaGap" in item && sf !== "rsiSmaGap") seg.push(`${axisLabelFor("rsiSmaGap", "RSI缺口")} ${fmtRsiGapVal(item.rsiSmaGap)}`);
     if ("weeklyRsiSmaGap" in item && sf !== "weeklyRsiSmaGap") seg.push(`${axisLabelFor("weeklyRsiSmaGap", "周RSI缺口")} ${fmtRsiGapVal(item.weeklyRsiSmaGap)}`);
     if ("volMultiple" in item && sf !== "volMultiple") seg.push(`${axisLabelFor("volMultiple", "日量倍数")} ${fmtVolMultVal(item.volMultiple)}`);
-    const shown = seg.slice(0, SUB_AXES_MAX).map(s => `<span class="sub__seg">${s}</span>`);
-    // extra（涨跌幅榜的价格上下文 / 当前轴不是涨跌幅时的涨跌幅）带 --ctx：≤860px 排到最前，两行放不下时先让掉的是末尾的轴。
+    const shown = seg.slice(0, SUB_AXES_MAX).map(s => subSegHtml(s));
+    // extra（涨跌幅榜的价格上下文 / 当前轴不是涨跌幅时的涨跌幅）带 --ctx：排到最前，放不下时先让掉的是末尾的轴。
     if (extra) shown.push(`<span class="sub__seg sub__seg--ctx">${extra}</span>`);
-    // 每段包一层 span：桌面照旧用「 | 」连成一行；≤860px 的 CSS 隐藏分隔符、按整段折成最多两行（不再截在数字中间）。
-    return shown.join('<span class="sub__sep"> | </span>');
+    return shown.join("");
 }
 // 零消费者保留：周线 RSI 动能上下文（rsiPrev → rsiCurr 箭头），供复活 weeklyRsi 榜时作 axesSub 的 extra。
 function momentumStr(v) {
@@ -166,20 +169,22 @@ function changeSub(v, sf, volLabel, priceCtx) {
     return axesSub(v, sf, volLabel, tail);
 }
 // 加密：K 线实体口径「开 X → 收 Y」，美元价。
-const cryptoPriceCtx = v => `开 ${fmtMktPrice(v.open)} → 收 ${fmtMktPrice(v.close)}`;
+// 标签包 .sub__k（≥1081px 列名写在表头）；标签与价格之间不换行：低价币这段比窄屏的副行宽，只许折在「→」两边，别被裁掉末位数字。
+const priceCtxHtml = (a, pa, b, pb) => `<span class="sub__k">${a}&nbsp;</span>${pa} → <span class="sub__k">${b}&nbsp;</span>${pb}`;
+const cryptoPriceCtx = v => priceCtxHtml("开", fmtMktPrice(v.open), "收", fmtMktPrice(v.close));
 // 行情榜四张（日 / 3日 / 周 / 月线涨跌幅）的副行：只列本榜排序条上的轴（全是本周期的；后端行上也只带本周期字段 ⇒ 不会冒出别的周期），
 // 当前排序轴与首轴涨跌幅不重复列；尾巴同 changeSub（排涨跌幅时是「开 → 收」，排别的轴时补一段本周期涨跌幅）。
 // 别换回 changeSub / axesSub：那两个按固定白名单出段、成交额那段写死读日成交额，套在周 / 月 / 3日行上会显示「—」。
 function marketSub(v, sf) {
     const sorts = (TABS_CONFIG[currentTab] || {}).sorts || [];
     const seg = sorts.filter(a => a.key !== "value" && a.key !== sf).slice(0, SUB_AXES_MAX)
-        .map(a => `<span class="sub__seg">${a.label} ${a.format(v)}</span>`);
-    const tail = sf === "value" ? (isAshareTab(currentTab) ? ashareMktCtx(v) : cryptoPriceCtx(v)) : `${axisLabelFor("value", "涨跌幅")} ${fmtGapVal(v.value)}`;
-    seg.push(`<span class="sub__seg sub__seg--ctx">${tail}</span>`);
-    return seg.join('<span class="sub__sep"> | </span>');
+        .map(a => subSegHtml(`${a.label} ${a.format(v)}`));
+    seg.push(sf === "value" ? `<span class="sub__seg sub__seg--ctx sub__seg--wide">${isAshareTab(currentTab) ? ashareMktCtx(v) : cryptoPriceCtx(v)}</span>`
+        : subSegHtml(`${axisLabelFor("value", "涨跌幅")} ${fmtGapVal(v.value)}`, " sub__seg--ctx"));
+    return seg.join("");
 }
 // A股：close-to-close，前收 / 现收标签随周期不同（ASHARE_PRICE_LABELS），人民币价；preClose / close 由后端行提供。
-const asharePriceCtx = (preLabel, curLabel) => v => `${preLabel} ${fmtCnyPrice(v.preClose)} → ${curLabel} ${fmtCnyPrice(v.close)}`;
+const asharePriceCtx = (preLabel, curLabel) => v => priceCtxHtml(preLabel, fmtCnyPrice(v.preClose), curLabel, fmtCnyPrice(v.close));
 function ashareMktCtx(v) {
     const [a, b] = ASHARE_PRICE_LABELS[(TAB_META[currentTab] || {}).tf] || ["前收", "收"];
     return asharePriceCtx(a, b)(v);
@@ -250,9 +255,8 @@ const AXIS_D_VOLRATIO = { key: "volRatio", label: "日量比", format: v => fmtR
 // 日量倍数：放大倍数带方向（阳正阴负）⇒ 降序最强、升序最弱、缩量在中间。全站各榜都挂（周 / 月 / 3日行情榜里是唯一的跨周期轴，排序条上自成一组）。极值把深度条压扁 ⇒ noBar；档位按绝对值定，值列别变宽。
 function fmtVolMultVal(x) {
     if (x == null) return "—";
-    const a = Math.abs(x);
-    const s = a >= 100 ? a.toFixed(0) : a >= 10 ? a.toFixed(1) : a.toFixed(2);
-    return (s === "0.00" ? "" : x > 0 ? "+" : "-") + s + "倍";
+    const s = Math.abs(x).toFixed(2);   // 位数别随大小变：右对齐时小数点要对得齐
+    return (s === "0.00" ? "" : x > 0 ? "+" : "-") + s + `<span class="val__unit">倍</span>`;
 }
 const AXIS_D_VOLMULT = { key: "volMultiple", label: "日量倍数", format: v => fmtVolMultVal(v.volMultiple), noBar: true, signed: true,
                          hint: "这根日K的成交量比近期常态放大了多少倍：收阳记正、收阴记负。降序＝放量上涨最强，升序＝放量下跌最弱，缩量的在中间；量的是当天强弱，不是买入信号" };
@@ -435,7 +439,7 @@ const AXIS_M_SARBARS = { key: "monthlySarBullBars", label: "月SAR多头根数",
                          hint: "月线SAR翻多至今第几根月K（翻多那根算第1根）。升序＝刚翻多，降序＝这轮多头跑最久；SAR 空头显示「—」" };
 // 3日线那张的 10 根（key 一律 threeDay 前缀，只挂 threeDayChange）：最新已收盘 3日K（TV 年锚切法，同 3日线策略榜）。价格类后端喂全历史日 K 拼的 3日K
 //   （与 TV 3D 周期一致；3日RSI缺口与策略榜那份逐位相同），量类（成交额 / CVD强弱 / 订单流）喂近 499 天日 K 拼的 3日K。名次徽标同日 / 周 / 月成交额。
-function fmtThreeDayVolVal(v) { return v.threeDayVolumeFormatted != null ? escapeHtml(v.threeDayVolumeFormatted) : "—"; }
+function fmtThreeDayVolVal(v) { return v.threeDayVolumeFormatted != null ? volUnitHtml(v.threeDayVolumeFormatted) : "—"; }
 const threeDayVolRankBadge = volRankBadgeFor("threeDayVolumeRank", "3日", "threeDayChange", "ashareThreeDayChange");
 const AXIS_3D_CHG = { key: "value", label: "3日涨跌幅", format: v => fmtGapVal(v.value) };
 const AXIS_3D_VOL = { key: "threeDayVolume", label: "3日成交额", format: v => fmtThreeDayVolVal(v), badge: threeDayVolRankBadge,
@@ -526,10 +530,10 @@ const TABS_CONFIG = {
     s44: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s45: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     // 只有一根轴、行是轻量行（没有别的轴字段）⇒ 副行固定两段，别走 axesSub。
-    s46: { sorts: dailyVolMultSorts, subFormat: v => `<span class="sub__seg">${AXIS_D_CHGPCT.label} ${AXIS_D_CHGPCT.format(v)}</span><span class="sub__sep"> | </span><span class="sub__seg">${AXIS_D_VOL.label} ${AXIS_D_VOL.format(v)}</span>` },
+    s46: { sorts: dailyVolMultSorts, subFormat: v => subSegHtml(`${AXIS_D_CHGPCT.label} ${AXIS_D_CHGPCT.format(v)}`) + subSegHtml(`${AXIS_D_VOL.label} ${AXIS_D_VOL.format(v)}`) },
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
-    // subClass：≤860px 别的榜副行限两行、整段不折，这张的周期段长 ⇒ 放开（style.css .sub--tg）。
+    // subClass：≤1080px 别的榜副行限两行，这张的周期段长 ⇒ 放开（style.css .sub--tg）。
     // [已撤下 2026-10-24] tgWatch: { sorts: tgWatchSorts, subClass: "sub--tg", subFormat: (v, sf) => tgWatchSub(v, sf) },
 
     // 美股 / ETF 的配置已随资产整族退役删除（复活清单见 fetch_us.py 顶部；后端 RETIRED_KEY_PREFIXES 不拿掉对应前缀，数据照跑也进不了站）。
@@ -695,6 +699,18 @@ const LOCK_REASON = {
 // 内联锁图标。width/height 必须写在属性里：它会进无 CSS 作用域的容器（如导航项），不能只靠样式给尺寸。
 // 置顶组组名前的图钉（同理写死尺寸）。
 const PIN_SVG = '<svg class="grp-pin" width="11" height="11" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M7.9 1.1a.7.7 0 0 1 1 0l2 2a.7.7 0 0 1 0 1l-.7.4-1.6 1.6.2 2.2a.7.7 0 0 1-1.2.5L5.8 7 2.4 10.4a.5.5 0 0 1-.8-.8L5 6.2 3.2 4.4A.7.7 0 0 1 3.7 3.2l2.2.2 1.6-1.6.4-.7Z"/></svg>';
+// 空状态图标：线条 SVG、跟文字同色。别换回 emoji：各系统画出来不一样，彩色的放在灰调界面里很跳
+const icoSvg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const EMPTY_ICON = {
+    tool: icoSvg('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.1L4 16.7 7.3 20l5.3-5.3a4 4 0 0 0 5.1-5.4l-2.6 2.6-2.5-.5-.5-2.5 2.6-2.6Z"/>'),
+    wait: icoSvg('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+    search: icoSvg('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>'),
+    lock: icoSvg('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
+    bell: icoSvg('<path d="M6 16v-5a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>'),
+    target: icoSvg('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/>'),
+    inbox: icoSvg('<path d="M4 13.5 6.5 5h11L20 13.5V19H4v-5.5Z"/><path d="M4 13.5h5l1.5 2.5h3l1.5-2.5h5"/>'),
+    warn: icoSvg('<path d="M12 4 3 19.5h18L12 4Z"/><path d="M12 10v4.5M12 17.2v.1"/>'),
+};
 const LOCK_SVG = '<svg class="tab-lock" width="11" height="11" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M6 1a2.7 2.7 0 0 0-2.7 2.7V5H3a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-.3V3.7A2.7 2.7 0 0 0 6 1Zm1.5 4h-3V3.7a1.5 1.5 0 1 1 3 0V5Z"/></svg>';
 
 // 存储安全包装：禁用存储时裸调 localStorage 会抛异常（顶层一抛整个脚本死掉、页面全白），降级为不记忆。
@@ -913,16 +929,14 @@ function navGroupLabel(g) {
 // ① 按「＋」分段（.nm-seg）：整段放得下就不在段内折，「＋」领起下一行；
 // ② 段内在「汉字后接拉丁缩写 / 数字」处再切一刀（.nm-part，如「日线|RSI缺口」「月线突破|ABC通道…」）：
 //    一行放不下整段时先折在缩写前。缩写后面不再跟两个以上汉字的（句尾的「SAR」「K」）不切，免得它单独掉到下一行。
-// 再放不下才在 part 内逐字折（CSS balance 匀成两行）。tailHtml（rail 的锁图标）并进最后一块，免得单独掉行。
+//    比较词（大于 / 小于 / 高于 / 低于）前也切一刀，免得折在词中间。再放不下才在 part 内逐字折（CSS balance 匀成两行）。
 // ⚠️ 正则别改写成后行断言 (?<=…)：旧 Safari 不认、整份脚本会在解析期报错。
-function nameSegHtml(name, tailHtml = "") {
-    const segs = name.split("＋");
-    return segs.map((seg, i) => {
-        const parts = ((i ? "＋" : "") + seg)
-            .replace(/([\u4e00-\u9fff])(?=[A-Za-z0-9][A-Za-z0-9/.%]*[\u4e00-\u9fff]{2})/g, "$1\u0000").split("\u0000");
-        const tail = i === segs.length - 1 ? tailHtml : "";
+function nameSegHtml(name) {
+    return name.split("＋").map((seg, i) => {
+        const parts = seg.replace(/([\u4e00-\u9fff])(?=[A-Za-z0-9][A-Za-z0-9/.%]*[\u4e00-\u9fff]{2}|[大小高低]于)/g, "$1\u0000").split("\u0000");
+        // 「＋」放在第一块里面：放在块外的话块之前能折行，「＋」会单独掉一行
         return `<span class="nm-seg">` + parts.map((p, j) =>
-            `<span class="nm-part">${escapeHtml(p)}${j === parts.length - 1 ? tail : ""}</span>`).join("") + `</span>`;
+            `<span class="nm-part">${i && !j ? `<span class="nm-plus">＋</span>` : ""}${escapeHtml(p)}</span>`).join("") + `</span>`;
     }).join("");
 }
 
@@ -940,8 +954,9 @@ function navHtml() {
                 return `<button class="nav-item${t.key === currentTab ? " is-active" : ""}" data-tab="${t.key}"${t.key === currentTab ? ' aria-current="page"' : ''} title="${g.label} · ${escapeHtml(m.name)}${hits != null ? ` · ${MODULE_TABS.has(t.key) ? "监控中" : "命中"} ${hits}` : ""}${locked ? " · 未解锁" : ""}">
                     <span class="nav-item__bar"></span>
                     ${tf ? `<span class="tf-chip${tf.length > 1 ? " tf-chip--wide" : ""}">${tf}</span>` : ""}
-                    <span class="nav-item__name">${nameSegHtml(m.name, locked ? " " + LOCK_SVG : "")}</span>
+                    <span class="nav-item__name">${nameSegHtml(m.name)}</span>
                     ${hits != null ? `<span class="nav-item__count${hits === 0 ? " is-zero" : ""}">${hits}</span>` : ""}
+                    ${locked ? LOCK_SVG : ""}
                 </button>`;
             }).join("")}
         </div>`).join("");
@@ -975,6 +990,7 @@ function renderNav() {
 }
 
 // board 头（标识 + 命中数注释）：资产 tag · 周期 badge · 策略名
+const BH_NAME_LONG = 24;
 function renderBoardHead() {
     const head = document.getElementById("boardHead");
     if (!head) return;
@@ -987,7 +1003,10 @@ function renderBoardHead() {
     const tfEl = document.getElementById("bhTf");
     tfEl.textContent = m.tf || "";
     tfEl.style.display = m.tf ? "" : "none";
-    document.getElementById("bhName").innerHTML = nameSegHtml(m.full);
+    const nameEl = document.getElementById("bhName");
+    nameEl.innerHTML = nameSegHtml(m.full);
+    // 长榜名降一档：大字号排四行要 150px 高，把表格顶出首屏
+    nameEl.classList.toggle("is-long", m.full.length > BH_NAME_LONG);
     // 命中数挂在标题旁（说明收起时也看得到）；说明行只放 desc（完整规则，导航名可以短）。
     // 锁着的榜（未解锁访客）：榜头只留资产 tag · 周期 · 风格名 —— 命中数、换批提示、说明都不出（命中数仍在 rail 与锁定卡片上）。
     const headLocked = isTabLocked(currentTab);
@@ -1010,8 +1029,22 @@ function renderBoardHead() {
     const desc = headLocked ? "" : m.desc || "";
     note.innerHTML = noteHtml(desc);
     note.hidden = !desc;
+    // 两个包裹层空着也占网格行距 ⇒ 一起收
+    note.parentElement.hidden = !desc;
+    hitEl.parentElement.hidden = hitEl.hidden && (!metaEl || metaEl.hidden);
     head.hidden = false;
     syncNoteClamp();
+}
+
+// 表体高度贴着视口底（≥641px）：表体内滚动、页面也能滚，表体下缘落在第一屏之外时最后一两行要先把页面滚上去才看得见。
+// 榜头高度随榜变（榜名行数、排序条排数、说明展开），CSS 算不出来 ⇒ 开页、切榜、展开说明、改窗口时量一次。
+// 用 documentElement.clientHeight（布局视口）不用 innerHeight：手机地址栏收放时前者不变，表体不跟着抖。
+const TBODY_MIN_H = 320, BOARD_BOTTOM_GAP = 51;   // 51 ＝ 表尾 34 + 卡片下边框 1 + 与视口底的留白 16（与 rail 下缘对齐）
+function fitTableHeight() {
+    const tb = document.getElementById("rankBody");
+    if (!tb) return;
+    const top = tb.getBoundingClientRect().top + window.scrollY;
+    tb.style.setProperty("--tbody-h", Math.max(TBODY_MIN_H, Math.round(document.documentElement.clientHeight - top - BOARD_BOTTOM_GAP)) + "px");
 }
 
 // N 日K（TradingView 切法：每年 1 月 1 日 UTC 起每 N 天一根、年底那根截断；与后端 tv_nd_bars 同一套）下一根的收盘时刻（那天 00:00 UTC）。
@@ -1173,7 +1206,7 @@ if (ASHARE_ENABLED) {
     lastTabByAsset.ashare = ASHARE_HOME_TAB;
 }
 
-// 说明收起 ＝ 桌面两行、手机三行（CSS line-clamp）。收起时没溢出（说明本来就短）不出按钮；展开时一律给「收起说明」。
+// 说明收起 ＝ 两行（CSS line-clamp）。收起时没溢出（说明本来就短）不出按钮；展开时一律给「收起说明」。
 // 要在 head 可见之后量高度；换宽度（转屏、拖窗口）会改变是否溢出 ⇒ resize 时重算。
 function syncNoteClamp() {
     const note = document.getElementById("bhNote");
@@ -1184,6 +1217,7 @@ function syncNoteClamp() {
     btn.hidden = note.hidden || (!noteOpen && !overflow);
     btn.textContent = noteOpen ? "收起说明" : "展开说明";
     btn.setAttribute("aria-expanded", String(noteOpen));
+    fitTableHeight();
 }
 
 // 排序条：选轴在表格上方的 chip 条（真按钮、键盘可达、移动端横向滑动）；表头只标当前轴 + 方向，点击切升 / 降序。
@@ -1216,6 +1250,7 @@ function renderSortStrip() {
     if (focusKey) strip.querySelector(`.sort-chip[data-sortkey="${focusKey}"]`)?.focus({ preventScroll: true });
     lastStripTab = currentTab;
     strip.hidden = false;
+    fitTableHeight();
 }
 
 // 锁定态的模糊预览行：确定性假数据，宽度写死不用随机（避免每次重渲染抖动）。
@@ -1368,6 +1403,20 @@ function renderTgPanel() {
     lastTgPanelKey = key;
 }
 
+// 表头的副行列名（≥1081px 才显示，style.css）：拿第一行的副行现拆 ⇒ 段序、当前排序轴去掉哪段都和表体一致；点列名按那根轴排序。
+function renderSubHead(item) {
+    const head = document.getElementById("subHead");
+    if (!head) return;
+    const cfg = TABS_CONFIG[currentTab];
+    const box = document.createElement("div");
+    box.innerHTML = item && cfg.subFormat ? cfg.subFormat(item, sortField) : "";
+    head.innerHTML = [...box.querySelectorAll(".sub__seg")].map(s => {
+        const label = [...s.querySelectorAll(".sub__k")].map(k => k.textContent.trim()).join(" → ");
+        const axis = (cfg.sorts || []).find(a => a.label === label);
+        return `<span class="${s.className}"${axis ? ` data-sortkey="${axis.key}" title="按${label}排序${axis.hint ? "　·　" + axis.hint : ""}"` : ""}>${label}</span>`;
+    }).join("");
+}
+
 function renderTable() {
     // 标识与排序条不依赖数据，放在 !data 早退之前（否则首屏数据未到时切 tab，标识栏停在旧内容）
     renderBoardHead();
@@ -1380,6 +1429,7 @@ function renderTable() {
     if (!config) return;
 
     const foot = document.getElementById("tableFoot");
+    if (foot) foot.classList.remove("sr-only");
 
     const tbody = document.getElementById("rankBody");
     const header = document.getElementById("valueHeader");
@@ -1415,6 +1465,7 @@ function renderTable() {
         header.innerHTML = (config.header || "值") + `<span class="sort-arrow">${arrow}</span>`;
     }
     const sortDef = config.sorts ? (config.sorts.find(s => s.key === sortField) || config.sorts[0]) : null;
+    renderSubHead(items[0]);
 
     if (items.length === 0) {
         // 空状态：锁定 / 搜索无匹配 / 橱窗行未到 / 策略榜 0 命中（筛选严格，不是故障）/ 数据未生成。
@@ -1430,7 +1481,7 @@ function renderTable() {
             tbody.innerHTML = lockGateHtml(n, { ...copy, previewCount: n });
             bindLockGate(copy.expired);
             // 页脚（role=status / aria-live）给读屏用户播报一句状态（#rankBody 不设 live）；行情榜同样付费 ⇒ 说「该榜」不说「该策略榜」
-            if (foot) { foot.textContent = copy.notFound ? "查不到这张通行证，请重新输入" : copy.expired ? "通行证已失效，续费后可继续查看" : "该榜需通行证解锁"; foot.hidden = false; }
+            if (foot) { foot.textContent = copy.notFound ? "查不到这张通行证，请重新输入" : copy.expired ? "通行证已失效，续费后可继续查看" : "该榜需通行证解锁"; foot.hidden = false; foot.classList.add("sr-only"); }
             updateExportBar();  // 锁定态也要刷：否则切榜后导出坞仍显示上一榜的「已选 N 个」+ 表头勾选态残留
             return;
         }
@@ -1444,7 +1495,7 @@ function renderTable() {
             const pd = isAshareTab(currentTab) ? asharePaidData : paidData;
             const missingKey = license.valid && pd && !(currentTab in pd);
             const ashareLoading = license.valid && isAshareTab(currentTab) && !asharePaidData;
-            ico = missingKey ? "🛠️" : "⏳";
+            ico = missingKey ? EMPTY_ICON.tool : EMPTY_ICON.wait;
             if (missingKey) {
                 title = n != null ? `该榜暂时缺数据（命中 ${n} 个）` : "该榜暂时缺数据";
                 desc = "通行证有效，但服务端本次未提供这个榜<br>下次数据更新后自动恢复，无需重新解锁";
@@ -1462,22 +1513,22 @@ function renderTable() {
                 desc = "通行证有效，付费数据暂时拉取失败<br>30 秒内自动重试，无需任何操作";
             }
         } else if (searchQuery) {
-            ico = "🔍";
+            ico = EMPTY_ICON.search;
             // escapeHtml：searchQuery 是唯一进 innerHTML 的用户输入，必须转义（自 XSS）
             title = `没有匹配「${escapeHtml(searchQuery)}」的标的`;
             desc = "试试换个代码或名称关键词";
         } else if (currentTab === TEASER_TAB && !license.valid && (tabCount(currentTab) || 0) > 0) {
             // 橱窗榜命中数 > 0 却一行没有 ＝ 免费那 1 行还没进公开文件，不是 0 命中。
             // 别删这个分支：一旦橱窗行与 paidMeta 不同源，落进 strict 会与导航徽标自相矛盾。
-            ico = "🔒";
+            ico = EMPTY_ICON.lock;
             title = `已找到 ${tabCount(currentTab)} 个标的`;
             desc = "免费预览的那一行正在更新，稍后自动出现<br>购买通行证可立即查看完整名单";
         } else if (MODULE_TABS.has(currentTab)) {
-            ico = "🔔";
+            ico = EMPTY_ICON.bell;
             title = "目前没有监控中的币";
             desc = "有币新入榜就会出现在这里<br>各周期 K 收盘后约 1–2 分钟更新；最近离榜和通知记录在下面";
         } else if (strict) {
-            ico = "🎯";
+            ico = EMPTY_ICON.target;
             // 加密策略榜一律按最新已收盘 K 判，周期内名单不变 ⇒ 别暗示「下个整点可能就有」，写清下次换批的时刻。
             // 跨周期榜按变得最快的那个周期算（含日线 ⇒ 每天换；周＋月 ⇒ 周一或 1 号先到的那个）；tf 取 TAB_META（同 rail 徽标）。
             const tf = (TAB_META[currentTab] || {}).tf || "";
@@ -1505,7 +1556,7 @@ function renderTable() {
                 ? `筛选条件较严，命中数会随行情波动<br>${batchMeta(currentTab).replace(" · ", "，") || "每个交易日收盘后自动重算"}`
                 : nextBatch;
         } else {
-            ico = "📭";
+            ico = EMPTY_ICON.inbox;
             title = "暂无数据";
             desc = "数据将在下次抓取后出现";
         }
@@ -1517,7 +1568,7 @@ function renderTable() {
             </div>`;
         // 页脚同样播报（#rankBody 不设 live：30s 刷新会朗读上千行）。搜索分支用原始 searchQuery：
         // title 里是 escapeHtml 过的，进 textContent 会双重转义。
-        if (foot) { foot.textContent = searchQuery ? `没有匹配「${searchQuery}」的标的` : title; foot.hidden = false; }
+        if (foot) { foot.textContent = searchQuery ? `没有匹配「${searchQuery}」的标的` : title; foot.hidden = false; foot.classList.add("sr-only"); }
         updateExportBar();  // 同上：空状态也要刷导出坞
         return;
     }
@@ -1583,7 +1634,7 @@ function renderTable() {
                 ? `${symBase} <span class="sym__suffix">${escapeHtml(item.name)}</span>`
                 : `${symBase} <span class="sym__suffix">/ ${symSuffix}</span>`;
             return `<div class="tr" role="row">
-                <div class="c-check" role="cell"><span class="row-accent"></span><input type="checkbox" class="chk symbol-check" data-symbol="${symSafe}" aria-label="选择 ${symSafe}" ${checked}></div>
+                <div class="c-check" role="cell"><span class="row-accent"></span><label class="chk-hit"><input type="checkbox" class="chk symbol-check" data-symbol="${symSafe}" aria-label="选择 ${symSafe}" ${checked}></label></div>
                 <div class="c-rank" role="cell">${rankCell}</div>
                 <div class="c-sym" role="cell">
                     <a class="sym" href="${escapeHtml(tvUrl)}" target="_blank" rel="noopener noreferrer" title="在 TradingView 打开 ${symSafe} 图表">
@@ -1641,6 +1692,7 @@ function switchTab(tab) {
     // 表体是容器内滚动（.tbody），切榜必须回顶，否则新榜停留在上一榜的滚动位置
     const tb = document.getElementById("rankBody");
     if (tb) tb.scrollTop = 0;
+    if (window.scrollY) window.scrollTo(0, 0);   // 页面滚下去时切榜，新榜的榜头别留在视野外
     renderNav();
     renderTable();
     // 脉搏条 + 新鲜度胶囊 + 横幅都按当前资产切换,切 tab 立即刷新,不等 30s 轮询。
@@ -1728,7 +1780,7 @@ function renderUpdatePill() {
         nextMin <= 2 ? ' <span class="fresh__next">· 刷新中…</span>' :
         ` <span class="fresh__next">· 下次 ≈ ${nextMin} 分</span>`;
     document.getElementById("freshCryptoTxt").innerHTML = data.updateTime
-        ? ` · <b>${data.updateTime.slice(11, 16)}</b>&nbsp;UTC${nextTxt}` : " · —";
+        ? `<b>${data.updateTime.slice(11, 16)}</b>&nbsp;UTC${nextTxt}` : "—";
 
     // --- A股胶囊（收盘日更；ashareDataDate 是 tushare 的 'YYYYMMDD'，无分隔符 ⇒ slice 4..6 / 6..8）---
     const tA = parseUpdateTime(data.ashareUpdateTime);
@@ -1741,7 +1793,7 @@ function renderUpdatePill() {
     const dd = data.ashareDataDate
         ? `<b>${data.ashareDataDate.slice(4, 6)}-${data.ashareDataDate.slice(6, 8)}</b> 收盘`
         : (tA ? `<b>${data.ashareUpdateTime.slice(11, 16)}</b> UTC` : "—");
-    document.getElementById("freshAshareTxt").innerHTML = ` · ${dd} <span class="fresh__next">· 日更</span>`;
+    document.getElementById("freshAshareTxt").innerHTML = `${dd} <span class="fresh__next">· 日更</span>`;
 
     // 移动端 CSS 只显示非 .is-dim 的胶囊 ⇒ 任何时候必须恰好有一个亮着（当前资产那个）。
     elC.className = `fresh ${clsC}${currentAsset === "crypto" ? "" : " is-dim"}`;
@@ -2170,12 +2222,12 @@ async function loadData() {
         if (pill) {
             pill.className = "fresh fresh--bad";
             // 文案别加长：≤640px 顶栏余量只够这么宽（原来那句「数据加载失败，稍后自动重试」在 375 宽把整页撑出横向滚动）；轮询本来就会自动重试
-            document.getElementById(pillId + "Txt").textContent = " · 加载失败";
+            document.getElementById(pillId + "Txt").textContent = "加载失败";
         }
         // 只有从未加载成功才在表格区报错；已有数据时单次失败别清掉用户正在看的榜单。
         if (!data) {
             document.getElementById("rankBody").innerHTML =
-                '<div class="empty"><div class="empty__icon">⚠️</div><div class="empty__title">无法加载数据</div><div class="empty__desc">稍后自动重试</div></div>';
+                `<div class="empty"><div class="empty__icon">${EMPTY_ICON.warn}</div><div class="empty__title">无法加载数据</div><div class="empty__desc">稍后自动重试</div></div>`;
         }
     } finally {
         loadInFlight = false;   // 必须在 finally 里复位，否则一次异常就把轮询永久卡死
@@ -2529,6 +2581,9 @@ function openDrawer() {
     document.body.classList.add("no-scroll"); // 锁背景滚动,抽屉内滚动不再带动页面
     document.getElementById("hamburger").setAttribute("aria-expanded", "true");
     DRAWER_BG_SEL.forEach(sel => document.querySelector(sel)?.setAttribute("inert", ""));
+    // 列表在 #drawerBody 里内滚动（抽屉头与关闭钮不动）：打开时把当前榜滚到视野里
+    const body = document.getElementById("drawerBody"), act = body.querySelector(".nav-item.is-active");
+    if (act) body.scrollTop = Math.max(0, act.offsetTop - body.clientHeight / 3);
     document.getElementById("drawerClose").focus();
 }
 function closeDrawer() {
@@ -2548,6 +2603,8 @@ document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(
 document.getElementById("hamburger").addEventListener("click", openDrawer);
 document.getElementById("drawerClose").addEventListener("click", closeDrawer);
 document.getElementById("drawerScrim").addEventListener("click", closeDrawer);
+// 拉宽窗口到有 rail 的那一档时抽屉被 CSS 隐藏，no-scroll 与 inert 还留着 ⇒ 一起收掉（断点 ＝ style.css 的 860.98px）
+window.matchMedia("(min-width:861px)").addEventListener("change", e => { if (e.matches) closeDrawer(); });
 
 // 抽屉体：资产分段控件 + 导航容器（renderNav 往 #drawerNav 填）。⚠️ 分段控件与 index.html rail 里那份同款结构，增删资产两处一起改；
 //   只剩加密（ASHARE_ENABLED 关）时不出分段控件。
@@ -2602,7 +2659,7 @@ document.getElementById("resonance").addEventListener("click", e => {
 let noteResizeTimer = 0;
 window.addEventListener("resize", () => {
     clearTimeout(noteResizeTimer);
-    noteResizeTimer = setTimeout(syncNoteClamp, 150);
+    noteResizeTimer = setTimeout(syncNoteClamp, 150);   // 里面顺带重量表体高度
 });
 
 // 收盘快照横幅关闭（永久记忆，见 renderSnapshotBanner；只有 A股 用）
@@ -2634,6 +2691,10 @@ document.getElementById("valueHeader").addEventListener("click", e => {
     } else {
         toggleSort();
     }
+});
+document.getElementById("subHead").addEventListener("click", e => {
+    const col = e.target.closest("[data-sortkey]");
+    if (col) selectSortKey(col.dataset.sortkey);
 });
 document.getElementById("sortStrip").addEventListener("click", e => {
     const chip = e.target.closest(".sort-chip");
@@ -2669,6 +2730,11 @@ if (appEl) {
 initFooterUI();
 initPaywallUI();
 renderNav();
+// rail 自带滚动（style.css .rail）：回访落在靠下的榜时把选中项滚进视野。只在开页时做一次：之后 renderNav 重建不动 rail 的滚动位。
+{
+    const rail = document.getElementById("rail"), act = rail && rail.querySelector(".nav-item.is-active");
+    if (act && rail.scrollHeight > rail.clientHeight) rail.scrollTop = Math.max(0, act.offsetTop - rail.clientHeight / 3);
+}
 renderSkeleton();
 loadData();
 

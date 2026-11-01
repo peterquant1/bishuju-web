@@ -513,6 +513,7 @@ const TABS_CONFIG = {
     s42: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s43: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s44: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    s45: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
     // subClass：≤860px 别的榜副行限两行、整段不折，这张的周期段长 ⇒ 放开（style.css .sub--tg）。
@@ -539,6 +540,8 @@ const TAB_GROUPS = [
         tabs: [
             { key: "s41", name: "月线转强·突破历史压力", tf: "月线",
               desc: "月线刚刚由弱转强、又一举越过历史压力区的合约。只在转强那个月在榜，成员很少，不少月份一个都没有。" },
+            { key: "s45", name: "周线趋势走强（精选名单）", tf: "周线", hourlyList: true,
+              desc: "精选潜力名单里，周线趋势向上、势头还在放大的合约。近半年每周十个左右，不少合约会连着几周出现；名单每个整点重新圈定。" },
             { key: "s44", name: "月线连跌", tf: "月线",
               desc: "月线连续多个月下跌、一直没止跌的合约。每月换一批，止跌就离榜，没止跌的会连着几个月出现；行情好的月份一个都没有，大跌之后能有上百个。" },
             { key: "s43", name: "日线趋势抬升", tf: "日线",
@@ -1074,10 +1077,10 @@ function noteHtml(desc) {
 // A股 的榜 ＝ 加密现役榜逐张镜像：后端同一个 build_rankings 产出（判据只有一份），key ＝ ashareKey(加密 key)。这里按加密那几组自动生成「A股行情」「A股策略」两组
 // （榜名 / 周期跟着加密走；说明 ＝ ASHARE_NOTE ＋ 加密那张说明的第一段判据；三张行情榜的说明单独写：涨跌幅口径不同）⇒ 改加密榜不用另改 A股。
 // 轴集 ＝ 加密那张去掉订单流（tushare 没有主动买卖数据，后端行上恒 null）。不镜像的加密榜（与后端 fetch_data.ASHARE_SKIP_TABS 必须一致，audit C 项在盯）：
-// 加密专属名单圈定的三张（A股 没有对应的名单）；后端那份另含几张加密这边不出的榜（前端用不到，audit C 只比有公开编号的）。A股 的 N 日K（2~8 日线、3日线）按交易日切：每年第一个交易日起每 N 个交易日一格
+// 加密专属名单圈定的各张（A股 没有对应的名单）；后端那份另含几张加密这边不出的榜（前端用不到，audit C 只比有公开编号的）。A股 的 N 日K（2~8 日线、3日线）按交易日切：每年第一个交易日起每 N 个交易日一格
 // （10-19 在 TradingView 上核过；后端 `nd` 时间轴），说明里补一句（ASHARE_ND_NOTE）、换批提示不写日期（前端没有交易日历）。
 // ⚠️ 要放在 NOTE_BREAK_RE 之后、首次渲染之前：用它切加密说明的第一段，也要往 TAB_GROUPS / TAB_META / TABS_CONFIG / CHANGE_PCT_TABS 里补 A股 那几张。
-const ASHARE_SKIP_TABS = new Set(["s03", "s05", "s07", "s39"]);
+const ASHARE_SKIP_TABS = new Set(["s03", "s05", "s07", "s39", "s45"]);
 const ashareKey = k => "ashare" + k[0].toUpperCase() + k.slice(1);
 const ASHARE_ONLY_NOTE = "加密那边这一套已不展示；A股 这边照旧整张保留。";
 const ASHARE_NOTE = "这是加密同名榜的 A股 版。A股 这边有几处不同：日 K 一个交易日一根（北京时间 15:00 收盘），等当天数据发布（一般 16:00 前后）才换一批；周 K、月 K 以本周、本月最后一个交易日收盘为准；价格按前复权；涨跌幅按交易所口径、比的是上一根收盘；停牌的股票不入榜；没有订单流（A股 数据里没有主动买卖归边）。范围是沪深 A 股，不含北交所。A股 没有单独做回放：加密那张说明里的回放、命中数和表现都是加密市场的数字，这里只摘了判据。";

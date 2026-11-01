@@ -47,7 +47,7 @@
     <!-- 自托管 IBM Plex Sans 可变字体(Latin 子集);预加载避免首屏 FOUT。CJK 走系统栈不预载。
          Geist Mono 只剩通行证输入框在用 ⇒ 不预加载(预加载了首屏却用不上，浏览器会报警告) -->
     <link rel="preload" as="font" type="font/woff2" href="fonts/ibm-plex-sans-latin-wght-normal.woff2" crossorigin>
-    <link rel="stylesheet" href="style.css?v=137">
+    <link rel="stylesheet" href="style.css?v=138">
 </head>
 <body>
 <!-- is-hero：榜单排在主栏最上面（站长 10-18 定的版式，script.js HERO_LAYOUT）；is-single：只剩一张榜时另外不出 rail（SINGLE_BOARD）。
@@ -125,20 +125,22 @@
 
                 <section class="board">
                     <div class="board-head" id="boardHead" hidden>
-                        <div class="board-head__main">
-                            <div class="board-head__title">
-                                <span class="asset-tag" id="bhAsset">加密</span>
-                                <span class="tf-badge" id="bhTf">日线</span>
-                                <h1 class="board-head__name" id="bhName">榜单</h1>
-                                <span class="board-head__hit" id="bhHit" hidden></span>
-                                <span class="board-head__meta" id="bhMeta" hidden></span>
-                            </div>
-                            <div class="board-head__note" id="bhNote"></div>
-                            <button type="button" class="note-toggle" id="bhNoteToggle" aria-controls="bhNote" aria-expanded="false" hidden>展开说明</button>
+                        <div class="board-head__tags">
+                            <span class="asset-tag" id="bhAsset">加密</span>
+                            <span class="tf-badge" id="bhTf">日线</span>
                         </div>
                         <div class="search">
                             <svg class="search__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m13.5 13.5-3.2-3.2"/></svg>
                             <input id="searchBox" class="search__input" type="search" placeholder="搜索代码 / 名称…" autocomplete="off" spellcheck="false" aria-label="搜索标的">
+                        </div>
+                        <h1 class="board-head__name" id="bhName">榜单</h1>
+                        <div class="board-head__stat">
+                            <span class="board-head__hit" id="bhHit" hidden></span>
+                            <span class="board-head__meta" id="bhMeta" hidden></span>
+                        </div>
+                        <div class="board-head__notewrap">
+                            <div class="board-head__note" id="bhNote"></div>
+                            <button type="button" class="note-toggle" id="bhNoteToggle" aria-controls="bhNote" aria-expanded="false" hidden>展开说明</button>
                         </div>
                     </div>
 
@@ -150,7 +152,7 @@
                         <div class="thead" role="row">
                             <div class="th c-check" role="columnheader"><input type="checkbox" class="chk" id="checkAll" aria-label="全选当前列表"></div>
                             <div class="th c-rank" role="columnheader">#</div>
-                            <div class="th c-sym" role="columnheader">标的</div>
+                            <div class="th c-sym" role="columnheader"><span>标的</span><div class="sub sub--head" id="subHead"></div></div>
                             <div class="th c-val" id="valueHeader" role="columnheader">日成交额</div>
                         </div>
                         <div class="tbody" id="rankBody" role="rowgroup"></div>
@@ -275,6 +277,6 @@
     <button type="button" class="modal-x dialog-close" data-dialog="purchaseDialog" aria-label="关闭">✕</button>
 </dialog>
 
-<script src="script.js?v=514"></script>
+<script src="script.js?v=515"></script>
 </body>
 </html>

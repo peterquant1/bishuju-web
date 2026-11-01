@@ -146,6 +146,7 @@ function axesSub(item, sf, volLabel, extra) {
     // 日 / 周RSI缺口：排在末尾（超出 SUB_AXES_MAX，默认副行不变）。
     if ("rsiSmaGap" in item && sf !== "rsiSmaGap") seg.push(`${axisLabelFor("rsiSmaGap", "RSI缺口")} ${fmtRsiGapVal(item.rsiSmaGap)}`);
     if ("weeklyRsiSmaGap" in item && sf !== "weeklyRsiSmaGap") seg.push(`${axisLabelFor("weeklyRsiSmaGap", "周RSI缺口")} ${fmtRsiGapVal(item.weeklyRsiSmaGap)}`);
+    if ("volMultiple" in item && sf !== "volMultiple") seg.push(`${axisLabelFor("volMultiple", "日量倍数")} ${fmtVolMultVal(item.volMultiple)}`);
     const shown = seg.slice(0, SUB_AXES_MAX).map(s => `<span class="sub__seg">${s}</span>`);
     // extra（涨跌幅榜的价格上下文 / 当前轴不是涨跌幅时的涨跌幅）带 --ctx：≤860px 排到最前，两行放不下时先让掉的是末尾的轴。
     if (extra) shown.push(`<span class="sub__seg sub__seg--ctx">${extra}</span>`);
@@ -246,7 +247,7 @@ const AXIS_D_CVD = { key: "cvdStrength", label: "日CVD强弱", format: v => fmt
 // 日量比 ＝ 当期成交量 / 前 5 期均量；日EMA间距 ＝ (EMA9 − EMA21)/EMA21 × 100。两轴已移除、后端行字段照发 ⇒
 // 零消费者保留；复活 ＝ 加回轴集 + axesSub 对应段（下文其余零消费者轴常量同理）。
 const AXIS_D_VOLRATIO = { key: "volRatio", label: "日量比", format: v => fmtRatioVal(v.volRatio) };
-// 日量倍数：放大倍数带方向（阳正阴负）⇒ 降序最强、升序最弱、缩量在中间。极值把深度条压扁 ⇒ noBar；档位按绝对值定，值列别变宽。
+// 日量倍数：放大倍数带方向（阳正阴负）⇒ 降序最强、升序最弱、缩量在中间。全站各榜都挂（周 / 月 / 3日行情榜里是唯一的跨周期轴，排序条上自成一组）。极值把深度条压扁 ⇒ noBar；档位按绝对值定，值列别变宽。
 function fmtVolMultVal(x) {
     if (x == null) return "—";
     const a = Math.abs(x);
@@ -362,7 +363,7 @@ const singleStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_CVD,
 // 加轴要后端 `_strategy_row` 先补字段（只加轴＝永远全 null 的幽灵轴），并同批加 axesSub 段；一改就是全部加密策略榜一起变，
 //   下方三张涨跌幅榜的轴集照抄本数组 ⇒ 同批改那三份。
 // 已移除的轴后端行字段照发 ⇒ audit A 项把它们列成「行上未挂轴的字段」是预期提示，不是失败。
-const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
+const cryptoStrategySorts = [AXIS_D_VOL, AXIS_D_CHGPCT, AXIS_D_VOLMULT, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
                              ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS,
                              AXIS_W_VOL, AXIS_W_CHGPCT, AXIS_WRSI, AXIS_W_RSIGAP, AXIS_W_CVD, AXIS_W_ADX, AXIS_W_DIPLUS,
                              AXIS_M_VOL, AXIS_M_CHGPCT, AXIS_MRSI, AXIS_M_DIPLUS];
@@ -455,14 +456,14 @@ const AXIS_3D_MACD = { key: "threeDayMacdStrength", label: "3日MACD强弱", for
 const AXIS_3D_SARBARS = { key: "threeDaySarBullBars", label: "3日SAR多头根数", format: v => fmtBarsVal(v.threeDaySarBullBars),
                           hint: "3日K SAR翻多至今第几根（翻多那根算第1根）。升序＝刚翻多，降序＝这轮多头跑最久；SAR 空头显示「—」" };
 const dailyVolMultSorts = [AXIS_D_VOLMULT];
-const dailyChangeSorts = [AXIS_D_CHG, AXIS_D_VOL, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
+const dailyChangeSorts = [AXIS_D_CHG, AXIS_D_VOL, AXIS_D_VOLMULT, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
                           ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS];
 const threeDayChangeSorts = [AXIS_3D_CHG, AXIS_3D_VOL, AXIS_3D_RSI, AXIS_3D_RSIGAP, AXIS_3D_CVD, AXIS_3D_TAKER,
-                             AXIS_3D_ADX, AXIS_3D_DIPLUS, AXIS_3D_MACD, AXIS_3D_SARBARS];
+                             AXIS_3D_ADX, AXIS_3D_DIPLUS, AXIS_3D_MACD, AXIS_3D_SARBARS, AXIS_D_VOLMULT];
 const weeklyChangeSorts = [AXIS_W_CHG, AXIS_W_VOL, AXIS_WRSI, AXIS_W_RSIGAP, AXIS_W_CVD, AXIS_W_TAKER,
-                           AXIS_W_ADX, AXIS_W_DIPLUS, AXIS_W_MACD, AXIS_W_SARBARS];
+                           AXIS_W_ADX, AXIS_W_DIPLUS, AXIS_W_MACD, AXIS_W_SARBARS, AXIS_D_VOLMULT];
 const monthlyChangeSorts = [AXIS_M_CHG, AXIS_M_VOL, AXIS_MRSI, AXIS_M_RSIGAP, AXIS_M_CVD, AXIS_M_TAKER,
-                            AXIS_M_ADX, AXIS_M_DIPLUS, AXIS_M_MACD, AXIS_M_SARBARS];
+                            AXIS_M_ADX, AXIS_M_DIPLUS, AXIS_M_MACD, AXIS_M_SARBARS, AXIS_D_VOLMULT];
 // A股 涨跌幅榜轴集工厂（休眠件）：仍是旧形 —— 通用 key 装本周期的值、比加密少「订单流」（tushare 日线无归边字段）。
 // 复活 A股 时要么照加密这样对齐（后端 fetch_ashare.py 行构造一起改），要么保持旧形，别混用。
 // ⚠️ 写成独立工厂、别加开关：audit A 项靠正则静态抽取工厂体里的 key，看不懂运行时裁剪。

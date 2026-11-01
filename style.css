@@ -283,6 +283,8 @@ a:hover{color:var(--gold-hi)}
 .tf-chip{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:3px;font-size:var(--fs-2xs);font-weight:400;flex:none}
 /* 跨周期榜（「日月」「日周月」）竖排成一枚窄药丸：徽标列恒为 17px ⇒ 各行榜名左缘对齐（横排的宽徽标会把榜名顶出去一截） */
 .tf-chip--wide{height:auto;padding:2px 0;line-height:13px;text-align:center;word-break:break-all}
+/* 「3日」这种数字 + 日只比 17px 宽半个像素：收一点字距排一行（竖排的话这一行比别的行高出 12px）*/
+.tf-chip--nd{letter-spacing:-.5px;white-space:nowrap}
 /* 平时灰（20 个黄方块会把选中指示条淹掉）、选中项才换资产色：选中态底色叠两层（--nav-active + 资产色淡底），改色要量叠加后的实际底色 */
 .tf-chip{background:var(--tag-bg);color:var(--muted)}
 [data-asset="crypto"] .nav-item.is-active .tf-chip{background:rgba(var(--asset-crypto-rgb),.16);color:var(--asset-crypto-ink)}
@@ -394,9 +396,11 @@ a:hover{color:var(--gold-hi)}
 /* 情绪五档：恐惧红 → 橙 → 中性灰 → 浅绿 → 涨绿（深色底盘值；浅色在下方换成过 AA 的深一档）*/
 .mkt-z--fear2{color:var(--down)}.mkt-z--fear{color:#f0864a}.mkt-z--neutral{color:var(--muted)}.mkt-z--greed{color:#6fd3a9}.mkt-z--greed2{color:var(--up)}
 [data-theme="light"] .mkt-z--fear{color:#b4541a}[data-theme="light"] .mkt-z--greed{color:#257a55}
-/* ≥641px：副值（涨跌占比、正费率占比、BTC / ETH 涨跌幅）挪到数值下一行、内距收一档 ⇒ 七块在桌面主栏里排成一行（原来折成两行约 128px 高） */
+/* ≥641px：副值（涨跌占比、正费率占比、BTC / ETH 涨跌幅）挪到数值下一行、内距收一档 ⇒ 七块在桌面主栏里排成一行（原来折成两行约 128px 高）。
+   小标题一律顶对齐（有的块两行、有的三行，居中的话小标题高低差 9px）；块间等距、最后一块贴右内距（各块平分余量时右边比左边多空出 50px）*/
 @media (min-width:641px){
-    .mkt__item{flex:1 1 auto;padding:12px 14px}
+    .mkt__inner{justify-content:space-between}
+    .mkt__item{flex:0 1 auto;justify-content:flex-start;padding:12px 14px}
     .mkt__item:first-child{padding-left:20px}
     .mkt__item:last-child{padding-right:20px}
     .mkt__v .mkt__sub{display:block;margin-left:0;margin-top:2px}
@@ -405,6 +409,12 @@ a:hover{color:var(--gold-hi)}
 }
 /* 主栏不满 900px（视口 <1240px）时七块排不进一行：先让掉「加密市场 更新时刻」（顶栏新鲜度胶囊里同样有），剩六块到约 1010px 视口仍是一行 */
 @media (min-width:641px) and (max-width:1239.98px){ .mkt__item--time{display:none} .mkt__item--time+.mkt__item{padding-left:20px} }
+/* 主栏不足约 680px 时六块也排不进一行（有 rail 的 861–1039px、没 rail 的 641–739px）：排成 3 × 2，两行的列对齐。
+   flex 折行是 4 + 2，第二行两块各占一半，和第一行的列对不上。第 5 个 ＝ 第二行第一块（第 1 个「加密市场」这一档隐藏）*/
+@media (min-width:641px) and (max-width:739.98px),(min-width:861px) and (max-width:1039.98px){
+    .mkt__inner{display:grid;grid-template-columns:repeat(3,1fr)}
+    .mkt__item:nth-child(5){padding-left:20px}
+}
 
 /* ---------------- board 头（标识 + 搜索）---------------- */
 /* 榜头是一张两列网格：第一行标签 + 搜索框，往下榜名、命中数 + 换批提示、说明都占满整行 —— 榜名不用给搜索框让宽度 */
@@ -429,7 +439,8 @@ a:hover{color:var(--gold-hi)}
 .board-head__hit{font-family:var(--font-sans);font-size:var(--fs-sm);color:var(--muted-2);font-variant-numeric:tabular-nums;white-space:nowrap}
 /* 命中数的数字包在 <b> 里（script.js renderBoardHead）：HERO 版式（恒开）下放大成头条数字（见下 .is-hero），关掉 HERO 才与正文同字重。 */
 .board-head__hit b{font-weight:inherit}
-.board-head__meta{font-size:var(--fs-sm);color:var(--muted-2)}
+/* balance：手机上这句折两行，不匀开的话「换一批」三个字单独掉一行 */
+.board-head__meta{font-size:var(--fs-sm);color:var(--muted-2);text-wrap:balance}
 /* ---------------- 榜在最上（.app.is-hero，script.js HERO_LAYOUT；站长 10-18「重构布局，放在一个最醒目的地方」）----------------
    榜单（标题 + 排序条 + 表格）靠 order 排到主栏最上面（DOM 顺序不动 ⇒ 读屏 / Tab 顺序照旧是概览在前），市场概览接在表格下面；
    脉搏磁贴由 JS 收起。标题区放大成头条：标签与搜索框一行、榜名一行、命中数 + 换批提示一行。
@@ -479,9 +490,8 @@ a:hover{color:var(--gold-hi)}
 /* ---------------- 表格（表头 / 表体分离 —— 表体内滚动，绝不 sticky）---------------- */
 .table{overflow:hidden;border-top:1px solid var(--line)}
 .board-head[hidden]~.table{border-top:none}
-/* 表体滚动条走标准属性（细条 + 透明轨道）：html 上的 scrollbar-color 会继承下来，而一旦标准属性生效，下面的
-   ::-webkit-scrollbar 在新版 Chromium 里就不再起作用（那几条只剩旧 Safari 在用）。表头要一起写 thin ——
-   它靠 scrollbar-gutter 预留与表体同宽的槽，两边宽度不一致列就对不齐。
+/* 表体滚动条：标准属性（细条 + 透明轨道）是 Firefox 与触屏的底；鼠标设备的 Chromium / Safari 走文件末尾的 ::-webkit-scrollbar。
+   表头要一起写 —— 它靠 scrollbar-gutter 预留与表体同宽的槽，两边宽度不一致列就对不齐。
    ≥641px 表头 / 表体左右各让 8px：行悬停底是 8px 圆角块（其站做法），贴着卡片边缘会被裁掉一角；两边内距必须相同、列才对得齐 */
 .thead{display:flex;align-items:stretch;background:var(--th-bg);border-bottom:1px solid var(--line);overflow-y:hidden;scrollbar-gutter:stable;scrollbar-width:thin}
 .th{display:flex;align-items:center;font-size:var(--fs-xs);font-weight:400;letter-spacing:0;color:var(--muted-2);user-select:none;padding:9px 0}
@@ -489,8 +499,6 @@ a:hover{color:var(--gold-hi)}
 @media (min-width:641px){ .thead,.tbody{padding-left:8px;padding-right:8px} .tbody{padding-top:4px;padding-bottom:4px} }
 /* 锁定卡片在场时（全锁榜、未解锁的橱窗榜）不限高：卡片被内滚动切掉一截比多滚一段页面糟；槽照留，表头才对得齐 */
 .tbody.tbody--gated{max-height:none}
-.tbody::-webkit-scrollbar{width:11px}
-.tbody::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:6px;border:3px solid var(--panel)}
 /* 行：无分隔线、悬停 8px 圆角底（其站实测）*/
 .tr{display:flex;align-items:center;border-bottom:1px solid var(--row-line);border-radius:var(--r-sm);transition:background var(--dur)}
 .tr:last-child{border-bottom:none}
@@ -716,7 +724,9 @@ a:hover{color:var(--gold-hi)}
 .buy-plan.is-selected{border-color:var(--accent-line)!important;background:rgba(var(--gold-rgb),.06);box-shadow:inset 0 0 0 1px var(--accent-line)}
 .buy-plan__tag{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--btn-fill);color:var(--btn-ink);font-size:var(--fs-2xs);font-weight:400;padding:2px 8px;border-radius:var(--r-tag);white-space:nowrap}
 .buy-plan__label{font-size:var(--fs-sm);color:var(--muted)}
-.buy-plan__price{font-size:var(--fs-2xl);font-weight:600;font-family:var(--num);font-variant-numeric:tabular-nums;margin:5px 0 1px}
+.buy-plan__price{font-size:var(--fs-2xl);font-weight:600;font-family:var(--num);font-variant-numeric:tabular-nums;margin:5px 0 1px;white-space:nowrap}
+/* 单位小一号；手机卡片只有 58–87px 内宽，「149 USDT」排不下 ⇒ ≤640px 单位另起一行，三张卡一样高 */
+.buy-plan__unit{font-size:var(--fs-sm);font-weight:500}
 .buy-plan.is-selected .buy-plan__price{color:var(--gold-ink)}
 .buy-steps{margin-top:16px;padding:14px 0 0 20px;border-top:1px solid var(--line);font-size:var(--fs-sm);color:var(--muted);line-height:1.75}
 
@@ -774,6 +784,7 @@ a:hover{color:var(--gold-hi)}
     /* 表单弹窗按钮竖排、主按钮在上：两颗并排时主按钮被次按钮的长文案挤到 109px */
     .modal form .modal-actions{flex-direction:column-reverse;align-items:stretch}
     .modal form .modal-actions .btn-primary{flex:none}
+    .buy-plan__unit{display:block;font-size:var(--fs-xs)}
     /* 窄屏保持横向滑动：轴一多在手机上换行会占掉半屏高度，而触屏横滑是自然手势（桌面端换行，见上方 .sort-strip 注释）*/
     .sort-strip{align-items:center;padding:4px 0 4px 14px}
     .sort-strip__label{padding-top:0}
@@ -832,3 +843,17 @@ a:hover{color:var(--gold-hi)}
 
 /* 硬约束兜底：reduced-motion 全禁（本就无循环动画，双保险） */
 @media (prefers-reduced-motion:reduce){ *,*::before,*::after{animation:none!important;transition:none!important} }
+
+/* ---------------- 滚动条（鼠标设备）---------------- */
+/* Windows 上 scrollbar-width:thin 两端带箭头钮，一屏三条（页面 / rail / 表体）⇒ 画成无箭头细条。
+   两套写法同时在时新版 Chromium 只认标准属性，所以先把标准属性清回 auto（scrollbar-color 会继承，html 也要清）。
+   Firefox 不认这个选择器，继续走各处的标准属性；触屏是系统浮层滚动条，不碰。 */
+@supports selector(::-webkit-scrollbar){
+    @media (hover:hover) and (pointer:fine){
+        html,.rail,.tbody,.faq,#drawerBody,.tgp__rows,.tgp__feed,.thead{scrollbar-width:auto;scrollbar-color:auto}
+        html::-webkit-scrollbar,.rail::-webkit-scrollbar,.tbody::-webkit-scrollbar,.faq::-webkit-scrollbar,#drawerBody::-webkit-scrollbar,.tgp__rows::-webkit-scrollbar,.tgp__feed::-webkit-scrollbar,.thead::-webkit-scrollbar{width:10px}
+        html::-webkit-scrollbar-track,.rail::-webkit-scrollbar-track,.tbody::-webkit-scrollbar-track,.faq::-webkit-scrollbar-track,#drawerBody::-webkit-scrollbar-track,.tgp__rows::-webkit-scrollbar-track,.tgp__feed::-webkit-scrollbar-track,.thead::-webkit-scrollbar-track{background:transparent}
+        html::-webkit-scrollbar-thumb,.rail::-webkit-scrollbar-thumb,.tbody::-webkit-scrollbar-thumb,.faq::-webkit-scrollbar-thumb,#drawerBody::-webkit-scrollbar-thumb,.tgp__rows::-webkit-scrollbar-thumb,.tgp__feed::-webkit-scrollbar-thumb{background:var(--line-2);background-clip:padding-box;border:3px solid transparent;border-radius:5px}
+        html::-webkit-scrollbar-thumb:hover,.rail::-webkit-scrollbar-thumb:hover,.tbody::-webkit-scrollbar-thumb:hover,.faq::-webkit-scrollbar-thumb:hover,#drawerBody::-webkit-scrollbar-thumb:hover,.tgp__rows::-webkit-scrollbar-thumb:hover,.tgp__feed::-webkit-scrollbar-thumb:hover{background-color:var(--muted-2)}
+    }
+}

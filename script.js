@@ -533,6 +533,7 @@ const TABS_CONFIG = {
     s45: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s47: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s48: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    s49: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     // 只有一根轴、行是轻量行（没有别的轴字段）⇒ 副行固定两段，别走 axesSub。
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
@@ -558,6 +559,8 @@ const TAB_GROUPS = [
         //   版式见 HERO_LAYOUT / SINGLE_BOARD（榜恒在主栏最上；只剩一张时另外不出 rail）。
         label: "置顶", asset: "加密", pinned: true,
         tabs: [
+            { key: "s49", name: "日线重返关键位", tf: "日线",
+              desc: "日线价格碰到或站上一个关键价位的合约。关键价位不常变，站稳就留在榜上，跌回去就离榜；成员多，近期每天一两百个，从没空过。" },
             { key: "s32", name: "月周向上·日线回调", tf: "日线/周线/月线",
               desc: "大周期偏多、短周期回调的合约，盯的是回调里的机会。每天换一批。" },
             { key: "s47", name: "日线强势加速", tf: "日线",
@@ -730,7 +733,7 @@ const safeStore = {
 let data = null;
 let lastRenderKey = null; // loadData 上次重渲染时的 updateTime，用于跳过无变化的重建
 // 默认落地榜 ＝ 置顶组第一张（10-26 起没有橱窗：未解锁的新访客看到的是锁定卡片 ＋ 命中数 ＋ 购买入口）；改这里要同步 currentAsset 默认值。
-let currentTab = "s32";
+let currentTab = "s49";
 let sortAsc = false; // false=降序, true=升序
 // 当前排序字段（切 tab 时重置为该 tab 首轴）。初值也必须是默认落地榜的首轴：首访不走 switchTab，写死 "value" 会让
 // 排序条上没有一个高亮 chip、副行多重复一段首轴、第一次点表头不翻方向（策略榜首轴的 key 是 volume 不是 value）。
@@ -920,7 +923,7 @@ const ASSET_CN = { crypto: "加密", ashare: "A股" };        // data-asset → 
 // 默认资产 ＝ 默认落地 tab（currentTab）所属资产，两者同改。
 let currentAsset = "crypto";                            // 当前资产（由 tab 派生/资产切换驱动）
 // 各资产上次看的榜；加密初值 ＝ 默认落地榜（置顶组第一张）；A股 初值由「A股 镜像」块填（ASHARE_HOME_TAB）。
-const lastTabByAsset = { crypto: "s32" };
+const lastTabByAsset = { crypto: "s49" };
 
 function assetOfTab(tab) {
     const m = TAB_META[tab];
@@ -1720,7 +1723,7 @@ function switchTab(tab) {
 function switchAsset(assetK) {
     if (assetK === currentAsset) return;
     // 兜底（lastTabByAsset 缺项时）也要落在本资产自己的榜上：再加资产时逐个列映射、别写成二分。加密兜底 ＝ 默认落地榜（置顶组第一张）。
-    const fallback = assetK === "ashare" ? ASHARE_HOME_TAB : "s32";
+    const fallback = assetK === "ashare" ? ASHARE_HOME_TAB : "s49";
     switchTab(lastTabByAsset[assetK] || fallback);
 }
 

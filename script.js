@@ -251,7 +251,7 @@ const AXIS_D_CVD = { key: "cvdStrength", label: "日CVD强弱", format: v => fmt
 // 日量比 ＝ 当期成交量 / 前 5 期均量；日EMA间距 ＝ (EMA9 − EMA21)/EMA21 × 100。两轴已移除、后端行字段照发 ⇒
 // 零消费者保留；复活 ＝ 加回轴集 + axesSub 对应段（下文其余零消费者轴常量同理）。
 const AXIS_D_VOLRATIO = { key: "volRatio", label: "日量比", format: v => fmtRatioVal(v.volRatio) };
-// 日量倍数：放大倍数带方向（阳正阴负）⇒ 降序最强、升序最弱、缩量在中间。只挂 s46（那张的唯一轴），其余各榜已移除、后端行字段照发。极值把深度条压扁 ⇒ noBar；档位按绝对值定，值列别变宽。
+// 日量倍数：放大倍数带方向（阳正阴负）⇒ 降序最强、升序最弱、缩量在中间。已移除、后端行字段照发 ⇒ 零消费者保留；复活 ＝ 加回轴集 + axesSub 对应段。极值把深度条压扁 ⇒ noBar；档位按绝对值定，值列别变宽。
 function fmtVolMultVal(x) {
     if (x == null) return "—";
     const s = Math.abs(x).toFixed(2);   // 位数别随大小变：右对齐时小数点要对得齐
@@ -461,7 +461,6 @@ const AXIS_3D_MACD = { key: "threeDayMacdStrength", label: "3日MACD强弱", for
                        hint: "3日K (PPO线 + 3×PPO柱)/4：动能的相对强弱，只看排名；不足35根显示「—」" };
 const AXIS_3D_SARBARS = { key: "threeDaySarBullBars", label: "3日SAR多头根数", format: v => fmtBarsVal(v.threeDaySarBullBars),
                           hint: "3日K SAR翻多至今第几根（翻多那根算第1根）。升序＝刚翻多，降序＝这轮多头跑最久；SAR 空头显示「—」" };
-const dailyVolMultSorts = [AXIS_D_VOLMULT];
 const dailyChangeSorts = [AXIS_D_CHG, AXIS_D_VOL, AXIS_D_RSI, AXIS_D_RSIGAP, AXIS_D_CVD, AXIS_D_TAKER,
                           ...dmiSorts, AXIS_D_MACD, AXIS_D_SARBARS];
 const threeDayChangeSorts = [AXIS_3D_CHG, AXIS_3D_VOL, AXIS_3D_RSI, AXIS_3D_RSIGAP, AXIS_3D_CVD, AXIS_3D_TAKER,
@@ -534,7 +533,6 @@ const TABS_CONFIG = {
     s45: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s47: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     // 只有一根轴、行是轻量行（没有别的轴字段）⇒ 副行固定两段，别走 axesSub。
-    s46: { sorts: dailyVolMultSorts, subFormat: v => subSegHtml(`${AXIS_D_CHGPCT.label} ${AXIS_D_CHGPCT.format(v)}`) + subSegHtml(`${AXIS_D_VOL.label} ${AXIS_D_VOL.format(v)}`) },
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
     // subClass：≤1080px 别的榜副行限两行，这张的周期段长 ⇒ 放开（style.css .sub--tg）。
@@ -632,8 +630,6 @@ const TAB_GROUPS = [
               desc: "月线弱势中出现企稳迹象的合约。每月换一批，偶尔一个都没有。" },
             { key: "s35", name: "周线动能翻多", tf: "周线",
               desc: "最新一周动能指标刚刚由弱转强（翻多的第一周）的合约。只在翻多那一周在榜，每周一换一批。" },
-            { key: "s46", name: "全市场量能强弱", tf: "日线",
-              desc: "全市场合约这一天的成交量比近期常态放大了多少倍，上涨记正、下跌记负。降序看放量上涨最强的，升序看放量下跌最弱的，缩量的在中间。每天换一批，量的是当天强弱，不是买入信号。" },
         ],
     },
     // A股「行情」「策略」两组不在这里写：由下方镜像块从加密组运行时生成

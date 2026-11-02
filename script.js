@@ -532,6 +532,7 @@ const TABS_CONFIG = {
     s44: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s45: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s47: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    s48: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     // 只有一根轴、行是轻量行（没有别的轴字段）⇒ 副行固定两段，别走 axesSub。
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
@@ -630,6 +631,8 @@ const TAB_GROUPS = [
               desc: "月线弱势中出现企稳迹象的合约。每月换一批，偶尔一个都没有。" },
             { key: "s35", name: "周线动能翻多", tf: "周线",
               desc: "最新一周动能指标刚刚由弱转强（翻多的第一周）的合约。只在翻多那一周在榜，每周一换一批。" },
+            { key: "s48", name: "日线刚转多·触及关键位", tf: "日线",
+              desc: "日线大方向刚刚由空转多、当天还触及一个关键价位的合约。只认转多那一天，每天换一批全新的合约，偶尔一个都没有。" },
         ],
     },
     // A股「行情」「策略」两组不在这里写：由下方镜像块从加密组运行时生成

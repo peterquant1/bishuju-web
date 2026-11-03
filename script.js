@@ -534,6 +534,7 @@ const TABS_CONFIG = {
     s47: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s48: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s49: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    s50: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     // 只有一根轴、行是轻量行（没有别的轴字段）⇒ 副行固定两段，别走 axesSub。
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
@@ -561,6 +562,8 @@ const TAB_GROUPS = [
         tabs: [
             { key: "s49", name: "日线重返关键位·多方占优", tf: "日线",
               desc: "日线价格碰到或站上一个关键价位、同时多方占优的合约。关键价位不常变，站稳就留在榜上，跌回去或多方不再占优就离榜；成员多，近期每天几十到一两百个，从没空过。" },
+            { key: "s50", name: "月线放量收跌", tf: "月线",
+              desc: "月线这个月成交放大、却收跌的合约。每月 1 号换一批，月内不变，下个月还在的不多；近两年每月几十到两百多个，很少空。" },
             { key: "s32", name: "月周向上·日线回调", tf: "日线/周线/月线",
               desc: "大周期偏多、短周期回调的合约，盯的是回调里的机会。每天换一批。" },
             { key: "s47", name: "日线强势加速", tf: "日线",

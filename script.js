@@ -2643,7 +2643,7 @@ function applyTheme(t) {
     // 切换时同步手机浏览器工具栏色（加载时由 index.html 内联脚本设）。
     // ⚠️ 两个 hex ＝ style.css 的 --header-bg；index.html 内联脚本与 manifest 各有一份硬编码，改品牌色一起改。
     const meta = document.getElementById("themeColorMeta");
-    if (meta) meta.content = t === "light" ? "#ffffff" : "#181a20";
+    if (meta) meta.content = t === "light" ? "#ffffff" : "#000000";
 }
 applyTheme(safeStore.get("localStorage", LS_THEME) === "light" ? "light" : "dark");
 document.getElementById("themeBtn").addEventListener("click", () => {

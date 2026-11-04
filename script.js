@@ -535,6 +535,7 @@ const TABS_CONFIG = {
     s48: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s49: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s50: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    s51: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     // 只有一根轴、行是轻量行（没有别的轴字段）⇒ 副行固定两段，别走 axesSub。
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
@@ -560,6 +561,8 @@ const TAB_GROUPS = [
         //   版式见 HERO_LAYOUT / SINGLE_BOARD（榜恒在主栏最上；只剩一张时另外不出 rail）。
         label: "置顶", asset: "加密", pinned: true,
         tabs: [
+            { key: "s51", name: "周线趋势走强·月线收复（精选名单）", tf: "周线/月线", hourlyList: true,
+              desc: "精选潜力名单里，周线趋势强度在加大、多方占优、资金面偏多，月线又已收复前一轮下跌早期价位的合约。状态不破就留在榜上，多数下一周还在；近一年每周十几个、近半年二十个上下；名单每个整点重新圈定。" },
             { key: "s49", name: "日线重返关键位·多方占优", tf: "日线",
               desc: "日线价格碰到或站上一个关键价位、同时多方占优的合约。关键价位不常变，站稳就留在榜上，跌回去或多方不再占优就离榜；成员多，近期每天几十到一两百个，从没空过。" },
             { key: "s39", name: "周线多头·买盘占优（精选名单）", tf: "周线", hourlyList: true,
@@ -736,7 +739,7 @@ const safeStore = {
 let data = null;
 let lastRenderKey = null; // loadData 上次重渲染时的 updateTime，用于跳过无变化的重建
 // 默认落地榜 ＝ 置顶组第一张（10-26 起没有橱窗：未解锁的新访客看到的是锁定卡片 ＋ 命中数 ＋ 购买入口）；改这里要同步 currentAsset 默认值。
-let currentTab = "s49";
+let currentTab = "s51";
 let sortAsc = false; // false=降序, true=升序
 // 当前排序字段（切 tab 时重置为该 tab 首轴）。初值也必须是默认落地榜的首轴：首访不走 switchTab，写死 "value" 会让
 // 排序条上没有一个高亮 chip、副行多重复一段首轴、第一次点表头不翻方向（策略榜首轴的 key 是 volume 不是 value）。
@@ -926,7 +929,7 @@ const ASSET_CN = { crypto: "加密", ashare: "A股" };        // data-asset → 
 // 默认资产 ＝ 默认落地 tab（currentTab）所属资产，两者同改。
 let currentAsset = "crypto";                            // 当前资产（由 tab 派生/资产切换驱动）
 // 各资产上次看的榜；加密初值 ＝ 默认落地榜（置顶组第一张）；A股 初值由「A股 镜像」块填（ASHARE_HOME_TAB）。
-const lastTabByAsset = { crypto: "s49" };
+const lastTabByAsset = { crypto: "s51" };
 
 function assetOfTab(tab) {
     const m = TAB_META[tab];
@@ -1143,7 +1146,7 @@ function noteHtml(desc) {
 // 加密专属名单圈定的各张（A股 没有对应的名单）；后端那份另含几张加密这边不出的榜（前端用不到，audit C 只比有公开编号的）。A股 的 N 日K（2~8 日线、3日线）按交易日切：每年第一个交易日起每 N 个交易日一格
 // （10-19 在 TradingView 上核过；后端 `nd` 时间轴），说明里补一句（ASHARE_ND_NOTE）、换批提示不写日期（前端没有交易日历）。
 // ⚠️ 要放在 NOTE_BREAK_RE 之后、首次渲染之前：用它切加密说明的第一段，也要往 TAB_GROUPS / TAB_META / TABS_CONFIG / CHANGE_PCT_TABS 里补 A股 那几张。
-const ASHARE_SKIP_TABS = new Set(["s01", "s03", "s05", "s07", "s39", "s45"]);
+const ASHARE_SKIP_TABS = new Set(["s01", "s03", "s05", "s07", "s39", "s45", "s51"]);
 const ashareKey = k => "ashare" + k[0].toUpperCase() + k.slice(1);
 const ASHARE_ONLY_NOTE = "加密那边这一套已不展示；A股 这边照旧整张保留。";
 const ASHARE_NOTE = "这是加密同名榜的 A股 版。A股 这边有几处不同：日 K 一个交易日一根（北京时间 15:00 收盘），等当天数据发布（一般 16:00 前后）才换一批；周 K、月 K 以本周、本月最后一个交易日收盘为准；价格按前复权；涨跌幅按交易所口径、比的是上一根收盘；停牌的股票不入榜；没有订单流（A股 数据里没有主动买卖归边）。范围是沪深 A 股，不含北交所。A股 没有单独做回放：加密那张说明里的回放、命中数和表现都是加密市场的数字，这里只摘了判据。";
@@ -1726,7 +1729,7 @@ function switchTab(tab) {
 function switchAsset(assetK) {
     if (assetK === currentAsset) return;
     // 兜底（lastTabByAsset 缺项时）也要落在本资产自己的榜上：再加资产时逐个列映射、别写成二分。加密兜底 ＝ 默认落地榜（置顶组第一张）。
-    const fallback = assetK === "ashare" ? ASHARE_HOME_TAB : "s49";
+    const fallback = assetK === "ashare" ? ASHARE_HOME_TAB : "s51";
     switchTab(lastTabByAsset[assetK] || fallback);
 }
 

@@ -561,6 +561,8 @@ const TAB_GROUPS = [
         //   版式见 HERO_LAYOUT / SINGLE_BOARD（榜恒在主栏最上；只剩一张时另外不出 rail）。
         label: "置顶", asset: "加密", pinned: true,
         tabs: [
+            { key: "s32", name: "月周向上·日线回调", tf: "日线/周线/月线",
+              desc: "大周期偏多、短周期回调的合约，盯的是回调里的机会。每天换一批。" },
             { key: "s51", name: "周线趋势走强·月线收复（精选名单）", tf: "周线/月线", hourlyList: true,
               desc: "精选潜力名单里，周线趋势强度在加大、多方占优、资金面偏多，月线又已收复前一轮下跌早期价位的合约。状态不破就留在榜上，多数下一周还在；近一年每周十几个、近半年二十个上下；名单每个整点重新圈定。" },
             { key: "s49", name: "日线重返关键位·多方占优", tf: "日线",
@@ -569,8 +571,6 @@ const TAB_GROUPS = [
               desc: "精选潜力名单里，周线趋势向上、资金面偏多的合约。状态不破就留在榜上，多数下一周还在；近一年每周二十多个、近半年三十个上下；名单每个整点重新圈定。" },
             { key: "s50", name: "月线放量或收阳", tf: "月线",
               desc: "月线这个月成交比上个月放大、或者虽然缩量但收涨的合约；只有缩量又收跌的不在。成员多，近两年每月大约全市场一半多；每月 1 号换一批，月内不变，从没空过。" },
-            { key: "s32", name: "月周向上·日线回调", tf: "日线/周线/月线",
-              desc: "大周期偏多、短周期回调的合约，盯的是回调里的机会。每天换一批。" },
             { key: "s47", name: "日线强势加速", tf: "日线",
               desc: "日线上升势头正在加速、买盘和趋势强度都跟得上的合约。每天重新判断，多数第二天还在榜；近一个月每天二十个上下，行情冷清时偶尔一个都没有。" },
             { key: "s01", name: "周线逆势吸筹（精选名单）", tf: "周线", hourlyList: true,
@@ -739,7 +739,7 @@ const safeStore = {
 let data = null;
 let lastRenderKey = null; // loadData 上次重渲染时的 updateTime，用于跳过无变化的重建
 // 默认落地榜 ＝ 置顶组第一张（10-26 起没有橱窗：未解锁的新访客看到的是锁定卡片 ＋ 命中数 ＋ 购买入口）；改这里要同步 currentAsset 默认值。
-let currentTab = "s51";
+let currentTab = "s32";
 let sortAsc = false; // false=降序, true=升序
 // 当前排序字段（切 tab 时重置为该 tab 首轴）。初值也必须是默认落地榜的首轴：首访不走 switchTab，写死 "value" 会让
 // 排序条上没有一个高亮 chip、副行多重复一段首轴、第一次点表头不翻方向（策略榜首轴的 key 是 volume 不是 value）。
@@ -929,7 +929,7 @@ const ASSET_CN = { crypto: "加密", ashare: "A股" };        // data-asset → 
 // 默认资产 ＝ 默认落地 tab（currentTab）所属资产，两者同改。
 let currentAsset = "crypto";                            // 当前资产（由 tab 派生/资产切换驱动）
 // 各资产上次看的榜；加密初值 ＝ 默认落地榜（置顶组第一张）；A股 初值由「A股 镜像」块填（ASHARE_HOME_TAB）。
-const lastTabByAsset = { crypto: "s51" };
+const lastTabByAsset = { crypto: "s32" };
 
 function assetOfTab(tab) {
     const m = TAB_META[tab];
@@ -1729,7 +1729,7 @@ function switchTab(tab) {
 function switchAsset(assetK) {
     if (assetK === currentAsset) return;
     // 兜底（lastTabByAsset 缺项时）也要落在本资产自己的榜上：再加资产时逐个列映射、别写成二分。加密兜底 ＝ 默认落地榜（置顶组第一张）。
-    const fallback = assetK === "ashare" ? ASHARE_HOME_TAB : "s51";
+    const fallback = assetK === "ashare" ? ASHARE_HOME_TAB : "s32";
     switchTab(lastTabByAsset[assetK] || fallback);
 }
 

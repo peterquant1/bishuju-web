@@ -1,20 +1,18 @@
 /* ============================================================
-   狗庄74 — 视觉系统 v8「欧易」
-   色板与尺寸在 okx.com/zh-hans/markets/prices 上实测 computed style 与其设计 token（--oxnv-okd-color-※ / --global-color-※）取值（2026-11-04，深 / 浅两套）：
-     深：页底 #000；卡片 #121212 实底、不描边、12px 圆角；行悬停 / 灰按钮 #1D1D1D、选中 #272727、分段控件选中 #383838；
-         字 #FFF / 次级 #B3B3B3 / 三级 #909090；分隔线 #2E2E2E；主按钮 #FAFAFA 底 + 黑字、全圆角胶囊；涨 #25A750 / 跌 #CA3F64；
-         品牌荧光绿 #BCFF2F（其站以黑白灰为主，荧光绿只点缀少数关键数字与链接）
-     浅：页底白、卡片 #FAFAFA、行悬停 #F3F3F3、选中 #EBEBEB；主按钮 #0E0E0E 底 + 白字；涨 #31BD65 / 跌 #EB4B6D；品牌色当文字用 #2B6D17
+   狗庄74 — 视觉系统 v7「币安」
+   色板与尺寸在 binance.com/zh-CN/markets/overview 上实测 computed style 取值（2026-10-07，深 / 浅两套）：
+     深：页底与卡片同为 #181A20，卡片只靠 1px #333B47 描边 + 16px 圆角区分；字 #EAECEF / 次级 #929AA5 / 三级 #707A8A；
+         选中 chip 与行悬停 #29313D（8px 圆角）；主按钮 #FCD535 + 字 #202630；次按钮 #333B47；涨 #2EBD85 / 跌 #F6465D
+     浅：页底与卡片同为白，卡片描边 #EDEDED；选中 chip #F5F5F5、行悬停 #FAFAFA；按钮同上
    与其站的差异都是刻意的（别「改回去」）：
-     ① 对比度一律 WCAG AA：其站深色跌色 #CA3F64 在卡片上只有 3.9:1、浅色涨跌色在白底 2.4–3.6:1 ⇒ 同色相调一档
-        （深跌 #D25D7C、浅涨 #207B42、浅跌 #D0173E，余量见各 token 注释）。
-     ② 字体：其站 OKX Sans 是私有字体 ⇒ 自托管宽度与字形都最接近的开源字体 Geist（OFL-1.1，许可证随文件放在 fonts/OFL-Geist.txt）：
-        13px 下同一串拉丁字母 / 数字 OKX Sans 506px、Geist 509、Inter 532（宽 5%，长榜名会多折行，所以没用）；等宽数字每位 9.6 / 9.8 / 10.4px。
-        其站数字默认等宽 ⇒ body 打开 tabular-nums（Geist 默认是比例数字）。
-     ③ 不用其站 logo / 字标：自己的三柱 logo 改成黑白反相（深色白底黑柱、浅色黑底白柱）。
-   **荧光绿要省着用**：主按钮、焦点环、勾选框、输入框聚焦描边、选中套餐、榜首奖牌一律黑白反相（其站 border-selected / focus 就是黑白）；
-   荧光绿只留给链接、少数核心数字（榜头与脉搏命中数、锁定卡片个数、导出坞个数）、选中导航项的指示条与周期徽标、排序箭头、
-   资产标识「加密」（榜头标签与顶栏胶囊）、「已解锁」徽标与锁定卡片图标、共振 #1 chip。数据延迟横幅与过期圆点走独立的 --warn（琥珀）。
+     ① 对比度一律 WCAG AA：其站三级字 #707A8A（深底 4.0:1）、浅色的涨跌色与灰字都不达标 ⇒ 深色三级字用 #848E9C，
+        浅色的字 / 涨跌色整组换成同色相的深一档（见 [data-theme="light"]）。悬停底取 #1D2128（#29313D 会把跌色压到 3.7:1）。
+     ② 字体：其站 BinanceNova / BinancePlex 是私有字体 ⇒ 自托管外形最接近的开源字体 IBM Plex Sans（OFL-1.1，许可证随文件放在
+        fonts/OFL-IBM-Plex-Sans.txt）；数字走同一字族 + tabular-nums（其站数字也不是等宽字体）。
+     ③ 不用其站 logo / 字标。
+   **黄色要省着用**（其站只在主按钮、选中指示、少数高亮上用黄）：周期徽标、共振卡分数与 #2/#3 chip、中性深度条一律灰调，
+   黄只留给主按钮（已解锁时顶栏按钮也退成灰）、选中指示条、选中导航项的徽标、榜首奖牌、共振 #1 chip、链接、排序箭头、少数核心数字，
+   以及资产标识「加密」（榜头标签与顶栏胶囊）、「已解锁」徽标与锁定卡片图标。
    默认深色（:root），[data-theme="light"] 覆盖（挂 <html>，localStorage bishuju_theme）。
    ⚠️ 三条 GPU 硬约束（真实黑屏事故，勿回退）：1) 禁 backdrop-filter 与固定背景  2) 禁 position:sticky
       3) 禁无限循环动画（只许一次性微交互；骨架屏是静态灰条）
@@ -23,11 +21,11 @@
       应等于文件里 @font-face 规则条数（先去掉注释再数：这段注释自己就含这个词）。
    ============================================================ */
 
-/* ---------------- 自托管字体（Latin 变量字体，单文件覆盖 100–900；CJK 走系统栈）---------------- */
-/* Geist：Fontsource @fontsource-variable/geist 5.1.0 的 Latin 子集可变字体（字重轴 100–900，全站只用 400 / 500 / 600 / 700）；
+/* ---------------- 自托管字体（Latin 变量字体，单文件覆盖 100–700；CJK 走系统栈）---------------- */
+/* IBM Plex Sans：Fontsource 的 Latin 子集可变字体（字重轴 100–700，全站只用 400 / 500 / 600，别写 800+）；
    unicode-range 照抄 Fontsource 给的子集覆盖范围（≈ 这类子集外的字逐字回退到系统字体），只去掉 U+2014：
-   「——」落回中文字体才是连续的两格长线（拉丁字体的破折号只有一格多、中间断开）*/
-@font-face{font-family:"Geist";src:url("fonts/geist-latin-wght-normal.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-2013,U+2015-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+   「——」落回中文字体才是连续的两格长线（Plex 的只有 1.56em 宽、中间断开）*/
+@font-face{font-family:"IBM Plex Sans";src:url("fonts/ibm-plex-sans-latin-wght-normal.woff2") format("woff2");font-weight:100 700;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-2013,U+2015-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 /* Geist Mono 只剩通行证输入框在用（固定格式的机读串），不预加载 */
 @font-face{font-family:"Geist Mono";src:url("fonts/geist-mono-latin.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap;unicode-range:U+0000-00FF,U+2000-206F,U+2070-209F,U+20A0-20BF,U+2100-214F,U+2190-21FF,U+2212}
 
@@ -35,115 +33,101 @@
 :root{
     /* 原生部件（滚动条、搜索框清除钮、自动填充底色）跟主题走：不声明的话默认深色页面上它们按浅色画 */
     color-scheme:dark;
-    /* 面：页底纯黑、卡片 #121212 实底（其站做法：卡片不描边，只靠底色与页底区分）；--bg0 只给资产分段控件轨道 */
-    --bg0:#000000; --bg1:#000000;
-    --panel:#121212; --panel-2:#1d1d1d; --panel-3:#272727;
-    /* 卡片描边透明：只留 1px 几何（换描边风格时布局一个像素都不动）*/
-    --panel-border:transparent;
-    /* 浮层（弹窗、锁定卡片、抽屉）压在卡片 / 遮罩上：深色补一道淡描边（黑底上阴影看不见），浅色靠阴影 */
-    --pop-border:rgba(255,255,255,.08);
-    --line:#2e2e2e; --line-2:#404040;
-    /* 中性标签底（周期徽标、共振 chip、榜头周期标签、「未解锁」）：#272727 上 --muted-2 也过 AA（4.68） */
-    --tag-bg:#272727;
-    /* 「描边 / 指示」类（焦点环、输入框聚焦描边、勾选框悬停、选中套餐）＝ 其站 border-selected / border-focus：深色白、浅色黑 */
-    --accent-line:#ffffff;
-    /* 品牌强调（token 名沿用 --gold，CSS 多处引用故不改名）：深色就是其站荧光绿 #BCFF2F（卡片上 15.6:1）。
-       当「文字」用 --gold-ink，淡底用 --gold-rgb（两个主题都叠荧光绿：浅色叠在白 / 浅灰上也只是淡绿底）；--gold-hi ＝ 链接悬停 */
-    --gold-hi:#e6ffb0; --gold-ink:#bcff2f; --gold-rgb:188,255,47;
-    /* 主按钮 ＝ 其站白色胶囊（深色白底黑字、浅色黑底白字）；次按钮 ＝ 灰底胶囊（卡片 / 弹窗上用 #272727，页底上的 #1D1D1D 在卡片上看不出来）*/
-    --btn-fill:#fafafa; --btn-fill-hover:#e6e6e6; --btn-ink:#000000;
-    --btn2-fill:#272727; --btn2-fill-hover:#383838; --btn2-ink:#ffffff;
-    /* 价格语义（加密涨绿跌红；A股 在 [data-asset] 翻转）。其站深色跌色 #CA3F64 在卡片上 3.93、页底 4.41 ⇒ 同色相提亮到 #D25D7C
-       （卡片 4.99、叠红色深度条 4.62）；--down-ink ＝ 不在卡片上的红字（弹窗 #1D1D1D、红色淡底）再亮一档 #D66C88（弹窗 5.11、弹窗上的红淡底 4.62）。
-       --down-rgb 给红色淡底（失效徽章、红横幅）用 */
-    --up:#25a750; --down:#d25d7c; --down-ink:#d66c88; --down-rgb:210,93,124;
-    /* 独立「警示」语义色（数据快过期的圆点、情绪条中段、数据延迟横幅）＝ 其站 warning 那组，别挂品牌色 */
-    --warn:#f5a915; --warn-ink:#ffc452; --warn-wash:rgba(245,169,21,.1);
-    /* 字阶：#909090 在卡片上 5.87、#272727 上 4.68，**在 #383838 上只有 3.67** ⇒ 压在 #383838 上的字只用 --text / --muted */
-    --text:#ffffff; --muted:#b3b3b3; --muted-2:#909090;
-    /* 资产识别色：加密 ＝ 品牌荧光绿（导航选中指示条、分段点用原色，文字用 -ink，-on ＝ 压在加密实底上的字）；A股 蓝（休眠） */
-    --asset-crypto:#bcff2f; --asset-crypto-ink:#bcff2f; --asset-crypto-rgb:188,255,47; --asset-crypto-on:#000000;
+    /* 面：页底 ＝ 卡片底（其站做法），卡片靠 --panel-border 描边；--bg0 只给资产分段控件轨道 */
+    --bg0:#0b0e11; --bg1:#181a20;
+    --panel:#181a20; --panel-2:#1e2329; --panel-3:#29313d;
+    --panel-border:#333b47;
+    --line:#2b3139; --line-2:#434c5a;
+    /* 中性标签底（周期徽标、共振 chip、榜头周期标签、「未解锁」）：#29313D 上只许 --text / --muted */
+    --tag-bg:#29313d;
+    /* 当「描边 / 指示条」用的黄（非文字 UI 要 ≥3:1）：深色就是品牌黄；浅色要深到 #B38600（白底 3.3、#F5F5F5 上 3.0）*/
+    --accent-line:#f0b90b;
+    /* 品牌黄（token 名沿用 --gold，JS / CSS 多处引用故不改名）：填充 / 指示条用 --gold，按钮用 --btn-fill，当「文字」用 --gold-ink */
+    --gold:#f0b90b; --gold-hi:#fcd535; --gold-ink:#f0b90b; --gold-rgb:240,185,11;
+    /* 主按钮 ＝ 黄底深字（两个主题都是）；次按钮 ＝ 其站「登录」那种灰底 */
+    --btn-fill:#fcd535; --btn-fill-hover:#f0b90b; --btn-ink:#202630;
+    --btn2-fill:#333b47; --btn2-fill-hover:#434c5a; --btn2-ink:#eaecef;
+    /* 价格语义（加密涨绿跌红；A股 在 [data-asset] 翻转）。--down-ink ＝ 不在页底上的红字（红色淡底、弹窗底 #1E2329）：
+       #F6465D 在 #1E2329 上只有 4.48:1 ⇒ 深色提亮一档、浅色加深一档 */
+    --up:#2ebd85; --down:#f6465d; --down-ink:#f7576c;
+    /* 独立「警示」语义色（数据快过期的圆点），别挂 --gold */
+    --warn:#f0b90b;
+    /* 字阶：#848E9C 在 #181A20 上 5.2:1、#1E2329 上 4.8:1，**在 #29313D 上只有 3.95:1** ⇒ 压在 --panel-3 / --nav-active /
+       --chip-active 上的字只能用 --text 或 --muted（#929AA5 在 #29313D 上 4.6:1） */
+    --text:#eaecef; --muted:#929aa5; --muted-2:#848e9c;
+    /* 资产识别色：加密 ＝ 品牌黄；A股 蓝。-ink ＝ 当文字用（压在同色淡底上要另测），填充用不带 -ink 的原色 */
+    --asset-crypto:#f0b90b; --asset-crypto-ink:#f0b90b; --asset-crypto-rgb:240,185,11;
     --asset-ashare:#6ab0ff; --asset-ashare-ink:#8cc3ff; --asset-ashare-rgb:106,176,255;
     /* directional（在 [data-asset] 下翻转）*/
     --price-up:var(--up); --price-down:var(--down); --asset-accent:var(--asset-crypto);
     /* 强度条 ＝ 盘口深度条（值列整格、右对齐向左长的淡色块，数字压在上面）。
-       ⚠️ 透明度按「数字压在条上仍过 AA」卡：跌色压红条 深色 .08（4.62）、浅色 .07（4.64）；悬停底再叠一层会更低，悬停是瞬态、不进扫描口径；改色先重测 */
-    --bar-up:rgba(37,167,80,.1); --bar-down:rgba(210,93,124,.08); --bar-crypto:rgba(255,255,255,.06);
+       ⚠️ 透明度按「数字压在条上仍过 AA」卡：跌色压红条，深色 ≤.08、浅色 ≤.07（悬停底再叠一层会掉到 4.2–4.4，悬停是瞬态、不进扫描口径）；改色先重测 */
+    --bar-up:rgba(46,189,133,.1); --bar-down:rgba(246,70,93,.08); --bar-crypto:rgba(132,142,156,.13);
     --bar-pos:var(--bar-up); --bar-neg:var(--bar-down); --bar-neutral:var(--bar-crypto);
-    /* 语义表面：悬停 ＝ 其站行悬停 #1D1D1D（surface-primary），选中 ＝ #272727（container-primary）*/
+    /* 语义表面 */
     --th-bg:transparent; --row-line:transparent;
-    --hover-wash:#1d1d1d; --nav-hover:#1d1d1d; --nav-active:#272727; --chip-active:#272727; --chip-wash:#1d1d1d;
-    /* 「选中」淡底（选中套餐）：中性，不带品牌色 */
-    --sel-wash:rgba(255,255,255,.06);
-    --header-bg:#000000;
-    /* logo 黑白反相：深色白底黑柱、浅色黑底白柱（index.html 的 .lg-tile / .lg-bar）*/
-    --logo-tile:#ffffff; --logo-bar:#000000;
-    /* 导出坞两个主题都是深色块（深色 #272727 浮块、浅色 #0E0E0E 反相块）⇒ 坞内一律走 --dock-※，别用跟主题走的 token */
-    --dock-bg:#272727; --dock-ink:#ffffff; --dock-accent:#bcff2f; --dock-line:rgba(255,255,255,.1);
-    --dock-btn2:#383838; --dock-btn2-hover:#4d4d4d; --dock-btn-fill:#fafafa; --dock-btn-fill-hover:#e6e6e6; --dock-btn-ink:#000000;
-    --group-dash:#2e2e2e;
-    --modal-bg:#1d1d1d; --scrim:rgba(0,0,0,.68);
-    /* 自绘勾选框：未选中描边对行底与悬停底都要 ≥3:1（#757575：卡片 4.0、悬停 3.66）；选中 ＝ 白底黑勾（浅色黑底白勾）*/
-    --chk-line:#757575; --chk-fill:#ffffff;
-    --chk-tick:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.6 6.3l2.3 2.4 4.5-5.2'/%3E%3C/svg%3E");
-    --chk-dash:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23000000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 6h6'/%3E%3C/svg%3E");
-    /* 字体：数字与正文同一字族（Geist 的 tabular 数字由 body 的 tabular-nums 打开），等宽字族只给通行证输入框 */
-    --font-sans:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans SC",Roboto,sans-serif;
+    --hover-wash:#1d2128; --nav-hover:#1d2128; --nav-active:#29313d; --chip-active:#29313d; --chip-wash:#1e2329;
+    --header-bg:#181a20;
+    /* 导出坞两个主题都是深色块 ⇒ 坞内一律走 --dock-※，别用跟主题走的 token */
+    --dock-bg:#29313d; --dock-ink:#eaecef; --dock-accent:#f0b90b; --dock-line:rgba(234,236,239,.12);
+    --dock-btn2:#434c5a; --dock-btn2-hover:#525c6b;
+    --group-dash:#2b3139;
+    --modal-bg:#1e2329; --scrim:rgba(0,0,0,.6);
+    /* 自绘勾选框：未选中描边对行底与表头底都要 ≥3:1；选中 ＝ 品牌黄实底 + 深色对勾（两个主题同一笔画色）*/
+    --chk-line:#707a8a;
+    --chk-tick:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23202630' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.6 6.3l2.3 2.4 4.5-5.2'/%3E%3C/svg%3E");
+    --chk-dash:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23202630' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 6h6'/%3E%3C/svg%3E");
+    /* 字体：数字与正文同一字族（IBM Plex Sans 有 tabular 数字），等宽字族只给通行证输入框 */
+    --font-sans:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans SC",Roboto,sans-serif;
     --num:var(--font-sans);
     --mono:"Geist Mono",ui-monospace,"Cascadia Code","SF Mono",Consolas,"JetBrains Mono",monospace;
-    /* 圆角（其站实测）：卡片 / 弹窗 12、套餐卡 / 导出坞 10、输入框 / 搜索框 8、导航项 / chip / 行悬停 6（其站分段控件与筛选 chip）、标签 4；
-       按钮一律全圆角胶囊（其站 60px）*/
-    --r-lg:12px; --r-md:10px; --r-input:8px; --r-sm:6px; --r-btn:999px; --r-tag:4px;
-    /* 卡片无阴影（只靠底色）；阴影只给浮层 */
-    --shadow-pop:0 4px 12px rgba(0,0,0,.5),0 16px 32px rgba(0,0,0,.55);
-    --shadow-modal:0 8px 24px rgba(0,0,0,.6),0 24px 56px rgba(0,0,0,.65);
+    /* 圆角：卡片 16（其站实测）、chip / 行 / 输入框 / 按钮 8、标签 4 */
+    --r-lg:16px; --r-md:12px; --r-sm:8px; --r-btn:8px; --r-tag:4px;
+    /* 卡片无阴影（只靠描边）；阴影只给浮层 */
+    --shadow-pop:0 4px 12px rgba(0,0,0,.32),0 16px 32px rgba(0,0,0,.36);
+    --shadow-modal:0 8px 24px rgba(0,0,0,.45),0 24px 56px rgba(0,0,0,.5);
     --dur:.14s; --dur-smooth:.18s;
-    /* 奖牌：#1 ＝ 主按钮那组（白底黑字）、#2 / #3 两档灰（黑白为主，不用银 / 铜）*/
-    --medal2-bg:rgba(255,255,255,.16); --medal2-ink:#ffffff; --medal3-bg:rgba(255,255,255,.08); --medal3-ink:#e6e6e6;
+    /* 奖牌：银 / 铜（金 ＝ 主按钮那组黄）*/
+    --medal2-bg:rgba(183,189,198,.12); --medal2-ink:#b7bdc6; --medal3-bg:rgba(216,154,74,.14); --medal3-ink:#d89a4a;
     /* 控件高度只有两档：顶栏 / 导出坞 / 搜索框 32，弹窗与卡片里的按钮、输入框 40 */
     --h-sm:32px; --h-md:40px;
     /* 字阶：全站字号只从这几档取（11 角标 · 12 次级 · 13 控件与导航 · 14 正文 · 16 小标题与榜内数字 · 18 / 20 / 24 / 28 标题）。
        半号（12.5 / 13.5 / 14.5）别加回来：中文里只会让相邻两块字看着差一点点，既不成层级也不对齐 */
     --fs-2xs:11px; --fs-xs:12px; --fs-sm:13px; --fs-md:14px; --fs-lg:16px; --fs-xl:18px; --fs-2xl:20px; --fs-3xl:24px; --fs-4xl:28px;
-    --selection:rgba(188,255,47,.28);
+    --selection:rgba(240,185,11,.3);
 }
 
-/* ---- 浅色：其站浅色版的面与按钮；涨跌色是同色相过 AA 的深一档（其站原值在白底上 2.4–3.6:1）---- */
+/* ---- 浅色：其站浅色版的面与按钮；字 / 涨跌色是同色相过 AA 的深一档（其站原值在白底上 2.4–4.3:1）---- */
 [data-theme="light"]{
     color-scheme:light;
-    --bg0:#f3f3f3; --bg1:#ffffff;
-    --panel:#fafafa; --panel-2:#f3f3f3; --panel-3:#ebebeb;
-    --pop-border:transparent;
-    --line:#e6e6e6; --line-2:#d6d6d6;
-    --tag-bg:#ebebeb;
-    --accent-line:#000000;
-    /* 品牌色当文字：荧光绿在白底只有 1.1:1 ⇒ 用其站浅色的 feature / link 色 #2B6D17（白 6.36、卡片 6.09、#EBEBEB 上的荧光绿淡底 5.26）*/
-    --gold-ink:#2b6d17;
-    --btn-fill:#0e0e0e; --btn-fill-hover:#2c2c2c; --btn-ink:#ffffff;
-    --btn2-fill:#ebebeb; --btn2-fill-hover:#dcdcdc; --btn2-ink:#000000;
-    /* 其站浅色涨 #31BD65 / 跌 #EB4B6D ⇒ 同色相加深：涨 #207B42（卡片 5.06、叠绿条 4.62）、跌 #D0173E（卡片 5.19、叠红条 4.64）*/
-    --up:#207b42; --down:#d0173e; --down-ink:#ce173e; --down-rgb:208,23,62;
-    /* 「数据快过期」圆点（非文字 3:1）：#BA5D00 压在胶囊底 #F3F3F3 上 4.07；横幅字再深一档 */
-    --warn:#ba5d00; --warn-ink:#9a4c00; --warn-wash:rgba(254,160,29,.12);
-    --text:#000000; --muted:#4a4a4a; --muted-2:#5e5e5e;
-    /* 资产填充色（导航选中指示条 --asset-accent）要过非文字 3:1 ⇒ 与文字同用 #2B6D17（#EBEBEB 上 5.33）；淡底仍叠荧光绿 */
-    --asset-crypto:#2b6d17; --asset-crypto-ink:#2b6d17; --asset-crypto-on:#ffffff;
+    --bg0:#f5f5f5; --bg1:#ffffff;
+    --panel:#ffffff; --panel-2:#fafafa; --panel-3:#f5f5f5;
+    --panel-border:#eaecef;
+    --line:#eaecef; --line-2:#d5d9de;
+    --tag-bg:#eaecef;
+    --accent-line:#b38600;
+    /* 黄色当文字：#F0B90B 在白底只有 1.8:1、其站浅色链接色 #C99400 也只有 2.7:1 ⇒ 深到 #8F6800（白底 5.1、#F5F5F5 上 4.6） */
+    --gold-ink:#8f6800;
+    --btn-ink:#1e2329;
+    --btn2-fill:#eaecef; --btn2-fill-hover:#dcdfe4; --btn2-ink:#1e2329;
+    --up:#078054; --down:#cf2e4a; --down-ink:#b8283f;
+    /* 「数据快过期」圆点（非文字 3:1，胶囊里唯一的过期信号）：其站 #C99400 压在胶囊底 #F5F5F5 上只有 2.5:1 ⇒ #A67C00（3.5，白底 3.8） */
+    --warn:#a67c00;
+    --text:#1e2329; --muted:#474d57; --muted-2:#5e6673;
+    /* tf 徽标嵌在选中态里时底色叠两层（#F5F5F5 + 黄 .18），#8F6800 只剩 4.3:1 ⇒ 资产文字色再深一档；
+       资产填充色（导航选中指示条 --asset-accent）同理要过 3:1 ⇒ 用 --accent-line 那一档 */
+    --asset-crypto:#b38600; --asset-crypto-ink:#7a5900;
     --asset-ashare:#1d5cbf; --asset-ashare-ink:#1a53ac; --asset-ashare-rgb:29,92,191;
-    --bar-up:rgba(32,123,66,.07); --bar-down:rgba(208,23,62,.07); --bar-crypto:rgba(0,0,0,.05);
-    --hover-wash:#f3f3f3; --nav-hover:#f3f3f3; --nav-active:#ebebeb; --chip-active:#ebebeb; --chip-wash:#f3f3f3;
-    --sel-wash:rgba(0,0,0,.04);
+    --bar-up:rgba(7,128,84,.07); --bar-down:rgba(207,46,74,.07); --bar-crypto:rgba(94,102,115,.09);
+    --hover-wash:#fafafa; --nav-hover:#fafafa; --nav-active:#f5f5f5; --chip-active:#f5f5f5; --chip-wash:#f5f5f5;
     --header-bg:#ffffff;
-    --logo-tile:#000000; --logo-bar:#ffffff;
-    --dock-bg:#0e0e0e; --dock-btn2:#272727; --dock-btn2-hover:#383838;
-    --group-dash:#e6e6e6;
-    --modal-bg:#ffffff; --scrim:rgba(0,0,0,.43);
-    --chk-line:#858585; --chk-fill:#000000;
-    --chk-tick:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.6 6.3l2.3 2.4 4.5-5.2'/%3E%3C/svg%3E");
-    --chk-dash:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 6h6'/%3E%3C/svg%3E");
-    --medal2-bg:rgba(0,0,0,.12); --medal2-ink:#000000; --medal3-bg:rgba(0,0,0,.06); --medal3-ink:#383838;
-    --shadow-pop:0 4px 12px rgba(0,0,0,.08),0 16px 32px rgba(0,0,0,.1);
-    --shadow-modal:0 8px 24px rgba(0,0,0,.1),0 24px 56px rgba(0,0,0,.16);
-    --selection:rgba(43,109,23,.2);
+    --dock-bg:#1e2329; --dock-btn2:#333b47; --dock-btn2-hover:#434c5a;
+    --group-dash:#eaecef;
+    --modal-bg:#ffffff; --scrim:rgba(0,0,0,.45);
+    --chk-line:#8a8f99;
+    --medal2-bg:rgba(112,122,138,.12); --medal2-ink:#474d57; --medal3-bg:rgba(184,118,40,.14); --medal3-ink:#8a5212;
+    --shadow-pop:0 4px 12px rgba(30,35,41,.08),0 16px 32px rgba(30,35,41,.1);
+    --shadow-modal:0 8px 24px rgba(30,35,41,.1),0 24px 56px rgba(30,35,41,.16);
 }
 
 /* ---- 资产价格语义作用域（挂在 .app 上；A股 涨红跌绿）---- */
@@ -156,7 +140,7 @@
 *{margin:0;padding:0;box-sizing:border-box}
 [hidden]{display:none!important}
 html{scrollbar-color:var(--line-2) var(--bg1);-webkit-text-size-adjust:100%}
-body{font-family:var(--font-sans);font-variant-numeric:tabular-nums;color:var(--text);background:var(--bg1);min-height:100vh;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+body{font-family:var(--font-sans);color:var(--text);background:var(--bg1);min-height:100vh;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 body.no-scroll{overflow:hidden}
 ::selection{background:var(--selection)}
 a{color:var(--gold-ink);text-decoration:none}
@@ -164,7 +148,7 @@ a:hover{color:var(--gold-hi)}
 /* 浅色的通用链接悬停退成主字色（--gold-hi 在白底太淡）。:where 把权重压到与 a:hover 相同 (0,1,1)：写成 a:hover 是 (0,2,1)，
    会盖过组件自己的悬停色（.reso__sym:hover 这类 (0,2,0)），浅色下鼠标移上去不变色 */
 [data-theme="light"] a:where(:hover){color:var(--text)}
-:focus-visible{outline:2px solid var(--accent-line);outline-offset:2px;border-radius:4px}
+:focus-visible{outline:2px solid var(--gold-ink);outline-offset:2px;border-radius:4px}
 .skip-link{position:absolute;left:8px;top:-48px;z-index:200;padding:8px 14px;background:var(--panel);color:var(--gold-ink);border:1px solid var(--panel-border);border-radius:var(--r-sm);font-size:var(--fs-sm);transition:top var(--dur)}
 .skip-link:focus{top:8px}
 /* 只给读屏（视觉上不占位）*/
@@ -184,8 +168,6 @@ a:hover{color:var(--gold-hi)}
 .topbar__inner{max-width:1440px;margin:0 auto;padding:0 28px;min-height:64px;display:flex;align-items:center;gap:16px}
 .brand{display:flex;align-items:center;gap:10px}
 .brand__logo{width:32px;height:32px;flex:none}
-.brand__logo .lg-tile{fill:var(--logo-tile)}
-.brand__logo .lg-bar{fill:var(--logo-bar)}
 .brand__name{font-size:var(--fs-xl);font-weight:700;letter-spacing:-.01em;line-height:1.15;white-space:nowrap}
 .brand__latin{color:var(--muted-2);font-size:var(--fs-sm);font-weight:500;margin-left:6px;letter-spacing:0}
 /* 全站零 text-transform:uppercase、零正字距（中文混排忽大忽小、字被拉散）；层级由字号 / 字重 / 字色承担。唯一豁免 #licenseInput。
@@ -195,13 +177,13 @@ a:hover{color:var(--gold-hi)}
 .topbar__tools{display:flex;align-items:center;gap:10px;margin-left:auto}
 .hamburger{display:none;width:36px;height:36px;flex:none;align-items:center;justify-content:center;background:transparent;border:none;border-radius:var(--r-sm);color:var(--text);cursor:pointer}
 .hamburger:hover{background:var(--nav-hover)}
-/* 主题钮 ＝ 其站顶栏那种无框图标钮，悬停变荧光绿（图标由 script.js applyTheme 换）*/
+/* 主题钮 ＝ 其站顶栏那种无框图标钮，悬停变黄（图标由 script.js applyTheme 换）*/
 .theme-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;flex:none;background:transparent;border:none;border-radius:var(--r-sm);color:var(--text);cursor:pointer;transition:color var(--dur)}
 .theme-btn:hover{color:var(--gold-ink)}
 .theme-btn svg{width:20px;height:20px;display:block}
 
 /* 新鲜度胶囊（桌面两个：非当前资产那个 .is-dim ＝ 透明底 + 时刻转灰。别用 opacity 压暗：压到 .5 时灰字只剩 2.4:1、0.85 也过不了 AA）*/
-.fresh{display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-xs);color:var(--muted);background:var(--chip-wash);border:none;border-radius:var(--r-btn);height:var(--h-sm);padding:0 12px;font-variant-numeric:tabular-nums;white-space:nowrap;transition:opacity var(--dur-smooth);font-family:inherit;cursor:pointer;appearance:none;-webkit-appearance:none}
+.fresh{display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-xs);color:var(--muted);background:var(--chip-wash);border:none;border-radius:var(--r-sm);height:var(--h-sm);padding:0 12px;font-variant-numeric:tabular-nums;white-space:nowrap;transition:opacity var(--dur-smooth);font-family:inherit;cursor:pointer;appearance:none;-webkit-appearance:none}
 .fresh.is-dim{background:transparent}
 .fresh.is-dim b{color:var(--muted)}
 .fresh.is-dim:hover{background:var(--chip-wash)}
@@ -221,16 +203,17 @@ a:hover{color:var(--gold-hi)}
 .lic-on{background:rgba(var(--gold-rgb),.1);color:var(--gold-ink)}
 [data-theme="light"] .lic-on{background:rgba(var(--gold-rgb),.12)}
 /* 失效徽章走 --down-ink：红淡底上用 --down 两个主题都贴着 4.5 线 */
-.lic-expired{background:rgba(var(--down-rgb),.08);color:var(--down-ink)}
-/* 顶栏购买 / 输入通行证 ＝ 主按钮（白色胶囊，浅色黑色胶囊）*/
+.lic-expired{background:rgba(246,70,93,.08);color:var(--down-ink)}
+[data-theme="light"] .lic-expired{background:rgba(207,46,74,.08)}
+/* 顶栏购买 / 输入通行证 ＝ 其站「注册」那颗黄钮 */
 .lic-btn-mini{background:var(--btn-fill);border:none;color:var(--btn-ink);font-size:var(--fs-sm);font-weight:600;font-family:inherit;height:var(--h-sm);padding:0 14px;border-radius:var(--r-btn);cursor:pointer;transition:background var(--dur);white-space:nowrap}
 .lic-btn-mini:hover{background:var(--btn-fill-hover)}
-/* 已解锁 / 待验证（script.js renderLicenseStatus 挂 .is-quiet）：「管理通行证」不是要催人点的主操作 ⇒ 灰色次按钮，实心主按钮只留给「输入通行证」 */
+/* 已解锁 / 待验证（script.js renderLicenseStatus 挂 .is-quiet）：「管理通行证」不是要催人点的主操作 ⇒ 灰色次按钮，黄只留给「输入通行证」 */
 .lic-btn-mini.is-quiet{background:var(--btn2-fill);color:var(--btn2-ink);font-weight:400}
 .lic-btn-mini.is-quiet:hover{background:var(--btn2-fill-hover)}
 .drawer__license{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 4px 14px;border-bottom:1px solid var(--line)}
 
-/* buttons：主 ＝ 白色胶囊（浅色黑色胶囊）；次（--ghost）＝ 灰底胶囊。文字色一律走 token，别写死 */
+/* buttons：主 ＝ 黄底深字；次（--ghost）＝ 灰底（其站「登录」）。文字色一律走 token，别写死 */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:var(--font-sans);font-weight:600;line-height:1.2;border:1px solid transparent;border-radius:var(--r-btn);cursor:pointer;white-space:nowrap;height:var(--h-md);padding:0 20px;font-size:var(--fs-md);transition:background var(--dur),color var(--dur)}
 .btn--sm{height:var(--h-sm);padding:0 14px;font-size:var(--fs-sm)}
 .btn--primary{background:var(--btn-fill);color:var(--btn-ink)}
@@ -239,14 +222,15 @@ a:hover{color:var(--gold-hi)}
 .btn--ghost:hover{background:var(--btn2-fill-hover)}
 
 /* ---------------- 横幅（数据延迟 / A股 快照说明）---------------- */
-.banner{position:relative;padding:9px 36px;text-align:center;font-size:var(--fs-sm);color:var(--warn-ink);background:var(--warn-wash)}
-.banner--down{color:var(--down-ink);background:rgba(var(--down-rgb),.08)}
+.banner{position:relative;padding:9px 36px;text-align:center;font-size:var(--fs-sm);color:var(--gold-ink);background:rgba(var(--gold-rgb),.1)}
+.banner--down{color:var(--down-ink);background:rgba(246,70,93,.08)}
+[data-theme="light"] .banner--down{background:rgba(207,46,74,.07)}
 .banner__close{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:inherit;cursor:pointer;font-size:var(--fs-sm);opacity:.7;padding:9px;line-height:1}
 .banner__close:hover{opacity:1}
 
-/* ---------------- 卡片通用：#121212 实底（浅色 #FAFAFA）+ 透明描边（只占 1px 几何）+ 12px 圆角（其站实测）----------------
+/* ---------------- 卡片通用：页底同色 + 描边 + 16px 圆角（其站实测）----------------
    卡片内容左右缘统一 20px（概览 / 脉搏 / 共振 / 榜头 / 排序条；表格勾选框列落在 ~21px），上下叠放时文字左缘成一条竖线 —— 新卡片照这个数。
-   榜单（.board）是一张卡：榜头、排序条、表头、表体、表尾在卡内用分隔线隔开，别再各自加底色 / 描边 */
+   榜单（.board）是一张卡：榜头、排序条、表头、表体、表尾在卡内用分隔线隔开，别再各自加描边 */
 .rail,.pulse,.reso-bar,.reso,.mkt,.board,.tgp__card{background:var(--panel);border:1px solid var(--panel-border);border-radius:var(--r-lg)}
 
 /* ---------------- rail 导航 ---------------- */
@@ -258,11 +242,11 @@ a:hover{color:var(--gold-hi)}
 .asset-seg{display:flex;gap:4px;padding:4px;background:var(--bg0);border:1px solid var(--line);border-radius:var(--r-sm)}
 .asset-seg__opt{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:9px 0;font-size:var(--fs-sm);font-weight:600;border:none;border-radius:6px;cursor:pointer;font-family:var(--font-sans);color:var(--muted);background:transparent;transition:color var(--dur)}
 /* 焦点环例外：分段按钮坐在 --bg0 轨道上、环画在按钮外 ⇒ 压的是轨道 —— 改轨道色先量环色 vs 轨道 ≥3:1 */
-.asset-seg__opt:focus-visible{outline-color:var(--accent-line)}
+.asset-seg__opt:focus-visible{outline-color:var(--gold-ink)}
 .asset-seg__dot{width:6px;height:6px;border-radius:50%;flex:none}
 .asset-seg__opt[data-k="crypto"] .asset-seg__dot{background:var(--asset-crypto)}
 .asset-seg__opt[data-k="ashare"] .asset-seg__dot{background:var(--asset-ashare)}
-.asset-seg__opt[data-k="crypto"].is-active{background:var(--asset-crypto);color:var(--asset-crypto-on)}
+.asset-seg__opt[data-k="crypto"].is-active{background:var(--asset-crypto);color:#202630}
 .asset-seg__opt[data-k="ashare"].is-active{background:var(--asset-ashare);color:#03121f}
 [data-theme="light"] .asset-seg__opt[data-k="ashare"].is-active{color:#fff}
 .asset-seg__opt.is-active .asset-seg__dot{background:rgba(0,0,0,.58)}
@@ -274,7 +258,7 @@ a:hover{color:var(--gold-hi)}
 .nav-group__label{font-size:var(--fs-xs);font-weight:400;letter-spacing:0;color:var(--muted-2);padding:2px 8px 4px 12px}
 /* 置顶组组名前的图钉（script.js PIN_SVG，跟组名同色）：与文字留一点缝 */
 .grp-pin{width:11px;height:11px;margin-right:4px;vertical-align:-1px}
-/* 导航项：未选中次级字、悬停 #1D1D1D 底、选中 #272727 底 + 主字 + 左侧荧光绿指示条（浅色深绿）*/
+/* 导航项 ＝ 其站灰调 tab：未选中次级字、悬停浅灰底、选中 #29313D 底 + 主字 + 左侧品牌黄指示条 */
 .nav-item{position:relative;display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:transparent;border:none;border-radius:var(--r-sm);padding:7px 8px 7px 12px;cursor:pointer;font-family:var(--font-sans);color:var(--muted);font-size:var(--fs-sm);line-height:1.4;transition:background var(--dur),color var(--dur)}
 .nav-item:hover{background:var(--nav-hover);color:var(--text)}
 .nav-item.is-active{background:var(--nav-active);color:var(--text)}
@@ -292,7 +276,7 @@ a:hover{color:var(--gold-hi)}
 .tab-lock{width:11px;height:11px;flex:none;opacity:.7}
 .nav-item__count{flex:none;font-family:var(--num);font-size:var(--fs-2xs);font-weight:500;color:var(--muted-2);font-variant-numeric:tabular-nums}
 .nav-item__count.is-zero{opacity:.45}
-/* 选中底上换 --muted（--muted-2 在 #272727 上 4.68，余量薄）*/
+/* 选中底 #29313D 上 --muted-2 只有 3.95:1 ⇒ 换 --muted */
 .nav-item.is-active .nav-item__count{color:var(--muted)}
 .nav-item__bar{position:absolute;left:0;top:50%;transform:translateY(-50%);height:0;width:3px;border-radius:0 3px 3px 0;background:var(--asset-accent);opacity:0;transition:height var(--dur),opacity var(--dur)}
 .nav-item.is-active .nav-item__bar{height:56%;opacity:1}
@@ -301,7 +285,7 @@ a:hover{color:var(--gold-hi)}
 .tf-chip--wide{height:auto;padding:2px 0;line-height:13px;text-align:center;word-break:break-all}
 /* 「3日」这种数字 + 日只比 17px 宽半个像素：收一点字距排一行（竖排的话这一行比别的行高出 12px）*/
 .tf-chip--nd{letter-spacing:-.5px;white-space:nowrap}
-/* 平时灰（二十几个荧光绿方块会把选中指示条淹掉）、选中项才换资产色：选中态底色叠两层（--nav-active + 资产色淡底），改色要量叠加后的实际底色 */
+/* 平时灰（20 个黄方块会把选中指示条淹掉）、选中项才换资产色：选中态底色叠两层（--nav-active + 资产色淡底），改色要量叠加后的实际底色 */
 .tf-chip{background:var(--tag-bg);color:var(--muted)}
 [data-asset="crypto"] .nav-item.is-active .tf-chip{background:rgba(var(--asset-crypto-rgb),.16);color:var(--asset-crypto-ink)}
 [data-asset="ashare"] .nav-item.is-active .tf-chip{background:rgba(var(--asset-ashare-rgb),.16);color:var(--asset-ashare-ink)}
@@ -328,7 +312,7 @@ a:hover{color:var(--gold-hi)}
 .pulse__cell:only-child .pulse__value{font-size:var(--fs-2xl)}
 .pulse__cell:only-child .pulse__sub{margin-top:0;min-width:0}
 
-/* 共振卡（日线通栏 + 周线 / 月线两张）：只在解锁态显示，夹在脉搏条与榜单之间；名次 1–3 的 chip 带 medal--N 类，但配色以下方 .reso__chips .reso__chip.medal--N 为准（#1 荧光绿、#2 / #3 灰） */
+/* 共振卡（日线通栏 + 周线 / 月线两张）：只在解锁态显示，夹在脉搏条与榜单之间；名次 1–3 的 chip 带 medal--N 类，但配色以下方 .reso__chips .reso__chip.medal--N 为准（#1 黄、#2 / #3 灰） */
 .reso-wrap{margin-bottom:16px}
 /* 速览条（默认只显示它）：每个周期一行「个数 + 前几个币名」，右侧按钮展开三张完整卡片 */
 .reso-bar{display:flex;align-items:center;flex-wrap:wrap;gap:8px 18px;padding:10px 20px}
@@ -351,8 +335,8 @@ a:hover{color:var(--gold-hi)}
 .reso__score{font-family:var(--num);font-variant-numeric:tabular-nums;font-size:var(--fs-xs);color:var(--muted-2);white-space:nowrap}
 .reso__score b{font-size:var(--fs-2xl);font-weight:600;color:var(--text);margin-right:1px}
 .reso__chips{display:flex;flex-wrap:wrap;gap:5px}
-/* chip ＝ 灰底小标签（#272727 底）。名次三档：#1 荧光绿淡底荧光绿字、#2 / #3 灰底亮字、其余灰底次级字
-   （表格里的奖牌是白 / 灰两档；chip 一行能有五六个 #1，用实心会满屏花）*/
+/* chip ＝ 其站灰底小标签（#29313D 上只许 --text / --muted）。名次三档：#1 黄淡底黄字、#2 / #3 灰底亮字、其余灰底次级字
+   （表格里的奖牌仍是金 / 银 / 铜；chip 一行能有五六个 #1，用实心黄或铜色会满屏花）*/
 .reso__chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:var(--r-tag);font-size:var(--fs-xs);line-height:1.3;white-space:nowrap;color:var(--muted);background:var(--tag-bg)}
 /* 前面多挂一级 .reso__chips (0,3,0)：[data-theme="light"] .medal--N 与 .reso__chip.medal--N 同为 (0,2,0)、又写在后面，
    浅色下会把 #2 / #3 盖回奖牌色（#3 铜色），别靠书写顺序 */
@@ -394,7 +378,7 @@ a:hover{color:var(--gold-hi)}
     }
 }
 
-/* ---------------- 市场概览全局条（免费）＝ 行情带：小号灰标签 + 白色数值，块间留白不画竖线 ---------------- */
+/* ---------------- 市场概览全局条（免费）＝ 其站合约页顶部那条行情带：小号灰标签 + 白色数值，块间留白不画竖线 ---------------- */
 .mkt{margin-bottom:16px;overflow:hidden}
 .mkt__inner{display:flex;flex-wrap:wrap;align-items:stretch}
 .mkt__item{display:flex;flex-direction:column;justify-content:center;gap:5px;padding:12px 20px;min-width:0}
@@ -405,12 +389,12 @@ a:hover{color:var(--gold-hi)}
 .mkt__v .is-down{color:var(--price-down)}
 .mkt__sub{font-size:var(--fs-xs);font-weight:400;color:var(--muted-2);margin-left:7px}
 .mkt__senti{display:flex;align-items:center;gap:9px}
-.mkt__gauge{position:relative;width:80px;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--down) 0%,var(--warn) 50%,var(--up) 100%);flex:none}
+.mkt__gauge{position:relative;width:80px;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--down) 0%,var(--gold) 50%,var(--up) 100%);flex:none}
 .mkt__marker{position:absolute;top:50%;transform:translate(-50%,-50%);width:3px;height:13px;border-radius:2px;background:var(--text);box-shadow:0 0 0 2px var(--panel)}
 .mkt__score{font-size:var(--fs-md);font-weight:600;font-family:var(--num);font-variant-numeric:tabular-nums;white-space:nowrap}
 .mkt__score em{font-style:normal;font-size:var(--fs-xs);font-weight:400;margin-left:5px}
 /* 情绪五档：恐惧红 → 橙 → 中性灰 → 浅绿 → 涨绿（深色底盘值；浅色在下方换成过 AA 的深一档）*/
-.mkt-z--fear2{color:var(--down)}.mkt-z--fear{color:#f0864a}.mkt-z--neutral{color:var(--muted)}.mkt-z--greed{color:#79e69d}.mkt-z--greed2{color:var(--up)}
+.mkt-z--fear2{color:var(--down)}.mkt-z--fear{color:#f0864a}.mkt-z--neutral{color:var(--muted)}.mkt-z--greed{color:#6fd3a9}.mkt-z--greed2{color:var(--up)}
 [data-theme="light"] .mkt-z--fear{color:#b4541a}[data-theme="light"] .mkt-z--greed{color:#257a55}
 /* ≥641px：副值（涨跌占比、正费率占比、BTC / ETH 涨跌幅）挪到数值下一行、内距收一档 ⇒ 七块在桌面主栏里排成一行（原来折成两行约 128px 高）。
    小标题一律顶对齐（有的块两行、有的三行，居中的话小标题高低差 9px）；块间等距、最后一块贴右内距（各块平分余量时右边比左边多空出 50px）*/
@@ -460,7 +444,7 @@ a:hover{color:var(--gold-hi)}
 /* ---------------- 榜在最上（.app.is-hero，script.js HERO_LAYOUT；站长 10-18「重构布局，放在一个最醒目的地方」）----------------
    榜单（标题 + 排序条 + 表格）靠 order 排到主栏最上面（DOM 顺序不动 ⇒ 读屏 / Tab 顺序照旧是概览在前），市场概览接在表格下面；
    脉搏磁贴由 JS 收起。标题区放大成头条：标签与搜索框一行、榜名一行、命中数 + 换批提示一行。
-   命中数用品牌荧光绿 ＝「少数核心数字」（与脉搏命中数同一个 --gold-ink；浅色是深绿 #2B6D17）。
+   命中数用品牌黄 ＝「少数核心数字」（与脉搏命中数同一个 --gold-ink，两主题对比度已在那里验过）。
    .is-single（全站只剩一张榜，SINGLE_BOARD 按 TAB_GROUPS 现算）另外不出 rail、主栏占满。 */
 .is-single .layout{grid-template-columns:minmax(0,1fr)}
 .is-single .rail{display:none}
@@ -475,8 +459,8 @@ a:hover{color:var(--gold-hi)}
 .asset-tag{font-size:var(--fs-xs);font-weight:400;padding:3px 8px;border-radius:var(--r-tag);letter-spacing:0;color:var(--asset-crypto-ink);background:rgba(var(--asset-crypto-rgb),.12);white-space:nowrap}
 .asset-tag.is-ashare{color:var(--asset-ashare-ink);background:rgba(var(--asset-ashare-rgb),.14)}
 .tf-badge{font-size:var(--fs-xs);font-weight:400;padding:3px 8px;border-radius:var(--r-tag);color:var(--muted);background:var(--tag-bg);white-space:nowrap;letter-spacing:0}
-/* 搜索框 ＝ 其站输入框：透明底 + 描边、8px 圆角，悬停描边变亮、聚焦描边变白（浅色黑；不加光晕）*/
-.search{display:flex;align-items:center;gap:8px;width:240px;height:var(--h-sm);padding:0 12px;background:transparent;border:1px solid var(--line-2);border-radius:var(--r-input);transition:border-color var(--dur)}
+/* 搜索框 ＝ 其站输入框：透明底 + 描边，悬停 / 聚焦描边变黄（不加光晕）*/
+.search{display:flex;align-items:center;gap:8px;width:240px;height:var(--h-sm);padding:0 12px;background:transparent;border:1px solid var(--line-2);border-radius:var(--r-btn);transition:border-color var(--dur)}
 .search:hover{border-color:var(--muted-2)}
 /* 聚焦比悬停重一档（描边加粗成 2px），不加光晕 */
 .search:focus-within{border-color:var(--accent-line);box-shadow:inset 0 0 0 1px var(--accent-line)}
@@ -484,7 +468,7 @@ a:hover{color:var(--gold-hi)}
 .search__input{flex:1;min-width:0;background:transparent;border:none;outline:none;color:var(--text);font-size:var(--fs-sm);font-family:inherit}
 .search__input::placeholder{color:var(--muted-2)}
 
-/* ---------------- 排序条（多轴选择 chips；表头值列只显当前轴）＝ 其站行情页那排筛选 chip ---------------- */
+/* ---------------- 排序条（多轴选择 chips；表头值列只显当前轴）＝ 其站灰调二级 tab ---------------- */
 /* ⚠️ 桌面端换行（flex-wrap:wrap）：原来 nowrap + 隐藏滚动条时第 10 根之后的轴全在右边界外、没有任何提示也滑不动（2026-07-26 站长报的真 bug）。
    移动端保持横滑（见 640px 档）。**刻意不用渐变遮罩 / mask 做「右边还有」的提示**：常驻元素不引入新的合成层（GPU 硬约束）。
    align-items:flex-start：换行后「排序」标签要贴第一行，用 padding-top 与第一排 chip 光学对齐。 */
@@ -492,7 +476,7 @@ a:hover{color:var(--gold-hi)}
 .sort-strip__label{flex:none;padding-top:7px;font-size:var(--fs-xs);font-weight:400;letter-spacing:0;color:var(--muted-2);user-select:none}
 .sort-strip__chips{display:flex;flex-wrap:wrap;gap:0 2px;flex:1;min-width:0;padding:2px 0}
 .sort-strip__chips::-webkit-scrollbar{display:none}
-/* 未选中只有字（次级字）、选中 #272727 底 + 主字（其站「全部 / 热门榜 / 主流币…」那排）；排序箭头荧光绿 */
+/* 未选中只有字（次级字）、选中 #29313D 底 + 主字（其站「全部 / BSC / Solana…」那排）；排序箭头品牌黄 */
 .sort-chip{flex:none;display:inline-flex;align-items:center;gap:4px;padding:5px 9px;font-size:var(--fs-sm);font-weight:400;font-family:var(--font-sans);color:var(--muted);background:transparent;border:none;border-radius:var(--r-sm);cursor:pointer;white-space:nowrap;transition:color var(--dur),background var(--dur)}
 .sort-chip:hover{color:var(--text)}
 .sort-chip__arrow{font-size:9px;line-height:1;color:var(--gold-ink)}
@@ -508,14 +492,14 @@ a:hover{color:var(--gold-hi)}
 .board-head[hidden]~.table{border-top:none}
 /* 表体滚动条：标准属性（细条 + 透明轨道）是 Firefox 与触屏的底；鼠标设备的 Chromium / Safari 走文件末尾的 ::-webkit-scrollbar。
    表头要一起写 —— 它靠 scrollbar-gutter 预留与表体同宽的槽，两边宽度不一致列就对不齐。
-   ≥641px 表头 / 表体左右各让 8px：行悬停底是 6px 圆角块，贴着卡片边缘会被裁掉一角；两边内距必须相同、列才对得齐 */
+   ≥641px 表头 / 表体左右各让 8px：行悬停底是 8px 圆角块（其站做法），贴着卡片边缘会被裁掉一角；两边内距必须相同、列才对得齐 */
 .thead{display:flex;align-items:stretch;background:var(--th-bg);border-bottom:1px solid var(--line);overflow-y:hidden;scrollbar-gutter:stable;scrollbar-width:thin}
 .th{display:flex;align-items:center;font-size:var(--fs-xs);font-weight:400;letter-spacing:0;color:var(--muted-2);user-select:none;padding:9px 0}
 .tbody{max-height:var(--tbody-h,min(70vh,760px));overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent;overscroll-behavior:contain}
 @media (min-width:641px){ .thead,.tbody{padding-left:8px;padding-right:8px} .tbody{padding-top:4px;padding-bottom:4px} }
 /* 锁定卡片在场时（全锁榜、未解锁的橱窗榜）不限高：卡片被内滚动切掉一截比多滚一段页面糟；槽照留，表头才对得齐 */
 .tbody.tbody--gated{max-height:none}
-/* 行：无分隔线、悬停 #1D1D1D 底（其站实测；其站是直角通栏，这里收 8px 内距、留 6px 圆角）*/
+/* 行：无分隔线、悬停 8px 圆角底（其站实测）*/
 .tr{display:flex;align-items:center;border-bottom:1px solid var(--row-line);border-radius:var(--r-sm);transition:background var(--dur)}
 .tr:last-child{border-bottom:none}
 .tr:hover{background:var(--hover-wash)}
@@ -531,17 +515,17 @@ a:hover{color:var(--gold-hi)}
 [data-asset="crypto"] .sort-arrow{color:var(--asset-crypto-ink)}
 [data-asset="ashare"] .sort-arrow{color:var(--asset-ashare-ink)}
 .sort-arrow{color:var(--asset-crypto-ink);font-size:10px;margin-left:2px}
-/* 自绘勾选框（appearance:none + 内嵌 SVG 对勾）：描边走 --chk-line（对行底 ≥3:1，WCAG 1.4.11）；选中 ＝ 白底黑勾（浅色黑底白勾）。
+/* 自绘勾选框（appearance:none + 内嵌 SVG 对勾）：描边走 --chk-line（对行底 ≥3:1，WCAG 1.4.11）；选中 ＝ 品牌黄实底 + 深色对勾。
    不加 transition：透明 → 实色的 background 过渡在真机上卡在起始值过（见 .asset-seg__opt 那条注释）。
    强制配色（Windows 高对比）下背景图会被系统抹掉 ⇒ 退回原生控件。 */
 .chk{appearance:none;-webkit-appearance:none;flex:none;width:16px;height:16px;margin:0;border:1.5px solid var(--chk-line);border-radius:4px;background:transparent center / 11px 11px no-repeat;cursor:pointer}
 .chk:hover{border-color:var(--accent-line)}
-.chk:checked,.chk:indeterminate{background-color:var(--chk-fill);border-color:var(--chk-fill);background-image:var(--chk-tick)}
+.chk:checked,.chk:indeterminate{background-color:var(--gold);border-color:var(--accent-line);background-image:var(--chk-tick)}
 .chk:indeterminate{background-image:var(--chk-dash)}
 @media (forced-colors:active){.chk{appearance:auto;-webkit-appearance:auto}}
 /* 行首强调条：v7 起行悬停已是整块圆角底，不再显示（DOM 由 script.js 照常输出）*/
 .row-accent{display:none}
-/* 名次：前三 ＝ 白底黑字（主按钮那组，浅色反相）/ 两档灰，扁平小方块 */
+/* 名次：前三 ＝ 金（品牌黄实底）/ 银 / 铜，扁平小方块 */
 .medal{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:var(--r-tag);font-size:var(--fs-xs);font-weight:600;font-family:var(--num);font-variant-numeric:tabular-nums}
 .medal--1{background:var(--btn-fill);color:var(--btn-ink)}
 .medal--2{background:var(--medal2-bg);color:var(--medal2-ink)}
@@ -549,7 +533,7 @@ a:hover{color:var(--gold-hi)}
 .rank-num{color:var(--muted-2);font-family:var(--num);font-variant-numeric:tabular-nums;font-size:var(--fs-sm);font-weight:500}
 /* 上下各 4px 内距 + 负外距：热区到 27px、不改行高 */
 .sym{display:inline-flex;align-items:baseline;gap:7px;max-width:100%;padding:4px 0;margin:-4px 0;color:inherit;text-decoration:none;cursor:pointer}
-.sym__base{font-weight:500;font-size:var(--fs-md);letter-spacing:0;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color var(--dur)}
+.sym__base{font-weight:600;font-size:var(--fs-md);letter-spacing:0;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color var(--dur)}
 .sym:hover .sym__base{color:var(--gold-ink)}
 .sym__suffix{color:var(--muted-2);font-weight:400;font-size:var(--fs-xs);letter-spacing:0}
 .sym__tv{opacity:0;font-size:var(--fs-2xs);font-weight:500;color:var(--muted-2);background:var(--chip-wash);border-radius:var(--r-tag);padding:1px 6px;white-space:nowrap;transform:translateY(-1px);transition:opacity var(--dur),color var(--dur);flex:none}
@@ -578,9 +562,9 @@ a:hover{color:var(--gold-hi)}
     .sub--head [data-sortkey]{cursor:pointer}
     .sub--head [data-sortkey]:hover{color:var(--text)}
 }
-/* 命中周期段（hitDaysSub / hitHoursSub，现在都是休眠件）：品牌色字、略粗；窄屏它本来就排第一段 */
+/* 命中周期段（hitDaysSub / hitHoursSub，现在都是休眠件）：金色字、略粗；窄屏它本来就排第一段 */
 .sub__seg--hit{color:var(--gold-ink);font-weight:500}
-.val{display:inline-block;font-family:var(--num);font-variant-numeric:tabular-nums;font-weight:500;font-size:var(--fs-lg);letter-spacing:0;white-space:nowrap;color:var(--text)}
+.val{display:inline-block;font-family:var(--num);font-variant-numeric:tabular-nums;font-weight:600;font-size:var(--fs-lg);letter-spacing:0;white-space:nowrap;color:var(--text)}
 /* 单位（倍、K / M / B）：K / M / B 定宽，右对齐时前面的数字对得齐；值列里再小一号，数字才是要比的（副行本来就小，别再缩）*/
 .val__unit--mag{display:inline-block;width:.95em;text-align:left}
 .val .val__unit{font-size:.8em;font-weight:500;margin-left:1px}
@@ -596,12 +580,12 @@ a:hover{color:var(--gold-hi)}
    ≤640px 值列只剩 116px 放不下，改叠在数字上方（见那一档）。刻意不加药丸 / 描边：同一行里已有奖牌、TV 快链两种框。
    ⚠️ ≥641px 值列 168px：最宽组合「TOP 527」+「384.37K」约 110px，改字号先重量。*/
 .c-val--badged{align-items:baseline;gap:8px}
-/* 名次小标压在深度条上（榜首那几行条是满格的）：--muted-2 叠在深度条上余量薄 ⇒ 用 --muted */
+/* 名次小标压在深度条上（榜首那几行条是满格的）：--muted-2 叠在中性深度条（灰）上只剩 4.38:1 ⇒ 用 --muted */
 .val-rank{font-family:var(--num);font-variant-numeric:tabular-nums;font-size:var(--fs-2xs);font-weight:500;color:var(--muted);white-space:nowrap}
 .table-foot{padding:8px 20px;border-top:1px solid var(--line);font-size:var(--fs-xs);color:var(--muted-2);text-align:right;letter-spacing:0;font-variant-numeric:tabular-nums}
 
 /* ---------------- TG 通知监控（rail「TG 通知」那一项）：表格下面两块卡片 —— 最近离榜 / 通知记录（script.js renderTgPanel）----------------
-   卡片走全站那条通用规则（实底 + 12px 圆角）；两块列表各自限高内滚动（同表体，不 sticky）。副行里的周期名 .sub__tf 是中性粗字（荧光绿省着用）。 */
+   卡片走全站那条通用规则（页底同色 + 描边 + 16px 圆角）；两块列表各自限高内滚动（同表体，不 sticky）。副行里的周期名 .sub__tf 是中性粗字（黄色省着用）。 */
 .sub__tf{font-weight:600;color:var(--muted)}
 /* 这张的副行（每个周期一段 + 价格段）比别的榜长：≤1080px 不限两行（别的榜最多两行） */
 @media (max-width:1080.98px){ .sub.sub--tg{max-height:none} }
@@ -655,7 +639,7 @@ a:hover{color:var(--gold-hi)}
 .lockgate .skl--bar{position:absolute;z-index:-1;top:50%;height:30px;margin-top:-15px;right:0;border-radius:2px;background:var(--bar-neutral)}
 .lockgate__veil{position:relative;z-index:1;display:flex;justify-content:center;align-items:flex-start;padding:34px 18px 40px}
 .lockgate__card{display:flex;flex-direction:column;align-items:center;text-align:center;width:100%;max-width:344px;
-    background:var(--modal-bg);border:1px solid var(--pop-border);border-radius:var(--r-lg);box-shadow:var(--shadow-pop);padding:26px 26px 28px}
+    background:var(--modal-bg);border:1px solid var(--panel-border);border-radius:var(--r-lg);box-shadow:var(--shadow-pop);padding:26px 26px 28px}
 .lockgate__icon{width:48px;height:48px;margin-bottom:14px;border-radius:50%;background:rgba(var(--gold-rgb),.12);
     display:flex;align-items:center;justify-content:center;color:var(--gold-ink)}
 .lockgate__icon svg{width:22px;height:22px;opacity:1}
@@ -674,16 +658,16 @@ a:hover{color:var(--gold-hi)}
 .dock__count{font-variant-numeric:tabular-nums;color:var(--dock-accent);font-weight:400;white-space:nowrap}
 .dock .btn--ghost{background:var(--dock-btn2);color:var(--dock-ink)}
 .dock .btn--ghost:hover{background:var(--dock-btn2-hover)}
-.dock .btn--primary{background:var(--dock-btn-fill);color:var(--dock-btn-ink)}
-.dock .btn--primary:hover{background:var(--dock-btn-fill-hover)}
-/* 坞内焦点环用坞自己的白：浅色主题的 --accent-line 是黑，压在深色坞上看不见 */
-.dock :focus-visible{outline-color:var(--dock-ink)}
+.dock .btn--primary{background:var(--btn-fill);color:#202630}
+.dock .btn--primary:hover{background:var(--btn-fill-hover)}
+/* 坞内焦点环用坞自己的黄：浅色主题的 --gold-ink（#8F6800）压在深色坞上只有 3.1:1 */
+.dock :focus-visible{outline-color:var(--dock-accent)}
 @keyframes dock-in{from{transform:translate(-50%,14px);opacity:0}to{transform:translate(-50%,0);opacity:1}}
 
 /* ---------------- 移动抽屉（≤640 显示；一次性滑入）---------------- */
 .scrim{position:fixed;inset:0;background:var(--scrim);opacity:0;pointer-events:none;transition:opacity .24s ease-out;z-index:69}
 .scrim.is-open{opacity:1;pointer-events:auto}
-.drawer{position:fixed;top:0;left:0;bottom:0;width:320px;max-width:86%;display:flex;flex-direction:column;gap:14px;padding:14px;background:var(--panel);border-right:1px solid var(--pop-border);box-shadow:var(--shadow-pop);z-index:70;transform:translateX(-102%);transition:transform .24s ease-out}
+.drawer{position:fixed;top:0;left:0;bottom:0;width:320px;max-width:86%;display:flex;flex-direction:column;gap:14px;padding:14px;background:var(--panel);border-right:1px solid var(--panel-border);box-shadow:var(--shadow-pop);z-index:70;transform:translateX(-102%);transition:transform .24s ease-out}
 .drawer.is-open{transform:translateX(0)}
 /* 只有榜单列表内滚动：抽屉头与关闭钮留在原地 */
 #drawerBody{position:relative;flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
@@ -700,7 +684,7 @@ a:hover{color:var(--gold-hi)}
 .footer-note{font-size:var(--fs-xs);color:var(--muted-2);line-height:1.8;max-width:640px;margin:0 auto}
 
 /* ---------------- 弹窗（通用 dialog）---------------- */
-.modal{margin:auto;background:var(--modal-bg);border:1px solid var(--pop-border);border-radius:var(--r-lg);padding:24px;width:92%;max-width:400px;color:var(--text);box-shadow:var(--shadow-modal)}
+.modal{margin:auto;background:var(--modal-bg);border:1px solid var(--panel-border);border-radius:var(--r-lg);padding:24px;width:92%;max-width:400px;color:var(--text);box-shadow:var(--shadow-modal)}
 .modal-wide{max-width:480px}
 /* 老浏览器（Chrome<122 / Safari<17.4）的 ::backdrop 拿不到自定义属性 ⇒ 带回退值，否则弹窗没有遮罩 */
 .modal::backdrop{background:var(--scrim,rgba(0,0,0,.6))}
@@ -711,7 +695,7 @@ a:hover{color:var(--gold-hi)}
 .modal-actions{display:flex;align-items:center;gap:8px;margin-top:20px}
 .spacer{flex:1}
 .modal-actions button{height:var(--h-md);padding:0 20px;border-radius:var(--r-btn);font-size:var(--fs-md);cursor:pointer;transition:background var(--dur),color var(--dur);text-align:center;font-family:inherit}
-/* 次按钮 ＝ 灰底胶囊；主按钮 ＝ 白色胶囊（浅色黑色胶囊）*/
+/* 次按钮 ＝ 灰底（其站「登录」）；主按钮 ＝ 黄底 */
 .btn-ghost{border:none;background:var(--btn2-fill);color:var(--btn2-ink);font-weight:400}
 .btn-ghost:hover{background:var(--btn2-fill-hover)}
 .modal-hint{font-size:var(--fs-md);color:var(--muted);line-height:1.8;margin-bottom:18px;text-wrap:pretty}
@@ -721,8 +705,8 @@ a:hover{color:var(--gold-hi)}
 .btn:disabled,.btn-primary:disabled,.btn-ghost:disabled{background:var(--btn2-fill);color:var(--muted);cursor:not-allowed}
 /* 表单弹窗（输入通行证 / 购买）：主按钮吃掉余下宽度，别和次按钮挤在左边留半行空白 */
 .modal form .modal-actions .btn-primary{flex:1}
-/* 输入框 ＝ 其站：透明底 + 描边、8px 圆角，悬停描边变亮、聚焦描边变白（浅色黑）、不加光晕 */
-.text-input{width:100%;height:var(--h-md);padding:0 12px;background:transparent;border:1px solid var(--line-2);border-radius:var(--r-input);color:var(--text);font-size:var(--fs-md);font-family:inherit;transition:border-color var(--dur)}
+/* 输入框 ＝ 其站：透明底 + 描边，悬停 / 聚焦描边变黄、不加光晕 */
+.text-input{width:100%;height:var(--h-md);padding:0 12px;background:transparent;border:1px solid var(--line-2);border-radius:var(--r-btn);color:var(--text);font-size:var(--fs-md);font-family:inherit;transition:border-color var(--dur)}
 .text-input::placeholder{color:var(--muted-2)}
 .text-input:hover{border-color:var(--muted-2)}
 .text-input:focus{outline:none;border-color:var(--accent-line);box-shadow:inset 0 0 0 1px var(--accent-line)}
@@ -733,11 +717,11 @@ a:hover{color:var(--gold-hi)}
 .lic-ok{color:var(--up)}
 .lic-err{color:var(--down-ink)}
 
-/* 购买弹窗：套餐卡 ＝ 描边卡，选中描边变白（浅色黑）、价格转品牌色 */
+/* 购买弹窗：套餐卡 ＝ 描边卡，选中描边变黄 */
 .buy-plans{display:flex;gap:8px;margin-bottom:16px}
 .buy-plan{position:relative;flex:1;background:transparent;border:1px solid var(--line-2);border-radius:var(--r-md);padding:16px 8px 13px;cursor:pointer;text-align:center;color:var(--text);transition:border-color var(--dur);font-family:inherit}
 .buy-plan:hover{border-color:var(--muted-2)}
-.buy-plan.is-selected{border-color:var(--accent-line)!important;background:var(--sel-wash);box-shadow:inset 0 0 0 1px var(--accent-line)}
+.buy-plan.is-selected{border-color:var(--accent-line)!important;background:rgba(var(--gold-rgb),.06);box-shadow:inset 0 0 0 1px var(--accent-line)}
 .buy-plan__tag{position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--btn-fill);color:var(--btn-ink);font-size:var(--fs-2xs);font-weight:400;padding:2px 8px;border-radius:var(--r-tag);white-space:nowrap}
 .buy-plan__label{font-size:var(--fs-sm);color:var(--muted)}
 .buy-plan__price{font-size:var(--fs-2xl);font-weight:600;font-family:var(--num);font-variant-numeric:tabular-nums;margin:5px 0 1px;white-space:nowrap}

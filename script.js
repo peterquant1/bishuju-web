@@ -536,6 +536,7 @@ const TABS_CONFIG = {
     s49: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s50: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s51: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
+    s52: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     // 只有一根轴、行是轻量行（没有别的轴字段）⇒ 副行固定两段，别走 axesSub。
 
     // === TG 通知监控（rail「TG 通知」组；不是策略榜，见 MODULE_TABS）：首轴推送时间、副行 tgWatchSub；表格下面另有「最近离榜 / 通知记录」两块（renderTgPanel）===
@@ -563,6 +564,8 @@ const TAB_GROUPS = [
         tabs: [
             { key: "s32", name: "月周向上·日线回调", tf: "日线/周线/月线",
               desc: "大周期偏多、短周期回调的合约，盯的是回调里的机会。每天换一批。" },
+            { key: "s52", name: "日线转强·趋势持有", tf: "日线",
+              desc: "日线由弱转强那天均线正在张开、之后趋势一直没破的合约。转强那天入榜，趋势不破就留在榜上，多数第二天还在；近三个月每天几十到上百个，行情冷清时偶尔一个都没有。" },
             { key: "s51", name: "周线趋势走强·月线收复（精选名单）", tf: "周线/月线", hourlyList: true,
               desc: "精选潜力名单里，周线趋势强度在加大、多方占优、资金面偏多，月线又已收复前一轮下跌早期价位的合约。状态不破就留在榜上，多数下一周还在；近一年每周十几个、近半年二十个上下；名单每个整点重新圈定。" },
             { key: "s49", name: "日线重返关键位·多方占优", tf: "日线",

@@ -47,7 +47,32 @@ jobs:
           print("OK：加密数据新鲜。")
           PYEOF
 
-      # A股 已退役：恢复时从 git 历史把它的新鲜度检查搬回来（本步之后、Worker 那步各一处）。
+      # A股 独立一步：加密那项一红就 sys.exit，A股 跟在它后面就根本不查。A股 每个交易日收盘后更新一次 ⇒ 30 小时阈值（非交易日也刷新时间戳，周末 / 长假不误报）。
+      # updateTime 是加密独占的，光看它发现不了 A股 停更；A股 日线行情榜是全市场、正常不会空 ⇒ 0 行 ＝ A股 build 坏了。
+      - name: Check A股 freshness
+        if: always()
+        run: |
+          python3 - << 'PYEOF'
+          import json, sys
+          from datetime import datetime, timezone
+
+          with open("data/rankings.json", encoding="utf-8") as f:
+              data = json.load(f)
+          if "ashareUpdateTime" not in data:
+              print("::error::公开文件里没有 ashareUpdateTime —— A股 数据没发布过，或被合并逻辑抹掉了！")
+              sys.exit(1)
+          ts = datetime.strptime(data["ashareUpdateTime"], "%Y-%m-%d %H:%M:%S UTC").replace(tzinfo=timezone.utc)
+          m = (datetime.now(timezone.utc) - ts).total_seconds() / 60
+          n = (data.get("paidMeta") or {}).get("ashareDailyChange")
+          print(f"ashareUpdateTime: {data['ashareUpdateTime']}  (落后 {m:.0f} 分钟)  数据日 {data.get('ashareDataDate')}  A股 日线行情榜 {n} 行")
+          if m > 30 * 60:
+              print("::error::A股数据已超过 30 小时未更新 —— A股 数据更新任务可能挂了，去看机器！")
+              sys.exit(1)
+          if not n:
+              print("::error::A股 日线行情榜 0 行（全市场榜不该空）—— A股 build 坏了或数据源异常！")
+              sys.exit(1)
+          print("OK：A股 数据新鲜。")
+          PYEOF
 
       # 付费数据链路（Worker KV）独立检查：上面的检查只覆盖公开文件——付费用户真正读的
       # 是 Worker KV（X-License-Key → /api/data），upload 断了（400/token 失效等）公开侧
@@ -80,6 +105,17 @@ jobs:
           print(f"KV updateTime: {d['updateTime']}  (落后 {m:.0f} 分钟, tabs={d.get('tabs')}, bytes={d.get('bytes')})")
           if m > 150:
               print("::error::付费数据(Worker KV)已超过 2.5 小时未更新 —— 上传链路断了，付费用户正在受影响！")
+              sys.exit(1)
+          # A股 那包在单独的 KV key，/api/status 的 ashare 字段是它的元信息：同 A股 公开时刻的 30 小时阈值
+          a = d.get("ashare")
+          if not a or not a.get("updateTime"):
+              print(f"::error::Worker /api/status 没有 A股 那包的元信息：{a} —— A股 付费数据没上传过或 meta 丢了！")
+              sys.exit(1)
+          ta = datetime.strptime(a["updateTime"], "%Y-%m-%d %H:%M:%S UTC").replace(tzinfo=timezone.utc)
+          ma = (datetime.now(timezone.utc) - ta).total_seconds() / 60
+          print(f"A股 KV updateTime: {a['updateTime']}  (落后 {ma:.0f} 分钟, tabs={a.get('tabs')}, bytes={a.get('bytes')})")
+          if ma > 30 * 60:
+              print("::error::A股 付费数据(Worker KV)已超过 30 小时未更新 —— A股 上传断了，付费用户看到的是旧数据！")
               sys.exit(1)
           print("OK：付费数据新鲜。")
           PYEOF

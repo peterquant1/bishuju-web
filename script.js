@@ -497,7 +497,6 @@ const TABS_CONFIG = {
     //     行由后端统一产出，各榜只差筛选条件 ===
     // 轴是描述值、不是判据镜像：改判据不动轴，也别按判据增删轴。⚠️ 尤其别为布尔判据加轴 —— 布尔值排不了序、后端也不发 ⇒ 幽灵轴。
     // key ＝ 公开编号（同 TAB_GROUPS）；新 key 别以后端 RETIRED_KEY_PREFIXES 里的前缀开头，否则后端自愈会静默删掉整张榜。
-    // s23–s30 加密不单独出榜，条目留着只给 A股 镜像用（ASHARE_ONLY_TABS / ASHARE_ONLY_SRC）。
     s01: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s02: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s03: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
@@ -510,14 +509,6 @@ const TABS_CONFIG = {
     s14: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s18: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s21: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    s23: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    s24: { sorts: day2StrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    s25: { sorts: day3StrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    s26: { sorts: day4StrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    s27: { sorts: day5StrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    s28: { sorts: day6StrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    s29: { sorts: day7StrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
-    s30: { sorts: day8StrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s32: { sorts: cryptoStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s33: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
     s34: { sorts: monthlyStrategySorts, subFormat: (v, sf) => axesSub(v, sf, "日成交额") },
@@ -644,31 +635,7 @@ const TAB_GROUPS = [
               desc: "日线大方向刚刚由空转多、当天还触及一个关键价位的合约。只认转多那一天，每天换一批全新的合约，偶尔一个都没有。" },
         ],
     },
-    // A股「行情」「策略」两组不在这里写：由下方镜像块从加密组运行时生成
-    //   （前端要连同 TABS_CONFIG、CHANGE_PCT_TABS、资产分段控件与 A股 新鲜度胶囊一起加回）。
-];
-
-// 只给 A股 镜像用的八张：加密这边不单独列榜，A股 照常列。不进加密 rail / TAB_META；下方「A股 镜像」块按 after 把它们插回 A股 那两组里的位置。
-//   TABS_CONFIG 里的同名条目留着（镜像要用它的轴集与副行）。ASHARE_ONLY_TABS 必须与后端对应的集合一致（audit C）；
-//   audit / make_og 靠这个字面量与下面 `{ key: …, name: …` 写在同一行认出它们。
-const ASHARE_ONLY_TABS = new Set(["s23", "s24", "s25", "s26", "s27", "s28", "s29", "s30"]);
-const ASHARE_ONLY_SRC = [
-    { key: "s23", name: "日线强势转多·持有", tf: "日线", after: "s09",
-      desc: "日线由弱转强、而且转强那一刻动能很足时入选，之后只要大方向不破就一直留在榜上。" },
-    { key: "s24", name: "2日线强势转多·持有", tf: "2日线", after: "s11",
-      desc: "按 2 日K 看：由弱转强、而且转强那一刻动能很足时入选，之后只要大方向不破就一直留在榜上。" },
-    { key: "s25", name: "3日线强势转多·持有", tf: "3日线", after: "s24",
-      desc: "按 3 日K 看：由弱转强、而且转强那一刻动能很足时入选，之后只要大方向不破就一直留在榜上。" },
-    { key: "s26", name: "4日线强势转多·持有", tf: "4日线", after: "s25",
-      desc: "按 4 日K 看：由弱转强、而且转强那一刻动能很足时入选，之后只要大方向不破就一直留在榜上。" },
-    { key: "s27", name: "5日线强势转多·持有", tf: "5日线", after: "s26",
-      desc: "按 5 日K 看：由弱转强、而且转强那一刻动能很足时入选，之后只要大方向不破就一直留在榜上。" },
-    { key: "s28", name: "6日线强势转多·持有", tf: "6日线", after: "s27",
-      desc: "按 6 日K 看：由弱转强、而且转强那一刻动能很足时入选，之后只要大方向不破就一直留在榜上。" },
-    { key: "s29", name: "7日线强势转多·持有", tf: "7日线", after: "s28",
-      desc: "按 7 日K 看：由弱转强、而且转强那一刻动能很足时入选，之后只要大方向不破就一直留在榜上。" },
-    { key: "s30", name: "8日线强势转多·持有", tf: "8日线", after: "s29",
-      desc: "按 8 日K 看：由弱转强、而且转强那一刻动能很足时入选，之后只要大方向不破就一直留在榜上。" },
+    // A股「行情」「策略」两组不在这里写：由下方「A股 镜像」块从加密这几组运行时生成（ASHARE_ENABLED）。
 ];
 
 // tab key → {asset, tf, name, full, desc}：组的 asset / tf 下发到每个 tab（tab 自带 tf 优先），full 缺省用 name。
@@ -1139,8 +1106,8 @@ function noteHtml(desc) {
     return desc ? "<p>" + escapeHtml(desc).replace(NOTE_BREAK_RE, "。</p><p>") + "</p>" : "";
 }
 
-// === A股 镜像（2026-10-19 复活：站长「恢复A股的TAB，逻辑和加密同步一致」）===
-// A股 的榜 ＝ 加密现役榜逐张镜像：后端同一个 build_rankings 产出（判据只有一份），key ＝ ashareKey(加密 key)。这里按加密那几组自动生成「A股行情」「A股策略」两组
+// === A股 镜像（站长 10-19「恢复A股的TAB，逻辑和加密同步一致」、11-06「恢复A股，TAB对齐加密版块」）===
+// A股 的榜 ＝ 加密 rail 上的榜逐张镜像、顺序相同（没有 A股 独有的榜；10-22 ~ 10-26 那八张 A股 独留的 11-06 起不出）：后端同一个 build_rankings 产出（判据只有一份），key ＝ ashareKey(加密 key)。这里按加密那几组自动生成「A股行情」「A股策略」两组
 // （榜名 / 周期跟着加密走；说明 ＝ ASHARE_NOTE ＋ 加密那张说明的第一段判据；三张行情榜的说明单独写：涨跌幅口径不同）⇒ 改加密榜不用另改 A股。
 // 轴集 ＝ 加密那张去掉订单流（tushare 没有主动买卖数据，后端行上恒 null）。不镜像的加密榜（与后端 fetch_data.ASHARE_SKIP_TABS 必须一致，audit C 项在盯）：
 // 加密专属名单圈定的各张（A股 没有对应的名单）；后端那份另含几张加密这边不出的榜（前端用不到，audit C 只比有公开编号的）。A股 的 N 日K（2~8 日线、3日线）按交易日切：每年第一个交易日起每 N 个交易日一格
@@ -1148,7 +1115,6 @@ function noteHtml(desc) {
 // ⚠️ 要放在 NOTE_BREAK_RE 之后、首次渲染之前：用它切加密说明的第一段，也要往 TAB_GROUPS / TAB_META / TABS_CONFIG / CHANGE_PCT_TABS 里补 A股 那几张。
 const ASHARE_SKIP_TABS = new Set(["s01", "s03", "s05", "s07", "s39", "s45", "s51"]);
 const ashareKey = k => "ashare" + k[0].toUpperCase() + k.slice(1);
-const ASHARE_ONLY_NOTE = "加密那边这一套已不展示；A股 这边照旧整张保留。";
 const ASHARE_NOTE = "这是加密同名榜的 A股 版。A股 这边有几处不同：日 K 一个交易日一根（北京时间 15:00 收盘），等当天数据发布（一般 16:00 前后）才换一批；周 K、月 K 以本周、本月最后一个交易日收盘为准；价格按前复权；涨跌幅按交易所口径、比的是上一根收盘；停牌的股票不入榜；没有订单流（A股 数据里没有主动买卖归边）。范围是沪深 A 股，不含北交所。A股 没有单独做回放：加密那张说明里的回放、命中数和表现都是加密市场的数字，这里只摘了判据。";
 const ASHARE_MARKET_DESC = {
     threeDayChange: "最新已收盘 3日K 的涨跌幅：这根 3日K 的收盘比上一根 3日K 的收盘（前复权；新股只有一根时比发行价）。A股 的 3日K 按交易日切：每年第一个交易日起每 3 个交易日一根，休市日不占格，年底那根可能不满 3 个——和 TradingView 一样；只认已收盘的那根，所以只在一根 3日K 的最后一个交易日收盘后换一批。没有任何筛选条件，全部沪深 A 股，主要用来看排序：排序条上全是 3日K 版本的轴，每行下面那行小字也只显示 3日K 的数。",
@@ -1185,24 +1151,18 @@ const ASHARE_AXIS_HINT = {
     monthlyDiPlus: "最新已收盘月K的+DI（DMI 14，对齐TV）：多方方向压力，0–100，一个月只更新一次；不足15个月显示「—」",
     athDistPct: "回到历史高点还要涨多少：上市以来全部日K的最高价（前复权、含影线）÷ 最新收盘 − 1。降序＝离高点最远；除权后的高点按前复权算，和行情软件的前复权图一致",
 };
-// A股 资产总开关（2026-10-26 站长「移除整个A股。等我需要恢复时再恢复。」⇒ false）：不生成「A股行情」「A股策略」两组、index.html 的资产切换与 A股 胶囊隐藏、
-//   抽屉里不出资产切换 ⇒ currentAsset 恒为加密（它由当前榜推出），A股 那包付费数据也就不会去拉。A股 的整套代码（下面的镜像块、口径说明、胶囊、付费包拉取、快照横幅）留作休眠件。
-//   恢复 ＝ 这里改回 true ＋ index.html 两处 display:none 拿掉 ＋ 标题 / FAQ 文案 ＋ 后端（RETIRED_KEY_PREFIXES 拿掉 ashare、启用 A股 任务，清单在 fetch_ashare.py 顶部）＋ check-freshness 的 A股 两段。
-const ASHARE_ENABLED = false;
+// A股 资产总开关（true ＝ 在役；站长 11-06「恢复A股，TAB对齐加密版块」）。false ＝ 不生成「A股行情」「A股策略」两组、抽屉里不出资产切换 ⇒ currentAsset 恒为加密、
+//   A股 那包付费数据也不会去拉；再退役 ＝ 这里改 false ＋ index.html 的资产切换 #assetSeg 与 A股 胶囊 #freshAshare 加 display:none ＋ 标题 / FAQ 文案 ＋ check-freshness 的 A股 两段
+//   ＋ 后端（清单在 fetch_ashare.py 顶部）。
+const ASHARE_ENABLED = true;
 let ASHARE_HOME_TAB = null;   // A股 默认落地 ＝ A股策略组第一张（加密置顶组里第一张有 A股 版的那张；置顶组第一张没有 A股 版），下面填
 if (ASHARE_ENABLED) {
     const src = TAB_GROUPS.filter(g => g.asset === "加密")
         .flatMap(g => g.tabs.map(t => ({ ...t, tf: t.tf || g.tf })))
         .filter(t => !ASHARE_SKIP_TABS.has(t.key) && TABS_CONFIG[t.key]);   // 漏配 TABS_CONFIG 的加密榜跳过：顶层这里一抛就整页白屏（只坏那一张才对）
-    // 只给 A股 的那几张按 after 插回原来的位置（anchor 找不到就排到最后）
-    for (const t of ASHARE_ONLY_SRC) {
-        if (!TABS_CONFIG[t.key]) continue;
-        const i = src.findIndex(x => x.key === t.after);
-        src.splice(i < 0 ? src.length : i + 1, 0, t);
-    }
     // 名字 / 说明跟着加密那张走（含解锁后的真名，见 tabMetaEntry）：说明 ＝ 加密那张说明的第一段 ＋ A股 说明；行情榜的说明单独写。
     const mirror = t => {
-        const tail = `${ASHARE_NOTE}${/^[2-8]日线$/.test(t.tf) ? ASHARE_ND_NOTE(t.tf[0]) : t.tf === "日线~月线" ? ASHARE_ND_NOTE("2、3") : ""}${ASHARE_ONLY_TABS.has(t.key) ? ASHARE_ONLY_NOTE : ""}`;
+        const tail = `${ASHARE_NOTE}${/^[2-8]日线$/.test(t.tf) ? ASHARE_ND_NOTE(t.tf[0]) : t.tf === "日线~月线" ? ASHARE_ND_NOTE("2、3") : ""}`;
         return { key: ashareKey(t.key), src: t.key, name: t.name, full: t.full, tf: t.tf, hourly: t.hourly, desc: t.desc,
             descOf: d => ASHARE_MARKET_DESC[t.key] || `判据和加密同名榜一字不差：${ashareCriteria(d)}。${tail}` };
     };
@@ -2737,7 +2697,7 @@ if (searchBoxEl) {
 // === 初始化 ===
 const LS_TAB = "bishuju_last_tab";
 const savedTab = safeStore.get("localStorage", LS_TAB);
-// 另判 TAB_META：TABS_CONFIG 里留着只给 A股 镜像用的加密 key（ASHARE_ONLY_TABS），上次停在并掉的榜上的回访者别切到一张不存在的榜。
+// 另判 TAB_META：上次停在已撤下的榜上（或 A股 关着时停在 A股 榜上）的回访者别切到一张不存在的榜。
 if (savedTab && TABS_CONFIG[savedTab] && TAB_META[savedTab] && savedTab !== currentTab) switchTab(savedTab);
 // ⚠️ 无条件把 .app 的 data-asset 同步到 currentAsset：index.html 写死了一个值，而上面那行不一定调 switchTab
 // （无 savedTab 或它就是默认 tab）⇒ 默认资产与写死值不同时 CSS 作用域会错（A股 红绿颠倒）。别依赖 switchTab 的副作用。
